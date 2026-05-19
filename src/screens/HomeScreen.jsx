@@ -1,0 +1,319 @@
+/**
+ * HomeScreen — tela inicial de gerenciamento de projetos.
+ * Projetos persistidos no IndexedDB (via App.jsx).
+ */
+import React, { useState, useRef, useCallback } from 'react';
+
+// ── Utilitários ───────────────────────────────────────────────────────────────
+
+function formatDate(iso) {
+  if (!iso) return '—';
+  const d   = new Date(iso);
+  const pad = (n) => String(n).padStart(2, '0');
+  return `${pad(d.getDate())}/${pad(d.getMonth() + 1)}/${d.getFullYear()} ${pad(d.getHours())}:${pad(d.getMinutes())}`;
+}
+
+const NAME_RE = /^[a-z0-9-]+$/;
+
+// ── Modal genérico reutilizável ───────────────────────────────────────────────
+
+function Modal({ title, onClose, children, maxWidth = 420 }) {
+  return (
+    <div className="modal-backdrop" onClick={onClose}>
+      <div className="modal" style={{ maxWidth, width: '92vw' }} onClick={(e) => e.stopPropagation()}>
+        <div style={{ padding: '10px 14px', borderBottom: '1px solid var(--line)', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+          <div className="neon-text" style={{ letterSpacing: 2, fontSize: 12 }}>▌ {title}</div>
+          <button className="btn-neon btn-danger" style={{ padding: '4px 10px' }} onClick={onClose}>X</button>
+        </div>
+        {children}
+      </div>
+    </div>
+  );
+}
+
+// ── Modais ────────────────────────────────────────────────────────────────────
+
+function CreateProjectModal({ onClose, onCreate }) {
+  const [name, setName] = useState('');
+  const isValidChars  = name.length === 0 || NAME_RE.test(name);
+  const isValidLength = name.length >= 3;
+  const isValid       = isValidChars && isValidLength && name.length > 0;
+  const errorMsg = !isValidChars ? 'apenas letras minúsculas, números e hífen'
+    : name.length > 0 && !isValidLength ? 'mínimo 3 caracteres' : null;
+
+  return (
+    <Modal title="NOVO PROJETO" onClose={onClose}>
+      <form onSubmit={(e) => { e.preventDefault(); if (isValid) onCreate(name.trim()); }} style={{ padding: 20 }}>
+        <div style={{ marginBottom: 18 }}>
+          <label className="term-label">NOME DO PROJETO</label>
+          <input className="term-input" value={name} placeholder="ex: orpen-ivr-suporte" autoFocus
+            style={{ borderColor: errorMsg ? '#ff5050' : undefined }}
+            onChange={(e) => setName(e.target.value.toLowerCase())} />
+          {errorMsg && <div style={{ fontSize: 9, color: '#ff5050', marginTop: 4 }}>⚠ {errorMsg}</div>}
+          {isValid && <div style={{ fontSize: 9, color: 'var(--neon-dim)', marginTop: 4 }}>arquivo: {name}.json</div>}
+        </div>
+        <div style={{ display: 'flex', gap: 8, justifyContent: 'flex-end' }}>
+          <button type="button" className="btn-neon" onClick={onClose} style={{ padding: '8px 18px' }}>CANCELAR</button>
+          <button type="submit" className="btn-neon" disabled={!isValid}
+            style={{ padding: '8px 18px', opacity: isValid ? 1 : 0.4, cursor: isValid ? 'pointer' : 'not-allowed' }}>
+            CRIAR
+          </button>
+        </div>
+      </form>
+    </Modal>
+  );
+}
+
+function ConfirmOpenModal({ projectName, onClose, onConfirm }) {
+  return (
+    <Modal title="ABRIR PROJETO" onClose={onClose} maxWidth={380}>
+      <div style={{ padding: 20 }}>
+        <p style={{ fontSize: 12, color: 'var(--neon-dim)', marginBottom: 20, lineHeight: 1.7 }}>
+          Abrir <span style={{ color: 'var(--neon)' }}>{projectName}</span>?<br />O projeto atual será substituído.
+        </p>
+        <div style={{ display: 'flex', gap: 8, justifyContent: 'flex-end' }}>
+          <button className="btn-neon" onClick={onClose} style={{ padding: '8px 16px' }}>CANCELAR</button>
+          <button className="btn-neon" onClick={onConfirm} style={{ padding: '8px 16px' }}>CONFIRMAR</button>
+        </div>
+      </div>
+    </Modal>
+  );
+}
+
+function ConfirmDeleteModal({ projectName, onClose, onConfirm }) {
+  return (
+    <Modal title="EXCLUIR PROJETO" onClose={onClose} maxWidth={380}>
+      <div style={{ padding: 20 }}>
+        <p style={{ fontSize: 12, color: 'var(--neon-dim)', marginBottom: 20, lineHeight: 1.7 }}>
+          Excluir <span style={{ color: '#ff5050' }}>{projectName}</span>?<br />Esta ação não pode ser desfeita.
+        </p>
+        <div style={{ display: 'flex', gap: 8, justifyContent: 'flex-end' }}>
+          <button className="btn-neon" onClick={onClose} style={{ padding: '8px 16px' }}>CANCELAR</button>
+          <button className="btn-neon btn-danger" onClick={onConfirm} style={{ padding: '8px 16px' }}>EXCLUIR</button>
+        </div>
+      </div>
+    </Modal>
+  );
+}
+
+// ── Modal de resumo da importação .conf ───────────────────────────────────────
+
+function ConfImportModal({ data, onClose, onConfirm }) {
+  const [name, setName]       = useState(data.suggestedName || 'projeto-importado');
+  const isValid               = name.length >= 3 && NAME_RE.test(name);
+  const { stats }             = data;
+  const totalNodes            = Object.values(stats.nodesByType).reduce((a, b) => a + b, 0);
+
+  return (
+    <Modal title="IMPORTAR .CONF — RESUMO" onClose={onClose} maxWidth={560}>
+      <div style={{ padding: '16px 20px', overflow: 'auto', maxHeight: '70vh' }}>
+        {/* Stats */}
+        <div style={{ marginBottom: 14, fontSize: 11, lineHeight: 2, color: 'var(--neon-dim)' }}>
+          <div><span style={{ color: 'var(--neon)' }}>{stats.contexts}</span> contexto(s) importado(s)</div>
+          <div><span style={{ color: 'var(--neon)' }}>{totalNodes}</span> nó(s) criado(s)</div>
+          {Object.entries(stats.nodesByType).map(([t, n]) => (
+            <div key={t} style={{ marginLeft: 12, fontSize: 10 }}>
+              {t}: <span style={{ color: '#c7ffd5' }}>{n}</span>
+            </div>
+          ))}
+        </div>
+
+        {/* Commented nodes */}
+        {stats.commented.length > 0 && (
+          <div style={{ marginBottom: 12 }}>
+            <div style={{ fontSize: 10, color: '#ffcc00', letterSpacing: 1, marginBottom: 6 }}>
+              ▌ LINHAS COMENTADAS ({stats.commented.length})
+            </div>
+            {stats.commented.map((l, i) => (
+              <div key={i} style={{ fontSize: 9, color: '#ffcc00', opacity: 0.65, padding: '2px 0', wordBreak: 'break-all' }}>; {l}</div>
+            ))}
+          </div>
+        )}
+
+        {/* Raw nodes */}
+        {stats.raw.length > 0 && (
+          <div style={{ marginBottom: 12 }}>
+            <div style={{ fontSize: 10, color: '#ff8c00', letterSpacing: 1, marginBottom: 6 }}>
+              ▌ COMANDOS NÃO RECONHECIDOS ({stats.raw.length})
+            </div>
+            {stats.raw.map((l, i) => (
+              <div key={i} style={{ fontSize: 9, color: '#ff8c00', opacity: 0.75, padding: '2px 0', wordBreak: 'break-all' }}>{l}</div>
+            ))}
+          </div>
+        )}
+
+        {/* Nome do projeto */}
+        <div style={{ borderTop: '1px solid var(--line)', paddingTop: 14, marginTop: 8 }}>
+          <label className="term-label">NOME DO PROJETO</label>
+          <input className="term-input" value={name} placeholder="nome-do-projeto"
+            style={{ borderColor: !isValid ? '#ff5050' : undefined, marginBottom: 4 }}
+            onChange={(e) => setName(e.target.value.toLowerCase())} />
+          {!isValid && name.length > 0 && <div style={{ fontSize: 9, color: '#ff5050' }}>⚠ apenas letras minúsculas, números e hífen (mín. 3)</div>}
+        </div>
+
+        <div style={{ display: 'flex', gap: 8, justifyContent: 'flex-end', marginTop: 16 }}>
+          <button className="btn-neon" onClick={onClose} style={{ padding: '8px 16px' }}>CANCELAR</button>
+          <button className="btn-neon" onClick={() => isValid && onConfirm(name)} disabled={!isValid}
+            style={{ padding: '8px 16px', opacity: isValid ? 1 : 0.4, cursor: isValid ? 'pointer' : 'not-allowed' }}>
+            ABRIR NO CANVAS
+          </button>
+        </div>
+      </div>
+    </Modal>
+  );
+}
+
+// ── Card de projeto ───────────────────────────────────────────────────────────
+
+function ProjectCard({ project, onOpen, onExport, onDelete }) {
+  const [hovered, setHovered] = useState(false);
+
+  return (
+    <div
+      style={{
+        background: '#181818',
+        border: `1px solid ${hovered ? 'var(--neon)' : 'var(--neon-dim)'}`,
+        borderRadius: 4, padding: 16,
+        display: 'flex', flexDirection: 'column', gap: 10,
+        transition: 'border-color 0.15s, box-shadow 0.15s',
+        boxShadow: hovered ? '0 0 14px rgba(0,255,65,0.18)' : 'none',
+      }}
+      onMouseEnter={() => setHovered(true)}
+      onMouseLeave={() => setHovered(false)}
+    >
+      <div style={{ fontSize: 14, color: 'var(--neon)', letterSpacing: 1, wordBreak: 'break-all' }}>
+        {project.name}
+      </div>
+      <div style={{ fontSize: 10, color: 'var(--neon-dim)', lineHeight: 1.8 }}>
+        <div>criado em {formatDate(project.dataCriacao)}</div>
+        <div>modificado em {formatDate(project.dataModificacao)}</div>
+      </div>
+      <div style={{ display: 'flex', gap: 6, marginTop: 4, flexWrap: 'wrap' }}>
+        <button className="btn-neon" onClick={() => onOpen(project)}
+          style={{ flex: 1, minWidth: 70, padding: '6px 8px', fontSize: 11, letterSpacing: 1 }}>
+          ABRIR
+        </button>
+        <button className="btn-neon" onClick={() => onExport(project)} disabled={!project.flow}
+          title={project.flow ? undefined : 'Salve o projeto primeiro'}
+          style={{ flex: 1, minWidth: 90, padding: '6px 8px', fontSize: 10, letterSpacing: 0.5, opacity: project.flow ? 1 : 0.35, cursor: project.flow ? 'pointer' : 'not-allowed' }}>
+          EXP .JSON
+        </button>
+        <button className="btn-neon btn-danger" onClick={() => onDelete(project)}
+          style={{ flex: 0, padding: '6px 10px', fontSize: 11 }}>
+          ⌫
+        </button>
+      </div>
+    </div>
+  );
+}
+
+// ── HomeScreen principal ──────────────────────────────────────────────────────
+
+export default function HomeScreen({
+  projects, onCreateProject, onOpenProject,
+  onImportProject, onImportConf, onDeleteProject,
+  importError, confImportData, onConfImportConfirm, onConfImportCancel,
+}) {
+  const [showCreateModal, setShowCreateModal] = useState(false);
+  const [confirmOpen,     setConfirmOpen]     = useState(null);
+  const [confirmDelete,   setConfirmDelete]   = useState(null);
+  const jsonRef = useRef(null);
+  const confRef = useRef(null);
+
+  const handleCreate = useCallback((name) => {
+    setShowCreateModal(false);
+    onCreateProject(name);
+  }, [onCreateProject]);
+
+  const handleExport = useCallback((project) => {
+    if (!project.flow) return;
+    const blob = new Blob([JSON.stringify(project, null, 2)], { type: 'application/json;charset=utf-8' });
+    const url  = URL.createObjectURL(blob);
+    const a    = document.createElement('a');
+    a.href = url; a.download = `${project.name}.json`;
+    document.body.appendChild(a); a.click();
+    document.body.removeChild(a); URL.revokeObjectURL(url);
+  }, []);
+
+  const handleDelete = useCallback((project) => setConfirmDelete(project), []);
+
+  const handleConfirmDelete = useCallback(() => {
+    if (confirmDelete) onDeleteProject(confirmDelete.id);
+    setConfirmDelete(null);
+  }, [confirmDelete, onDeleteProject]);
+
+  return (
+    <div style={{
+      height: '100vh', background: 'var(--bg)', color: 'var(--neon)',
+      fontFamily: "'JetBrains Mono','Fira Code','Courier New',ui-monospace,monospace",
+      display: 'flex', flexDirection: 'column', overflow: 'auto',
+    }}>
+      {/* Header */}
+      <div style={{ padding: '28px 48px 20px', borderBottom: '1px solid var(--line)' }}>
+        <div style={{ fontSize: 26, letterSpacing: 3 }} className="neon-text">
+          ▌Orpen // URA<span className="blink">_</span>
+        </div>
+        <div style={{ fontSize: 11, color: 'var(--neon-dim)', marginTop: 6, letterSpacing: 2 }}>
+          ASTERISK DIALPLAN BUILDER
+        </div>
+      </div>
+
+      {/* Toolbar */}
+      <div style={{ padding: '16px 48px', display: 'flex', alignItems: 'center', gap: 10, borderBottom: '1px solid var(--line)', flexWrap: 'wrap' }}>
+        <button className="btn-neon" onClick={() => setShowCreateModal(true)}
+          style={{ padding: '9px 20px', fontSize: 12, letterSpacing: 2 }}>
+          + NOVO PROJETO
+        </button>
+
+        {/* Importar JSON */}
+        <button className="btn-neon" onClick={() => jsonRef.current?.click()}
+          style={{ padding: '9px 18px', fontSize: 12, letterSpacing: 1.5, borderColor: 'var(--neon-dim)', color: 'var(--neon-dim)' }}
+          onMouseEnter={(e) => { e.currentTarget.style.borderColor = 'var(--neon)'; e.currentTarget.style.color = 'var(--neon)'; }}
+          onMouseLeave={(e) => { e.currentTarget.style.borderColor = 'var(--neon-dim)'; e.currentTarget.style.color = 'var(--neon-dim)'; }}>
+          IMPORTAR .JSON
+        </button>
+        <input ref={jsonRef} type="file" accept=".json" style={{ display: 'none' }}
+          onChange={(e) => { const f = e.target.files?.[0]; if (f) onImportProject(f); e.target.value = ''; }} />
+
+        {/* Importar CONF */}
+        <button className="btn-neon" onClick={() => confRef.current?.click()}
+          style={{ padding: '9px 18px', fontSize: 12, letterSpacing: 1.5, borderColor: '#ffcc0077', color: '#ffcc00' }}
+          onMouseEnter={(e) => { e.currentTarget.style.borderColor = '#ffcc00'; }}
+          onMouseLeave={(e) => { e.currentTarget.style.borderColor = '#ffcc0077'; }}>
+          IMPORTAR .CONF
+        </button>
+        <input ref={confRef} type="file" accept=".conf,.txt" style={{ display: 'none' }}
+          onChange={(e) => { const f = e.target.files?.[0]; if (f) onImportConf(f); e.target.value = ''; }} />
+
+        {importError && (
+          <div style={{ fontSize: 11, color: '#ff5050', letterSpacing: 1 }}>// {importError}</div>
+        )}
+      </div>
+
+      {/* Lista de projetos */}
+      <div style={{ flex: 1, padding: '28px 48px' }}>
+        {projects.length === 0 ? (
+          <div style={{ textAlign: 'center', padding: '90px 0', fontSize: 13, color: 'var(--neon)', opacity: 0.3, letterSpacing: 1, lineHeight: 1.8 }}>
+            // nenhum projeto encontrado<br />— crie ou importe sua primeira URA
+          </div>
+        ) : (
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill,minmax(280px,1fr))', gap: 16 }}>
+            {projects.map((p) => (
+              <ProjectCard key={p.id} project={p}
+                onOpen={() => setConfirmOpen(p)}
+                onExport={handleExport}
+                onDelete={handleDelete}
+              />
+            ))}
+          </div>
+        )}
+      </div>
+
+      {/* Modais */}
+      {showCreateModal  && <CreateProjectModal    onClose={() => setShowCreateModal(false)} onCreate={handleCreate} />}
+      {confirmOpen      && <ConfirmOpenModal       projectName={confirmOpen.name}   onClose={() => setConfirmOpen(null)}   onConfirm={() => { onOpenProject(confirmOpen); setConfirmOpen(null); }} />}
+      {confirmDelete    && <ConfirmDeleteModal     projectName={confirmDelete.name} onClose={() => setConfirmDelete(null)} onConfirm={handleConfirmDelete} />}
+      {confImportData   && <ConfImportModal        data={confImportData}            onClose={onConfImportCancel}           onConfirm={onConfImportConfirm} />}
+    </div>
+  );
+}

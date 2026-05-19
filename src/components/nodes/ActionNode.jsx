@@ -1,23 +1,58 @@
-import React, { memo } from 'react';
-import { Handle, Position } from 'reactflow';
+import React, { memo, useCallback } from 'react';
+import { Handle, Position, useReactFlow } from 'reactflow';
 import { ACTION_META } from '../../utils/actionMeta';
 import { cls } from '../../utils/common';
 
-const ActionNode = memo(({ data, selected, type }) => {
+const btnStyle = (color) => ({
+  flex: 1,
+  padding: '3px 0',
+  fontSize: 8,
+  letterSpacing: 1,
+  background: 'transparent',
+  border: `1px solid ${color}55`,
+  color,
+  cursor: 'pointer',
+  fontFamily: 'inherit',
+  borderRadius: 2,
+});
+
+const ActionNode = memo(({ id, data, selected, type }) => {
   const meta = ACTION_META[type];
   if (!meta) return null;
+  const { setNodes, setEdges } = useReactFlow();
   const Icon = meta.icon;
   const rows = meta.summary(data) || [];
 
-  // Validação em tempo real: borda vermelha se inválido
-  const errors   = meta.validate ? meta.validate(data) : [];
-  const isInvalid = errors.length > 0;
-  const borderColor = isInvalid ? '#ff5050' : (meta.color + '99');
+  const handleActivate = useCallback(() => {
+    setNodes((ns) =>
+      ns.map((n) => {
+        if (n.id !== id) return n;
+        const { _commented, _origLine, ...rest } = n.data;
+        return { ...n, data: rest };
+      })
+    );
+  }, [id, setNodes]);
+
+  const handleExclude = useCallback(() => {
+    setNodes((ns) => ns.filter((n) => n.id !== id));
+    setEdges((es) => es.filter((e) => e.source !== id && e.target !== id));
+  }, [id, setNodes, setEdges]);
+
+  const errors      = meta.validate ? meta.validate(data) : [];
+  const isInvalid   = errors.length > 0;
+  const borderColor = data._commented
+    ? (meta.color + '44')
+    : (isInvalid ? '#ff5050' : (meta.color + '99'));
 
   return (
     <div
       className={cls('rcx-node', selected && 'selected')}
-      style={{ borderColor, minWidth: 210 }}
+      style={{
+        borderColor,
+        borderStyle: data._commented ? 'dashed' : 'solid',
+        opacity: data._commented ? 0.6 : 1,
+        minWidth: 210,
+      }}
     >
       {/* ── Handles: 4 lados ── */}
       <Handle type="target" position={Position.Top}    id="in"        style={{ background: meta.color }} />
@@ -35,12 +70,14 @@ const ActionNode = memo(({ data, selected, type }) => {
         color: meta.color,
       }}>
         <span style={{ display: 'flex', alignItems: 'center', gap: 6, textShadow: `0 0 5px ${meta.color}` }}>
-          <Icon size={12} /> {meta.title}
+          <Icon size={12} /> {data._commented ? `// ${meta.title}` : meta.title}
         </span>
-        <span className="badge" style={{ borderColor: meta.color, color: meta.color }}>{meta.app}</span>
+        {data._commented
+          ? <span className="badge" style={{ borderColor: '#ff505088', color: '#ff5050' }}>DESATIVADO</span>
+          : <span className="badge" style={{ borderColor: meta.color, color: meta.color }}>{meta.app}</span>
+        }
       </div>
 
-      {/* Badge de label em amarelo neon (visível quando label está definido) */}
       {meta.supportsLabel && data.label?.trim() && (
         <div style={{
           padding: '2px 10px',
@@ -65,14 +102,24 @@ const ActionNode = memo(({ data, selected, type }) => {
           </div>
         ))}
 
-        {/* Banner de validação */}
-        {isInvalid && (
+        {isInvalid && !data._commented && (
           <div style={{
             marginTop: 6, padding: '3px 6px',
             fontSize: 9, color: '#ff5050',
             borderTop: '1px dashed #ff505066',
           }}>
             ⚠ {errors[0]}
+          </div>
+        )}
+
+        {data._commented && (
+          <div style={{ display: 'flex', gap: 5, marginTop: 6 }}>
+            <button onMouseDown={(e) => e.stopPropagation()} onClick={handleActivate} style={btnStyle('#00ff41')}>
+              ATIVAR
+            </button>
+            <button onMouseDown={(e) => e.stopPropagation()} onClick={handleExclude} style={btnStyle('#ff5050')}>
+              EXCLUIR
+            </button>
           </div>
         )}
       </div>

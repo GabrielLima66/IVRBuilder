@@ -23,9 +23,13 @@ import { EdgeModeContext } from './contexts/EdgeModeContext';
 import HomeScreen from './screens/HomeScreen';
 import { salvarProjeto, listarProjetos } from './services/projectStorage';
 import { parseConfFile } from './utils/confParser';
+import { useAlignmentGuides } from './hooks/useAlignmentGuides';
+import AlignmentGuides from './components/canvas/AlignmentGuides';
 
-// EdgeWithWaypoints serve como edge 'floating': floating handles + waypoints editáveis
-const edgeTypes = { floating: EdgeWithWaypoints };
+// Ambos os tipos usam EdgeWithWaypoints:
+// 'floating' — floating handles + waypoints editáveis (handles genéricos)
+// 'smoothstep' — posições fixas de handle (ctx-start, d-*) sem waypoints editáveis
+const edgeTypes = { floating: EdgeWithWaypoints, smoothstep: EdgeWithWaypoints };
 
 // ─────────────────────────────────────────────────────────────────────────────
 // CANVAS — estado global do grafo + lógica de DnD / reparenting
@@ -117,7 +121,7 @@ function Canvas({ initialFlow, projectName, projectCreatedAt, currentProjectId, 
         );
       }
 
-      // Remove edge 'true' anterior e adiciona nova (amarela)
+      // Remove edge 'true' anterior e adiciona nova (amarela, floating com waypoints)
       setEdges((es) => {
         const filtered = es.filter(
           (e) => !(e.source === source && e.sourceHandle === 'true')
@@ -125,7 +129,8 @@ function Canvas({ initialFlow, projectName, projectCreatedAt, currentProjectId, 
         return addEdge(
           {
             ...params,
-            type: 'smoothstep',
+            type: 'floating',
+            data: { waypoints: [] },
             animated: false,
             style: { stroke: '#ffcc00', strokeWidth: 1.5 },
             markerEnd: { type: MarkerType.ArrowClosed, color: '#ffcc00' },
@@ -235,7 +240,8 @@ function Canvas({ initialFlow, projectName, projectCreatedAt, currentProjectId, 
           sourceHandle: 'true',
           target: targetCtx.id,
           targetHandle: 'ctx-in',
-          type: 'smoothstep',
+          type: 'floating',
+          data: { waypoints: [] },
           animated: false,
           style: { stroke: '#ffcc00', strokeWidth: 1.5 },
           markerEnd: { type: MarkerType.ArrowClosed, color: '#ffcc00' },
@@ -304,7 +310,31 @@ function Canvas({ initialFlow, projectName, projectCreatedAt, currentProjectId, 
   }, [rfInstance, nodes, setNodes]);
 
   // ── Re-parenting ao arrastar nó existente ─────────────────────────────────
-  const onNodeDragStop = useCallback((_, draggedNode) => {
+  const onNodeDragStop = useCallback((event, draggedNode) => {
+    // Apply alignment snap before anything else
+    alignDragStop(event, draggedNode);
+
+    // IDs de nós que se moveram: o nó arrastado + filhos quando é ContextNode
+    const movedIds = new Set([draggedNode.id]);
+    if (draggedNode.type === 'context') {
+      nodes.forEach((n) => { if (n.parentNode === draggedNode.id) movedIds.add(n.id); });
+    }
+
+    // Limpa waypoints de todas as edges conectadas aos nós movidos.
+    // Feito ao soltar (não durante o drag) para evitar re-renders excessivos.
+    setEdges((es) =>
+      es.map((e) => {
+        if (
+          (movedIds.has(e.source) || movedIds.has(e.target)) &&
+          (e.data?.waypoints?.length || 0) > 0
+        ) {
+          return { ...e, data: { ...(e.data || {}), waypoints: [] } };
+        }
+        return e;
+      })
+    );
+
+    // Re-parenting apenas para nós não-contexto
     if (draggedNode.type === 'context') return;
 
     let absX = draggedNode.position.x;
@@ -345,11 +375,11 @@ function Canvas({ initialFlow, projectName, projectCreatedAt, currentProjectId, 
       }
       return updated;
     });
-  }, [nodes, setNodes]);
+  }, [nodes, setNodes, setEdges]); // alignDragStop omitido — é estável (useCallback([setNodes]))
 
   // ── Seleção ───────────────────────────────────────────────────────────────
-  const onNodeClick  = useCallback((_, n) => { setSelectedId(n.id); setEdgeMenu(null); }, []);
-  const onPaneClick  = useCallback(() => { setSelectedId(null); setEdgeMenu(null); }, []);
+  const onNodeClick  = useCallback((_, n) => { setSelectedId(n.id); setEdgeMenu(null); setNodeMenu(null); }, []);
+  const onPaneClick  = useCallback(() => { setSelectedId(null); setEdgeMenu(null); setNodeMenu(null); }, []);
 
   // ── Atualização de dados e estilo ─────────────────────────────────────────
   const updateNodeData = useCallback((id, data) => {
@@ -394,6 +424,38 @@ function Canvas({ initialFlow, projectName, projectCreatedAt, currentProjectId, 
     setEdges((es) => es.filter((e) => e.source !== id && e.target !== id));
     setSelectedId(null);
   }, [setNodes, setEdges]);
+
+  // ── Toggle comentado (DESATIVAR / ATIVAR) ─────────────────────────────────
+  const toggleComment = useCallback((id) => {
+    setNodes((ns) =>
+      ns.map((n) => {
+        if (n.id !== id) return n;
+        if (n.data._commented) {
+          const { _commented, _origLine, ...rest } = n.data;
+          return { ...n, data: rest };
+        }
+        return { ...n, data: { ...n.data, _commented: true } };
+      })
+    );
+  }, [setNodes]);
+
+  // ── Alignment guides + snap ───────────────────────────────────────────────
+  const {
+    guides,
+    onNodeDragStart,
+    onNodeDrag,
+    onNodeDragStop: alignDragStop,
+  } = useAlignmentGuides(nodes, setNodes);
+
+  // ── Context menu de clique direito em nó ─────────────────────────────────
+  const [nodeMenu, setNodeMenu] = useState(null); // { x, y, nodeId }
+
+  const onNodeContextMenu = useCallback((event, n) => {
+    event.preventDefault();
+    event.stopPropagation();
+    setNodeMenu({ x: event.clientX, y: event.clientY, nodeId: n.id });
+    setSelectedId(n.id);
+  }, []);
 
   // ── Forçar save imediato (sem aguardar debounce) ─────────────────────────
   const flushSave = useCallback(async () => {
@@ -556,8 +618,11 @@ function Canvas({ initialFlow, projectName, projectCreatedAt, currentProjectId, 
           onConnect={onConnect}
           onNodeClick={onNodeClick}
           onPaneClick={onPaneClick}
+          onNodeDragStart={onNodeDragStart}
+          onNodeDrag={onNodeDrag}
           onNodeDragStop={onNodeDragStop}
           onEdgeContextMenu={onEdgeContextMenu}
+          onNodeContextMenu={onNodeContextMenu}
           nodeTypes={stableNodeTypes}
           edgeTypes={stableEdgeTypes}
           fitView
@@ -591,6 +656,9 @@ function Canvas({ initialFlow, projectName, projectCreatedAt, currentProjectId, 
           />
         </ReactFlow>
 
+        {/* Alignment guide lines — rendered over canvas, below UI controls */}
+        <AlignmentGuides guides={guides} />
+
         {/* Botão de exportação flutuante */}
         <button
           className="btn-neon"
@@ -611,6 +679,7 @@ function Canvas({ initialFlow, projectName, projectCreatedAt, currentProjectId, 
         nodes={nodes}
         updateNodeData={updateNodeData}
         deleteNode={deleteNode}
+        toggleComment={toggleComment}
         patchNodeStyle={patchNodeStyle}
         syncTrueContext={syncTrueContext}
         propagateContextRename={propagateContextRename}
@@ -677,6 +746,73 @@ function Canvas({ initialFlow, projectName, projectCreatedAt, currentProjectId, 
               >
                 ⌫ Remover conexão
               </button>
+            </div>
+          </>
+        );
+      })()}
+
+      {/* ── Context menu de clique direito em nó ─────────────────────────── */}
+      {nodeMenu && (() => {
+        const menuNode     = nodes.find((n) => n.id === nodeMenu.nodeId);
+        const isCommented  = !!menuNode?.data?._commented;
+        const canComment   = menuNode && menuNode.type !== 'config' && menuNode.type !== 'context';
+
+        const nodeBtnStyle = {
+          display: 'block', width: '100%',
+          background: 'transparent', border: 'none',
+          fontFamily: 'inherit', fontSize: 12,
+          padding: '9px 12px',
+          cursor: 'pointer', textAlign: 'left',
+          letterSpacing: 1, transition: 'background 0.1s',
+        };
+
+        return (
+          <>
+            <div
+              style={{ position: 'fixed', inset: 0, zIndex: 9998 }}
+              onClick={() => setNodeMenu(null)}
+              onContextMenu={(e) => { e.preventDefault(); setNodeMenu(null); }}
+            />
+            <div style={{
+              position: 'fixed',
+              top: nodeMenu.y, left: nodeMenu.x,
+              zIndex: 9999,
+              background: 'var(--panel)',
+              border: '1px solid var(--neon-dim)',
+              borderRadius: 3, overflow: 'hidden',
+              boxShadow: '0 0 14px rgba(0,255,65,0.25), 0 4px 12px rgba(0,0,0,0.6)',
+              minWidth: 175,
+            }}>
+              <div style={{
+                padding: '4px 10px', fontSize: 9,
+                color: 'var(--neon-dim)', letterSpacing: 1,
+                borderBottom: '1px solid var(--line)',
+                background: 'var(--panel-2)',
+              }}>
+                // NÓ
+              </div>
+
+              {canComment && (
+                <button
+                  style={{ ...nodeBtnStyle, color: isCommented ? 'var(--neon)' : '#ffcc00' }}
+                  onMouseEnter={(e) => { e.currentTarget.style.background = isCommented ? '#00ff4112' : '#ffcc0012'; }}
+                  onMouseLeave={(e) => { e.currentTarget.style.background = 'transparent'; }}
+                  onClick={() => { toggleComment(nodeMenu.nodeId); setNodeMenu(null); }}
+                >
+                  {isCommented ? '▶ ATIVAR nó' : '// DESATIVAR nó'}
+                </button>
+              )}
+
+              {menuNode?.type !== 'config' && (
+                <button
+                  style={{ ...nodeBtnStyle, color: '#ff5050' }}
+                  onMouseEnter={(e) => { e.currentTarget.style.background = '#ff3b3b18'; }}
+                  onMouseLeave={(e) => { e.currentTarget.style.background = 'transparent'; }}
+                  onClick={() => { deleteNode(nodeMenu.nodeId); setNodeMenu(null); }}
+                >
+                  ⌫ Excluir nó
+                </button>
+              )}
             </div>
           </>
         );

@@ -26,8 +26,15 @@ const ContextNode = memo(({ id, data, selected }) => {
     [setNodes]
   );
 
+  // Cor de acento: ciano para macros, neon para contextos normais
+  const accent = data.isMacro ? '#00d4ff' : 'var(--neon)';
+  const accentDim = data.isMacro ? '#0099bb' : 'var(--neon-dim)';
+
   return (
-    <div className={cls('ctx-node', selected && 'selected')}>
+    <div
+      className={cls('ctx-node', selected && 'selected')}
+      style={data.isMacro ? { borderColor: '#00d4ff' } : {}}
+    >
       <NodeResizer
         isVisible={selected}
         minWidth={260}
@@ -42,7 +49,7 @@ const ContextNode = memo(({ id, data, selected }) => {
         type="target"
         position={Position.Top}
         id="ctx-in"
-        style={{ background: '#00ff41', width: 14, height: 14, top: -7, border: '2px solid #000' }}
+        style={{ background: accent, width: 14, height: 14, top: -7, border: '2px solid #000' }}
       />
 
       {/* ── ctx-start: SOURCE — origina edges para o 1º nó do fluxo interno ─────
@@ -58,7 +65,7 @@ const ContextNode = memo(({ id, data, selected }) => {
           top: 44,
           left: '50%',
           transform: 'translateX(-50%)',
-          zIndex: 10,           /* acima do div da barra START que vem depois no DOM */
+          zIndex: 10,
           background: '#ffcc00',
           width: 10, height: 10,
           border: '1px solid #000',
@@ -67,9 +74,24 @@ const ContextNode = memo(({ id, data, selected }) => {
       />
 
       {/* ── Header: nome do contexto ─────────────────────────────────────────── */}
-      <div className="ctx-header">
-        <FolderTree size={13} />
-        <span style={{ color: 'var(--neon-dim)', fontSize: 11, letterSpacing: 1 }}>[</span>
+      <div
+        className="ctx-header"
+        style={data.isMacro
+          ? { background: 'rgba(0,212,255,0.15)', borderBottomColor: '#00d4ff' }
+          : {}}
+      >
+        <FolderTree size={13} style={data.isMacro ? { color: '#00d4ff' } : {}} />
+        {data.isMacro && (
+          <span style={{
+            fontSize: 8, letterSpacing: 1.5, color: '#00d4ff',
+            border: '1px solid #00d4ff44', borderRadius: 2,
+            padding: '0 4px', lineHeight: '14px', flexShrink: 0,
+            opacity: 0.9,
+          }}>
+            MACRO
+          </span>
+        )}
+        <span style={{ color: accentDim, fontSize: 11, letterSpacing: 1 }}>[</span>
         <input
           className="ctx-name-input"
           value={data.contextName || ''}
@@ -83,8 +105,9 @@ const ContextNode = memo(({ id, data, selected }) => {
           }}
           onMouseDown={(e) => e.stopPropagation()}
           onClick={(e) => e.stopPropagation()}
+          style={data.isMacro ? { color: '#00d4ff' } : {}}
         />
-        <span style={{ color: 'var(--neon-dim)', fontSize: 11, letterSpacing: 1 }}>]</span>
+        <span style={{ color: accentDim, fontSize: 11, letterSpacing: 1 }}>]</span>
       </div>
 
       {/* ── Faixa START: inerte ao drag — apenas a bolinha amarela é interativa ──

@@ -154,7 +154,7 @@ const MonthPicker = memo(function MonthPicker({ selected, onChange }) {
 
 // ─── Painel principal ─────────────────────────────────────────────────────────
 
-export default function PropertiesPanel({ node, updateNodeData, deleteNode, patchNodeStyle, syncTrueContext, propagateContextRename, nodes = [] }) {
+export default function PropertiesPanel({ node, updateNodeData, deleteNode, toggleComment, patchNodeStyle, syncTrueContext, propagateContextRename, nodes = [] }) {
   // Armazena o nome do contexto no momento do foco (para detectar rename via painel)
   const ctxNameOnFocus = useRef('');
   const panelStyle = {
@@ -820,8 +820,22 @@ export default function PropertiesPanel({ node, updateNodeData, deleteNode, patc
         </>
       )}
 
+      {node.type !== 'config' && node.type !== 'context' && (
+        <button
+          className="btn-neon"
+          style={{
+            width: '100%', marginTop: 14,
+            borderColor: node.data._commented ? 'var(--neon)' : '#ffcc00',
+            color: node.data._commented ? 'var(--neon)' : '#ffcc00',
+          }}
+          onClick={() => toggleComment(node.id)}
+        >
+          {node.data._commented ? '▶ ATIVAR NÓ' : '// DESATIVAR NÓ'}
+        </button>
+      )}
+
       {node.type !== 'config' && (
-        <button className="btn-neon btn-danger" style={{ width: '100%', marginTop: 14 }}
+        <button className="btn-neon btn-danger" style={{ width: '100%', marginTop: 6 }}
           onClick={() => deleteNode(node.id)}>
           ⌫ EXCLUIR NÓ
         </button>

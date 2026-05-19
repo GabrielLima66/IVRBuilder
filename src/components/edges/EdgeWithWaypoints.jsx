@@ -19,7 +19,7 @@ import {
   useStore, useReactFlow,
   EdgeLabelRenderer, BaseEdge, getSmoothStepPath,
 } from 'reactflow';
-import { getEdgeParams, getEdgeParamsDirected } from '../../utils/edgeUtils';
+import { getEdgeParams, getEdgeParamsDirected, isSemanticHandle } from '../../utils/edgeUtils';
 import { useEdgeMode, snapToGrid } from '../../contexts/EdgeModeContext';
 
 /** Aplica snap quando no modo grade, retorna o valor intacto no modo livre */
@@ -228,11 +228,18 @@ const WaypointDot = memo(function WaypointDot({ x, y, index, zoom, onMove, onRem
 
 // ─────────────────────────────────────────────────────────────────────────────
 // EdgeWithWaypoints — componente principal
+//
+// Funciona para TODOS os tipos de edge do canvas:
+//  - 'floating' (handles genéricos): floating endpoints + waypoints editáveis
+//  - 'smoothstep' (handles semânticos, ctx-start / d-*): posição fixa de handle,
+//    sem waypoints editáveis — usa getSmoothStepPath com as coords fornecidas pelo RF
 // ─────────────────────────────────────────────────────────────────────────────
 export default function EdgeWithWaypoints({
   id, source, target, data, markerEnd, style, selected,
+  sourceX, sourceY, targetX, targetY, sourcePosition, targetPosition,
+  sourceHandleId, targetHandleId,
 }) {
-  // ── Todos os hooks antes de qualquer return ───────────────────────────────
+  // ── Todos os hooks antes de qualquer return (Rules of Hooks) ──────────────
   const { setEdges } = useReactFlow();
   const sourceNode  = useStore(useCallback((s) => s.nodeInternals.get(source), [source]));
   const targetNode  = useStore(useCallback((s) => s.nodeInternals.get(target), [target]));
@@ -240,6 +247,11 @@ export default function EdgeWithWaypoints({
   const waypoints   = data?.waypoints || [];
   const edgeMode    = useEdgeMode();
   const gridMode    = edgeMode === 'grid';
+
+  const edgeOpacity = (sourceNode?.data?._commented || targetNode?.data?._commented) ? 0.3 : 1;
+
+  // Handle semântico → posição visual obrigatória; sem floating nem waypoints
+  const isFixed = isSemanticHandle(sourceHandleId) || isSemanticHandle(targetHandleId);
 
   const patch = useCallback((wps) => {
     setEdges((es) =>
@@ -255,13 +267,27 @@ export default function EdgeWithWaypoints({
     patch(waypoints.filter((_, i) => i !== idx));
   }, [waypoints, patch]);
 
-  // ── Early return depois de todos os hooks ─────────────────────────────────
-  if (
+  // ── Early return: floating sem dimensões de nó ────────────────────────────
+  // Edges fixas têm sourceX/Y/targetX/Y das props — não precisam de nodeInternals.
+  if (!isFixed && (
     !sourceNode?.positionAbsolute || !targetNode?.positionAbsolute ||
     !sourceNode.width             || !targetNode.width
-  ) return null;
+  )) return null;
 
-  // ── Cálculo de path ───────────────────────────────────────────────────────
+  // ── Edges com handles fixos (ctx-start, d-*) ─────────────────────────────
+  // Usa as coordenadas exatas do handle fornecidas pelo React Flow,
+  // preservando o alinhamento visual obrigatório dessas conexões.
+  // Waypoints não são expostos — traçado sempre automático.
+  if (isFixed) {
+    const [fixedPath] = getSmoothStepPath({
+      sourceX, sourceY, sourcePosition,
+      targetX, targetY, targetPosition,
+      borderRadius: 6,
+    });
+    return <BaseEdge id={id} path={fixedPath} markerEnd={markerEnd} style={{ ...style, opacity: edgeOpacity }} />;
+  }
+
+  // ── Edges floating: cálculo de path com floating endpoints ───────────────
   // Com waypoints: endpoints calculados em direção ao 1º/último waypoint.
   // Sem waypoints: cálculo padrão source→target.
   const edgeParamsFn = waypoints.length > 0
@@ -275,7 +301,7 @@ export default function EdgeWithWaypoints({
   const { sx, sy, tx, ty, sourcePos, targetPos } = edgeParamsFn;
   const allPts = [{ x: sx, y: sy }, ...waypoints, { x: tx, y: ty }];
 
-  // Sempre ortogonal: sem diagonais independente do modo livre/grade
+  // Sem waypoints: suave (SmoothStep). Com waypoints: ortogonal (sem diagonais).
   let pathD;
   if (waypoints.length === 0) {
     [pathD] = getSmoothStepPath({
@@ -288,19 +314,16 @@ export default function EdgeWithWaypoints({
   }
 
   // ── Drag de segmento: um único gesto cria + move o waypoint ──────────────
-  // Capture zoom e gridMode no momento do drag para cálculo correto.
   function startSegmentDrag(e, segIdx, startFlowX, startFlowY) {
     const startClientX  = e.clientX;
     const startClientY  = e.clientY;
-    const currentZoom   = zoom;    // snapshot do zoom
-    const currentGrid   = gridMode; // snapshot do modo de snap
+    const currentZoom   = zoom;
+    const currentGrid   = gridMode;
 
-    // Insere o waypoint na posição inicial (já vem snapped pelo SegmentMidHandle)
     const baseWps = [...waypoints];
     baseWps.splice(segIdx, 0, { x: startFlowX, y: startFlowY });
     patch(baseWps);
 
-    // Rastreia o movimento e atualiza só o waypoint recém-criado
     const onMove = (ev) => {
       const dx  = (ev.clientX - startClientX) / currentZoom;
       const dy  = (ev.clientY - startClientY) / currentZoom;
@@ -321,12 +344,11 @@ export default function EdgeWithWaypoints({
   // ── Render ────────────────────────────────────────────────────────────────
   return (
     <>
-      {/* Caminho SVG visual da edge */}
-      <BaseEdge id={id} path={pathD} markerEnd={markerEnd} style={style} />
+      <BaseEdge id={id} path={pathD} markerEnd={markerEnd} style={{ ...style, opacity: edgeOpacity }} />
 
-      {/* Controles visíveis APENAS quando a edge está selecionada */}
+      {/* Controles de waypoint visíveis APENAS quando a edge está selecionada */}
       {selected && <EdgeLabelRenderer>
-        {/* ── Handles de segmento: sempre visíveis (sutis), hover revela ⊕ ── */}
+        {/* Handles de segmento: hover revela ⊕ para criar waypoint */}
         {allPts.slice(0, -1).map((p, i) => {
           const q  = allPts[i + 1];
           const mx = (p.x + q.x) / 2;
@@ -341,7 +363,7 @@ export default function EdgeWithWaypoints({
           );
         })}
 
-        {/* ── Waypoints existentes: bolinhas arrastáveis ── */}
+        {/* Waypoints existentes: bolinhas arrastáveis */}
         {waypoints.map((wp, i) => (
           <WaypointDot
             key={`wp-${i}`}

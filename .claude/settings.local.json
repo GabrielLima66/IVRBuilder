@@ -1,0 +1,15 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(Read \"C:\\\\Users\\\\RCX\\\\AppData\\\\Local\\\\Temp\\\\claude\\\\c--Users-RCX-Downloads-IVRBuilder\\\\ac1ca629-8111-4b49-b0bb-2e5bb47080a3\\\\tasks\\\\brx0w2hlh.output\")",
+      "Bash(find \"c:\\\\Users\\\\RCX\\\\Downloads\" -name \"*.conf\" -o -name \"ura_conf*\" -o -name \"rcx-ivr*\" 2>/dev/null | head -20)",
+      "Read(//c/Users/RCX/Downloads/**)",
+      "Bash(dir /s \"c:\\\\Users\\\\RCX\\\\Downloads\")",
+      "Bash(findstr /i \"conf txt ivr\")",
+      "Bash(curl -s -o /dev/null -w \"%{http_code}\" http://localhost:5173/)",
+      "Bash(node -e ' *)",
+      "Bash(npx vite *)",
+      "Bash(node --input-type=module)"
+    ]
+  }
+}

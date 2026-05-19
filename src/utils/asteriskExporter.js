@@ -46,6 +46,18 @@ function findActiveContextIds(nodes, edges) {
       reachable.add(current.parentNode);
       queue.push(current.parentNode);
     }
+
+    // Enfileira filhos diretos de ContextNodes visitados: sem isso, RouteNode
+    // e outros filhos internos nunca seriam percorridos pelo BFS (não há edge
+    // explícita ContextNode→filho após importação — só sequential entre filhos)
+    if (current?.type === 'context') {
+      for (const child of nodes) {
+        if (child.parentNode === current.id && !reachable.has(child.id)) {
+          reachable.add(child.id);
+          queue.push(child.id);
+        }
+      }
+    }
   }
 
   const activeIds = new Set(
@@ -109,6 +121,7 @@ function generateDialplanFromContexts(nodes, edges, findNode, outEdges) {
   // Linhas de dialplan para um nó filho de contexto
   function linesForChild(n) {
     if (!n) return [];
+    if (n.data?._commented) return n.data._origLine ? [n.data._origLine] : [];
     if (ACTION_META[n.type]) return [actionLine(n)].filter(Boolean);
 
     switch (n.type) {
@@ -246,6 +259,13 @@ function generateDialplanFromContexts(nodes, edges, findNode, outEdges) {
     const standaloneConfig = nodes.find((n) => n.type === 'config' && !n.parentNode);
 
     if (standaloneConfig) {
+      // Se o config está conectado diretamente a um ContextNode, as linhas do
+      // GlobalConfig serão injetadas no bloco daquele contexto — não gerar
+      // um bloco avulso [orpen-ivr-{IVR}] separado.
+      const cfgConnectedCtx = ctxNodes.some((ctx) =>
+        edges.some((e) => e.source === standaloneConfig.id && e.target === ctx.id)
+      );
+
       const IVR      = standaloneConfig.data.ivr || '0000';
       const ENTRY_CTX = `orpen-ivr-${IVR}`;
 
@@ -269,7 +289,7 @@ function generateDialplanFromContexts(nodes, edges, findNode, outEdges) {
         scCur = findNode(scNextEdge.target);
       }
 
-      if (scChain.length > 0) {
+      if (scChain.length > 0 && !cfgConnectedCtx) {
         emit(`[${ENTRY_CTX}]`);
 
         // Avisos para TimeNodes sem destino
@@ -391,9 +411,15 @@ function generateDialplanFromContexts(nodes, edges, findNode, outEdges) {
     const sSeq = [];
     const menus = [];
 
+    // Injeta linhas do GlobalConfigNode quando conectado diretamente a este contexto
+    const gcNode = nodes.find((n) => n.type === 'config' && !n.parentNode);
+    if (gcNode && edges.some((e) => e.source === gcNode.id && e.target === ctx.id)) {
+      linesForChild(gcNode).forEach((l) => { if (l) sSeq.push({ line: l, label: '' }); });
+    }
+
     for (const c of chain) {
-      // Etapa 4: validação de nós de ação antes de emitir
-      if (ACTION_META[c.type]?.validate) {
+      // Etapa 4: validação de nós de ação antes de emitir (pula nós comentados)
+      if (!c.data?._commented && ACTION_META[c.type]?.validate) {
         const errs = ACTION_META[c.type].validate(c.data || {});
         if (errs.length > 0) {
           emit(`;; AVISO: ${c.type} [id=${c.id}] — ${errs[0]}`);
@@ -413,17 +439,20 @@ function generateDialplanFromContexts(nodes, edges, findNode, outEdges) {
         sSeq.push({ line: `WaitExten(${c.data.waitExten || 4})` });
       } else {
         const lns = linesForChild(c);
-        // Label do nó vai apenas na PRIMEIRA linha gerada; subsequentes ficam sem
         const nodeLbl = ACTION_META[c.type]?.supportsLabel ? (c.data.label || '').trim() : '';
         lns.forEach((l, i) => {
-          if (l) sSeq.push({ line: l, label: i === 0 ? nodeLbl : '' });
+          if (l) {
+            // Linhas raw: nós comentados, include =>, ou linhas que já começam com ;
+            const isRaw = !!(c.data?._commented || /^include\s*=>/i.test(l) || l.startsWith(';'));
+            sSeq.push({ line: l, label: i === 0 ? nodeLbl : '', isRaw });
+          }
         });
       }
     }
 
     // Verifica referências a labels em nós GotoIf dentro desta chain
     for (const c of chain) {
-      if (c.type !== 'gotoif') continue;
+      if (c.type !== 'gotoif' || c.data?._commented) continue;
       const checkDest = (destStr) => {
         const parts = (destStr || '').trim().split(',');
         if (parts.length < 3) return;
@@ -446,11 +475,17 @@ function generateDialplanFromContexts(nodes, edges, findNode, outEdges) {
     if (sSeq.length === 0) {
       emit(`exten => s,1,Noop(## ${ctxName} ##)`);
     } else {
-      for (let i = 0; i < sSeq.length; i++) {
-        const item = sSeq[i];
-        const pri  = i === 0 ? '1' : 'n';
-        const lbl  = item.label ? `(${item.label})` : '';
-        emit(`exten => s,${pri}${lbl},${item.line}`);
+      let seqIdx = 0;
+      for (const item of sSeq) {
+        if (item.isRaw) {
+          // Linhas raw (comentadas, include =>, etc.) emitidas sem prefixo exten =>
+          emit(item.line);
+        } else {
+          const pri = seqIdx === 0 ? '1' : 'n';
+          const lbl = item.label ? `(${item.label})` : '';
+          emit(`exten => s,${pri}${lbl},${item.line}`);
+          seqIdx++;
+        }
       }
     }
 

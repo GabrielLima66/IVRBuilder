@@ -142,6 +142,23 @@ function ConfImportModal({ data, onClose, onConfirm }) {
           </div>
         )}
 
+        {/* Referências externas não vinculadas */}
+        {stats.unresolvedRefs?.length > 0 && (
+          <div style={{ marginBottom: 12 }}>
+            <div style={{ fontSize: 10, color: '#00d4ff', letterSpacing: 1, marginBottom: 6 }}>
+              ▌ REFERÊNCIAS EXTERNAS NÃO VINCULADAS ({stats.unresolvedRefs.length})
+            </div>
+            <div style={{ fontSize: 9, color: 'var(--neon-dim)', marginBottom: 6, opacity: 0.7 }}>
+              // contextos referenciados que não existem no arquivo importado — sem edge criada
+            </div>
+            {stats.unresolvedRefs.map((ref, i) => (
+              <div key={i} style={{ fontSize: 9, color: '#00d4ff', opacity: 0.8, padding: '2px 0', wordBreak: 'break-all' }}>
+                → {ref}
+              </div>
+            ))}
+          </div>
+        )}
+
         {/* Nome do projeto */}
         <div style={{ borderTop: '1px solid var(--line)', paddingTop: 14, marginTop: 8 }}>
           <label className="term-label">NOME DO PROJETO</label>

@@ -14,9 +14,10 @@ npm run preview  # preview do build
 | Vite | 5 | bundler / dev server |
 | React | 18 | UI framework |
 | ReactFlow | 11.11.4 | canvas de grafo interativo |
-| @reactflow/node-resizer | 2.2.14 | resize handle para ContextNode |
 | lucide-react | 0.395 | ícones SVG |
 | TailwindCSS | 3 | utility classes (uso mínimo — styling principal é CSS custom) |
+
+> **Nota:** `@reactflow/node-resizer` ainda está instalado mas não é mais usado — o ContextNode deixou de ser manualmente redimensionável.
 
 ## Estrutura de pastas
 ```
@@ -26,7 +27,8 @@ src/
 ├── main.jsx              entry point — importa reactflow CSS, node-resizer CSS, index.css
 ├── components/
 │   ├── canvas/
-│   │   └── AlignmentGuides.jsx   linhas-guia sobre o canvas
+│   │   ├── AlignmentGuides.jsx   linhas-guia sobre o canvas
+│   │   └── ContextOrderOverlay.jsx  controles de reordenação (drag ⠿, ↑↓, campo numérico)
 │   ├── edges/
 │   │   ├── EdgeWithWaypoints.jsx  componente de edge principal (floating + smoothstep + DTMF)
 │   │   └── FloatingEdge.jsx       LEGADO — existe no disco, NÃO registrado em edgeTypes
@@ -35,7 +37,7 @@ src/
 │       ├── ActionNode.jsx    componente genérico para 22 tipos de ação
 │       ├── CommentedNode.jsx nó comentado (borda dashed amarela)
 │       ├── ConfigNode.jsx    nó START — sem handles de entrada
-│       ├── ContextNode.jsx   container resizável — ctx-in + ctx-start handles
+│       ├── ContextNode.jsx   container de altura automática — handle ctx-in (top); filhos gerenciados por childOrder
 │       ├── MenuNode.jsx      menu DTMF — handles d-N, d-i, d-t na borda direita
 │       ├── RawNode.jsx       linha não reconhecida — textarea editável
 │       ├── RouteNode.jsx     destino unificado: macro / fila / contexto
@@ -80,7 +82,7 @@ src/
 
 7. **DTMF handles (`d-*`) usam `type: 'floating'`** — NÃO são semânticos (`isSemanticHandle` retorna false para `d-*`). O EdgeWithWaypoints detecta `isDtmf = /^d-/.test(sourceHandleId)` e aplica Bézier cúbico independente. Não passar por `getEdgeParams` (causaria convergência de todas as edges no mesmo ponto).
 
-8. **`ctx-start` usa `type: 'smoothstep'`** — único handle semântico (`isSemanticHandle` retorna true). Edge do tipo smoothstep usa o renderer nativo do React Flow.
+8. **`ctx-start` foi removido do ContextNode** — o handle e a barra START foram eliminados. A ordem de execução é determinada por `data.childOrder`. O compilador usa childOrder como fonte de verdade; fallback legado (edge ctx-start ou sort por Y) ainda funciona para projetos antigos.
 
 9. **Não reativar `onEdgeMouseDown` no ReactFlow** — foi removido pois impedia a criação de conexões dos handles DTMF. O drag de edge usa `EdgeLabelRenderer` + `document.addEventListener`.
 
@@ -95,6 +97,12 @@ src/
 14. **`customerAgi` no ConfigNode é LEGADO** — campo existe nos defaults do buildNode mas o exportador o ignora. Para `Agi(customerDataInboundCall...)`, usar nó AGI explícito.
 
 15. **`Canvas` recebe `key={project.id}`** — garante remount completo ao trocar de projeto. Não usar o mesmo Canvas para projetos diferentes sem key.
+
+16. **Filhos de ContextNode têm `draggable: false`** — o posicionamento é gerenciado exclusivamente pelo ContextNode via `useEffect` + `childOrder`. Nunca setar `draggable: true` em filhos enquanto estiverem dentro de um contexto.
+
+17. **`ContextOrderOverlay` detecta hover via `mousePos`** — o Canvas passa `mousePos` ({x,y} relativo ao wrapperRef) ao overlay. O overlay converte posições flow→tela via `useStore(s => s.transform)` para renderizar controles absolutamente posicionados acima do ReactFlow (z-index 50), evitando o problema de stacking com o ContextNode (z-index -1).
+
+18. **`childOrder` é fonte de verdade da sequência** — ao dropar, re-parenting ou deletar um nó filho, o `childOrder` do ContextNode pai deve ser atualizado em conjunto. O compilador lê `childOrder` para emitir `exten => s,1,...` e `exten => s,n,...` na ordem correta.
 
 ## Asterisk — conceitos mínimos
 
@@ -159,7 +167,11 @@ pathD = `M ${sx} ${sy} C ${sx+80} ${sy}, ${tx-80} ${ty}, ${tx} ${ty}`
 | MenuNode `waitExten` | `4` |
 | MenuNode `maxRetry` | `3` |
 | MenuNode dígitos padrão (`DEFAULT_DIGITS`) | `[{id:'1',label:'Opcao 1'}, ..., {id:'4',label:'Opcao 4'}]` |
-| ContextNode `order` | `''` (sem ordem definida) |
+| ContextNode `order` | `''` (sem ordem definida — campo legado, não determina mais sequência) |
+| ContextNode `childOrder` | `[]` (ids dos filhos em ordem de execução) |
+| ContextNode largura mínima | `320px` (CTX_MIN_W em ContextNode.jsx) |
+| ContextNode padding filhos | `20px` lateral + `20px` inferior (CTX_PAD_H, CTX_PAD_BOTTOM) |
+| ContextNode altura header | `34px` (CTX_HEADER_H — constante exportada de ContextNode.jsx) |
 | IndexedDB database | `orpen-ura-db` v1, store `projects` |
 | Projeto ID | `Date.now().toString()` |
 | Debounce de auto-save | `2000ms` |

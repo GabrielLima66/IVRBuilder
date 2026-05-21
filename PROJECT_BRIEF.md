@@ -104,7 +104,8 @@ Construtor URA/
     ├── index.css             ← Todo o CSS custom
     ├── components/
     │   ├── canvas/
-    │   │   └── AlignmentGuides.jsx   ← Renderiza linhas-guia sobre o canvas (usa useStore para viewport)
+    │   │   ├── AlignmentGuides.jsx       ← Renderiza linhas-guia sobre o canvas (usa useStore para viewport)
+    │   │   └── ContextOrderOverlay.jsx   ← Controles de reordenação de filhos (drag ⠿, ↑↓, campo numérico)
     │   ├── edges/
     │   │   ├── EdgeWithWaypoints.jsx ← Componente de edge principal (floating + smoothstep)
     │   │   └── FloatingEdge.jsx      ← Componente legacy simples (existe no disco, NÃO registrado em edgeTypes)
@@ -152,7 +153,7 @@ Construtor URA/
 
 | Tipo | Componente | Responsabilidade |
 |---|---|---|
-| `context` | ContextNode.jsx | Container/grupo resizável. Agrupa filhos com `parentNode`. |
+| `context` | ContextNode.jsx | Container de altura automática. Agrupa filhos com `parentNode`. Ordem gerenciada por `childOrder`. |
 | `config` | ConfigNode.jsx | Nó START — define variáveis globais. Sem handles de entrada. |
 | `menu` | MenuNode.jsx | Menu DTMF. Gera Background + WaitExten + extensões por dígito. |
 | `time` | TimeNode.jsx | Condição temporal GotoIfTime. |
@@ -169,13 +170,30 @@ Construtor URA/
 #### `context`
 ```js
 {
-  contextName: string,  // nome do contexto Asterisk — editável inline no cabeçalho
-  order?: number|'',    // opcional: posição no .conf (crescente; vazio = sem prioridade)
-  isMacro?: bool,       // true quando importado de [macro-*]; visual ciano
+  contextName: string,      // nome do contexto Asterisk — editável inline no cabeçalho
+  childOrder:  string[],    // IDs dos filhos em ordem de execução (fonte de verdade do compilador)
+  order?:      number|'',   // opcional: posição do contexto no .conf exportado (crescente)
+  isMacro?:    bool,        // true quando importado de [macro-*]; visual ciano
 }
 ```
-Handles: `ctx-in` (TOP, target, verde/ciano) = recebe edges externas; `ctx-start` (posição absoluta top:44, source, amarelo) = define entry-point do fluxo interno.
+
+**Layout automático:**
+- Largura = nó filho mais largo + 40px (20px cada lado). Mínimo: 320px.
+- Altura = 34px (header) + soma das alturas dos filhos + 20px (padding inferior). Sem gap entre filhos.
+- Filhos posicionados automaticamente via `useEffect` no ContextNode — `draggable: false`.
+- O ContextNode exporta as constantes `CTX_HEADER_H=34`, `CTX_PAD_H=20`, `CTX_PAD_BOTTOM=20`, `CTX_MIN_W=320` para uso no `ContextOrderOverlay`.
+
+**Handles:** `ctx-in` (TOP, target, verde/ciano) = recebe edges externas de outros contextos.  
+O handle `ctx-start` foi **removido** — a sequência é determinada por `childOrder`.  
 Badge "SEM CONEXÃO" visível quando `!hasIncoming && !data.isMacro`.
+
+**Reordenação de filhos (ContextOrderOverlay):**  
+Três mecanismos coexistem, visíveis ao hover do nó filho:
+- **A — Drag-to-reorder:** ícone ⠿ (16px, lado esquerdo); linha indicadora neon no destino.
+- **B — Botões ↑↓:** canto superior direito; primeiro item não exibe ↑, último não exibe ↓.
+- **C — Campo numérico:** canto superior esquerdo; posição 1-based editável; Enter/blur confirma.
+
+Todos operam sobre `childOrder` via callbacks `onMoveUp/onMoveDown/onMoveTo/onDragReorder` no Canvas.
 
 #### `config`
 ```js
@@ -350,8 +368,8 @@ Se o ConfigNode não estiver conectado a nenhum ContextNode ativo, gera um bloco
 Para cada ContextNode ativo:
 1. **Injeção do GlobalConfig:** se uma edge conecta o ConfigNode diretamente a este contexto, as linhas do Config são emitidas primeiro.
 2. **Ordenação interna (`getExecChain`):**
-   - Se existe edge `ctx-start` saindo deste contexto → segue grafo explícito a partir do nó apontado
-   - Sem `ctx-start` → fallback por posição Y/X dos filhos
+   - Se `data.childOrder` existe e não está vazio → usa a ordem do array como sequência de execução (**modo novo**)
+   - Fallback legado: edge `ctx-start` → grafo explícito; sem `ctx-start` → sort por posição Y/X
 3. **Geração de linhas por nó filho:**
    - `menu` → emite `Background(...)` + `WaitExten(...)` com label `menu` (ou label customizado)
    - nós de ação → chama `actionLine(node)` da `actionMeta.js`
@@ -411,6 +429,9 @@ Divide o texto em blocos `[nome]` + suas linhas. Aceita linhas `exten =>`, `;ext
 Lê o primeiro contexto para extrair variáveis globais: IVR, soundPath, agiPath, language, comment, numberDialed.
 
 **3. `processContext(ctx, xOffset, stats, globalConfig, isFirstContext)`**  
+Para cada contexto. Ao final, popula `data.childOrder` com os IDs dos filhos na ordem do arquivo — garante que a ordem do .conf original é preservada após a importação.  
+Todos os filhos são criados com `draggable: false`.
+
 Para cada contexto:
 - Linhas `include =>` → RawNode
 - Linhas comentadas (`;exten =>`) → nó do tipo real com `_commented: true` e `_origLine`

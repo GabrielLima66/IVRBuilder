@@ -1,5 +1,5 @@
 import React, { memo, useCallback, useRef } from 'react';
-import { Handle, Position, useReactFlow } from 'reactflow';
+import { Handle, Position, useReactFlow, useStore } from 'reactflow';
 import { NodeResizer } from '@reactflow/node-resizer';
 import { FolderTree } from 'lucide-react';
 import { cls } from '../../utils/common';
@@ -9,6 +9,13 @@ const ContextNode = memo(({ id, data, selected }) => {
   const { setNodes } = useReactFlow();
 
   const nameOnFocus = useRef('');
+
+  // Detecta se existe alguma edge apontando para este ContextNode.
+  // Reativo: recalculado automaticamente quando edges mudam.
+  const hasIncoming = useStore((s) => s.edges.some((e) => e.target === id));
+
+  // Contexto sem edges de entrada (exceto macros, que são chamados implicitamente)
+  const isOrphan = !hasIncoming && !data.isMacro;
 
   const onRename = useCallback(
     (v) => {
@@ -27,12 +34,16 @@ const ContextNode = memo(({ id, data, selected }) => {
   );
 
   // Cor de acento: ciano para macros, neon para contextos normais
-  const accent = data.isMacro ? '#00d4ff' : 'var(--neon)';
+  const accent    = data.isMacro ? '#00d4ff' : 'var(--neon)';
   const accentDim = data.isMacro ? '#0099bb' : 'var(--neon-dim)';
 
   return (
     <div
-      className={cls('ctx-node', selected && 'selected')}
+      className={cls(
+        'ctx-node',
+        selected && 'selected',
+        isOrphan && 'ctx-node--orphan'
+      )}
       style={data.isMacro ? { borderColor: '#00d4ff' } : {}}
     >
       <NodeResizer
@@ -43,8 +54,7 @@ const ContextNode = memo(({ id, data, selected }) => {
         handleClassName="handle"
       />
 
-      {/* ── ctx-in: recebe edges externas (GlobalStart, outros contextos) ──────
-          Posição: topo, centralizado — inalterado                               */}
+      {/* ctx-in: recebe edges externas */}
       <Handle
         type="target"
         position={Position.Top}
@@ -52,10 +62,7 @@ const ContextNode = memo(({ id, data, selected }) => {
         style={{ background: accent, width: 14, height: 14, top: -7, border: '2px solid #000' }}
       />
 
-      {/* ── ctx-start: SOURCE — origina edges para o 1º nó do fluxo interno ─────
-          type="source" garante que o usuário ARRASTA A PARTIR daqui.
-          Position.Bottom + overrides de top/left posicionam visualmente no centro
-          da faixa START. O React Flow usa a posição DOM real para rotear edges. */}
+      {/* ctx-start: origina edge para o 1º nó do fluxo interno */}
       <Handle
         type="source"
         position={Position.Bottom}
@@ -73,7 +80,7 @@ const ContextNode = memo(({ id, data, selected }) => {
         }}
       />
 
-      {/* ── Header: nome do contexto ─────────────────────────────────────────── */}
+      {/* Header: nome do contexto */}
       <div
         className="ctx-header"
         style={data.isMacro
@@ -81,6 +88,8 @@ const ContextNode = memo(({ id, data, selected }) => {
           : {}}
       >
         <FolderTree size={13} style={data.isMacro ? { color: '#00d4ff' } : {}} />
+
+        {/* Badge MACRO */}
         {data.isMacro && (
           <span style={{
             fontSize: 8, letterSpacing: 1.5, color: '#00d4ff',
@@ -91,6 +100,7 @@ const ContextNode = memo(({ id, data, selected }) => {
             MACRO
           </span>
         )}
+
         <span style={{ color: accentDim, fontSize: 11, letterSpacing: 1 }}>[</span>
         <input
           className="ctx-name-input"
@@ -108,11 +118,19 @@ const ContextNode = memo(({ id, data, selected }) => {
           style={data.isMacro ? { color: '#00d4ff' } : {}}
         />
         <span style={{ color: accentDim, fontSize: 11, letterSpacing: 1 }}>]</span>
+
+        {/* Badge SEM CONEXÃO — visível apenas quando isOrphan */}
+        {isOrphan && (
+          <span
+            className="ctx-orphan-badge"
+            data-tooltip="Este contexto não está conectado ao fluxo principal e não será exportado"
+          >
+            SEM CONEXÃO
+          </span>
+        )}
       </div>
 
-      {/* ── Faixa START: inerte ao drag — apenas a bolinha amarela é interativa ──
-          onMouseDown com stopPropagation impede que o React Flow inicie drag
-          ao clicar nessa área. cursor: default reforça que não é drag handle.  */}
+      {/* Faixa START */}
       <div
         style={{
           position: 'relative',
@@ -120,9 +138,9 @@ const ContextNode = memo(({ id, data, selected }) => {
           flexShrink: 0,
           borderBottom: '1px dashed var(--line)',
           background: 'rgba(255,204,0,0.04)',
-          cursor: 'default',   /* ← não é drag handle */
+          cursor: 'default',
         }}
-        onMouseDown={(e) => e.stopPropagation()}  /* ← impede drag nesta área */
+        onMouseDown={(e) => e.stopPropagation()}
       >
         <span style={{
           position: 'absolute',

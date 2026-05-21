@@ -108,6 +108,99 @@ export function getEdgeParamsDirected(sourceNode, targetNode, firstWp, lastWp) {
   };
 }
 
+// ─────────────────────────────────────────────────────────────────────────────
+// Obstacle avoidance
+// ─────────────────────────────────────────────────────────────────────────────
+
+/**
+ * Verifica se o segmento (sx,sy)→(tx,ty) intersecta o retângulo dado.
+ * Usa o algoritmo paramétrico linha × aresta-do-rect.
+ */
+function lineIntersectsRect(sx, sy, tx, ty, rect) {
+  const { left, top, right, bottom } = rect;
+
+  // Descarte rápido por bounding box
+  if (Math.max(sx, tx) < left  || Math.min(sx, tx) > right  ||
+      Math.max(sy, ty) < top   || Math.min(sy, ty) > bottom) return false;
+
+  const dx = tx - sx;
+  const dy = ty - sy;
+
+  // Testa cada aresta do retângulo usando parâmetro t ∈ [0,1]
+  const tests = [];
+  if (dx !== 0) {
+    tests.push({ t: (left  - sx) / dx, key: 'y', lo: top,  hi: bottom });
+    tests.push({ t: (right - sx) / dx, key: 'y', lo: top,  hi: bottom });
+  }
+  if (dy !== 0) {
+    tests.push({ t: (top    - sy) / dy, key: 'x', lo: left, hi: right });
+    tests.push({ t: (bottom - sy) / dy, key: 'x', lo: left, hi: right });
+  }
+
+  for (const { t, key, lo, hi } of tests) {
+    if (t < 0 || t > 1) continue;
+    const pt = key === 'y' ? sy + t * dy : sx + t * dx;
+    if (pt >= lo && pt <= hi) return true;
+  }
+  return false;
+}
+
+/**
+ * Calcula um ponto de desvio para a edge (sx,sy)→(tx,ty) contornar obstáculos.
+ *
+ * @param {number} sx - X de origem da edge
+ * @param {number} sy - Y de origem
+ * @param {number} tx - X de destino
+ * @param {number} ty - Y de destino
+ * @param {Array}  allNodes - todos os nós do store (com positionAbsolute)
+ * @param {string} sourceId - id do nó de origem (excluído da checagem)
+ * @param {string} targetId - id do nó de destino (excluído da checagem)
+ * @param {string} [sourceParentId] - ContextNode pai da origem (excluído)
+ * @param {string} [targetParentId] - ContextNode pai do destino (excluído)
+ * @returns {{ x: number, y: number } | null}
+ */
+export function computeObstacleAvoidance(sx, sy, tx, ty, allNodes, sourceId, targetId, sourceParentId, targetParentId) {
+  const PAD = 28; // padding externo ao bounding box do nó
+
+  let bestDetour = null;
+  let bestCost   = Infinity;
+
+  for (const node of allNodes) {
+    if (node.id === sourceId || node.id === targetId) continue;
+    if (sourceParentId && node.id === sourceParentId) continue;
+    if (targetParentId && node.id === targetParentId) continue;
+    if (!node.positionAbsolute || !node.width || !node.height) continue;
+    if (node.width < 20 || node.height < 20) continue;
+
+    const bbox = {
+      left:   node.positionAbsolute.x - PAD,
+      top:    node.positionAbsolute.y - PAD,
+      right:  node.positionAbsolute.x + node.width  + PAD,
+      bottom: node.positionAbsolute.y + node.height + PAD,
+    };
+
+    if (!lineIntersectsRect(sx, sy, tx, ty, bbox)) continue;
+
+    // Ponto de desvio: midpoint do segmento projetado em cada lado do bbox
+    const midX = (sx + tx) / 2;
+    const midY = (sy + ty) / 2;
+
+    const candidates = [
+      { x: midX,       y: bbox.top    },
+      { x: midX,       y: bbox.bottom },
+      { x: bbox.left,  y: midY        },
+      { x: bbox.right, y: midY        },
+    ];
+
+    for (const c of candidates) {
+      const cost = Math.hypot(c.x - sx, c.y - sy) + Math.hypot(c.x - tx, c.y - ty);
+      if (cost < bestCost) { bestCost = cost; bestDetour = c; }
+    }
+  }
+
+  return bestDetour;
+}
+
 /**
  * Handles semanticamente fixos — edges com esses handles usam 'smoothstep' (não floating).
  *

@@ -27,8 +27,8 @@ import { useAlignmentGuides } from './hooks/useAlignmentGuides';
 import AlignmentGuides from './components/canvas/AlignmentGuides';
 
 // Ambos os tipos usam EdgeWithWaypoints:
-// 'floating' — floating handles + waypoints editáveis (handles genéricos)
-// 'smoothstep' — posições fixas de handle (ctx-start, d-*) sem waypoints editáveis
+// 'floating' — floating handles + offset elástico + desvio automático de obstáculos
+// 'smoothstep' — posições fixas de handle (ctx-start, d-*) sem offset
 const edgeTypes = { floating: EdgeWithWaypoints, smoothstep: EdgeWithWaypoints };
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -48,7 +48,17 @@ function Canvas({ initialFlow, projectName, projectCreatedAt, currentProjectId, 
   // eslint-disable-next-line react-hooks/exhaustive-deps
   const initNodes = useMemo(() => initialFlow?.nodes?.length ? initialFlow.nodes : [buildNode('config', { x: 60, y: 80 })], []);
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  const initEdges = useMemo(() => initialFlow?.edges || [], []);
+  const initEdges = useMemo(() => {
+    const raw = initialFlow?.edges || [];
+    // Migra edges antigas: handles semânticos (d-*, ctx-start) devem ser smoothstep,
+    // não floating, para que o caminho respeite a posição exata do handle.
+    return raw.map((e) => {
+      if (e.type === 'floating' && (isSemanticHandle(e.sourceHandle) || isSemanticHandle(e.targetHandle))) {
+        return { ...e, type: 'smoothstep' };
+      }
+      return e;
+    });
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
   const [nodes, setNodes, onNodesChange] = useNodesState(initNodes);
   const [edges, setEdges, onEdgesChange] = useEdgesState(initEdges);
@@ -121,7 +131,7 @@ function Canvas({ initialFlow, projectName, projectCreatedAt, currentProjectId, 
         );
       }
 
-      // Remove edge 'true' anterior e adiciona nova (amarela, floating com waypoints)
+      // Remove edge 'true' anterior e adiciona nova (amarela, floating com offset zero)
       setEdges((es) => {
         const filtered = es.filter(
           (e) => !(e.source === source && e.sourceHandle === 'true')
@@ -130,7 +140,7 @@ function Canvas({ initialFlow, projectName, projectCreatedAt, currentProjectId, 
           {
             ...params,
             type: 'floating',
-            data: { waypoints: [] },
+            data: { offsetX: 0, offsetY: 0 },
             animated: false,
             style: { stroke: '#ffcc00', strokeWidth: 1.5 },
             markerEnd: { type: MarkerType.ArrowClosed, color: '#ffcc00' },
@@ -151,8 +161,8 @@ function Canvas({ initialFlow, projectName, projectCreatedAt, currentProjectId, 
         {
           ...params,
           type: useFloating ? 'floating' : 'smoothstep',
-          // waypoints inicializados vazios → edge usa floating handles automaticamente
-          ...(useFloating ? { data: { waypoints: [] } } : {}),
+          // offset inicializado em zero → edge usa trajeto automático
+          ...(useFloating ? { data: { offsetX: 0, offsetY: 0 } } : {}),
           animated: false,
           style: { stroke: '#00ff41', strokeWidth: 1.5 },
           markerEnd: { type: MarkerType.ArrowClosed, color: '#00ff41' },
@@ -190,11 +200,11 @@ function Canvas({ initialFlow, projectName, projectCreatedAt, currentProjectId, 
     setEdgeMenu({ x: event.clientX, y: event.clientY, edgeId: edge.id });
   }, []);
 
-  // Limpa todos os waypoints de uma edge → volta ao trajeto automático dos floating handles
-  const resetEdgeWaypoints = useCallback((edgeId) => {
+  // Reseta o offset da edge → volta ao trajeto automático
+  const resetEdgeOffset = useCallback((edgeId) => {
     setEdges((es) =>
       es.map((e) =>
-        e.id === edgeId ? { ...e, data: { ...(e.data || {}), waypoints: [] } } : e
+        e.id === edgeId ? { ...e, data: { ...(e.data || {}), offsetX: 0, offsetY: 0 } } : e
       )
     );
     setEdgeMenu(null);
@@ -241,7 +251,7 @@ function Canvas({ initialFlow, projectName, projectCreatedAt, currentProjectId, 
           target: targetCtx.id,
           targetHandle: 'ctx-in',
           type: 'floating',
-          data: { waypoints: [] },
+          data: { offsetX: 0, offsetY: 0 },
           animated: false,
           style: { stroke: '#ffcc00', strokeWidth: 1.5 },
           markerEnd: { type: MarkerType.ArrowClosed, color: '#ffcc00' },
@@ -320,15 +330,15 @@ function Canvas({ initialFlow, projectName, projectCreatedAt, currentProjectId, 
       nodes.forEach((n) => { if (n.parentNode === draggedNode.id) movedIds.add(n.id); });
     }
 
-    // Limpa waypoints de todas as edges conectadas aos nós movidos.
+    // Reseta o offset de todas as edges conectadas aos nós movidos.
     // Feito ao soltar (não durante o drag) para evitar re-renders excessivos.
     setEdges((es) =>
       es.map((e) => {
         if (
           (movedIds.has(e.source) || movedIds.has(e.target)) &&
-          (e.data?.waypoints?.length || 0) > 0
+          ((e.data?.offsetX || 0) !== 0 || (e.data?.offsetY || 0) !== 0)
         ) {
-          return { ...e, data: { ...(e.data || {}), waypoints: [] } };
+          return { ...e, data: { ...(e.data || {}), offsetX: 0, offsetY: 0 } };
         }
         return e;
       })
@@ -688,8 +698,8 @@ function Canvas({ initialFlow, projectName, projectCreatedAt, currentProjectId, 
       {/* ── Context menu de edge (botão direito) ─────────────────────────── */}
       {edgeMenu && (() => {
         const menuEdge      = edges.find((e) => e.id === edgeMenu.edgeId);
-        const isFloating    = menuEdge?.type === 'floating';
-        const hasWaypoints  = (menuEdge?.data?.waypoints?.length || 0) > 0;
+        const isFloating = menuEdge?.type === 'floating';
+        const hasOffset  = ((menuEdge?.data?.offsetX || 0) !== 0 || (menuEdge?.data?.offsetY || 0) !== 0);
 
         const menuBtnStyle = {
           display: 'block', width: '100%',
@@ -726,13 +736,13 @@ function Canvas({ initialFlow, projectName, projectCreatedAt, currentProjectId, 
                 // CONEXÃO
               </div>
 
-              {/* Redefinir trajeto — só para edges floating com waypoints */}
-              {isFloating && hasWaypoints && (
+              {/* Redefinir trajeto — só para edges floating com offset */}
+              {isFloating && hasOffset && (
                 <button
                   style={{ ...menuBtnStyle, color: 'var(--neon)' }}
                   onMouseEnter={(e) => { e.currentTarget.style.background = '#00ff4112'; }}
                   onMouseLeave={(e) => { e.currentTarget.style.background = 'transparent'; }}
-                  onClick={() => resetEdgeWaypoints(edgeMenu.edgeId)}
+                  onClick={() => resetEdgeOffset(edgeMenu.edgeId)}
                 >
                   ↺ Redefinir trajeto
                 </button>

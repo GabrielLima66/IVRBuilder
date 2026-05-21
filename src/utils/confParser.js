@@ -14,14 +14,17 @@
 import { uid } from './common';
 
 // ── Constantes de layout ──────────────────────────────────────────────────────
-const CTX_WIDTH   = 520;
-const CTX_GAP     = 100;
-const CTX_PAD_TOP = 60;
-const CTX_PAD_H   = 30;
-const NODE_H      = 120;
-const NODE_GAP    = 16;
-// ContextNodes ficam abaixo do GlobalConfigNode (estimativa de altura do ConfigNode)
-const CTX_ROW_Y   = 220;
+const CTX_MIN_WIDTH  = 520;  // largura mínima de um ContextNode
+const CTX_PAD_TOP    = 60;   // padding topo (espaço abaixo da barra START)
+const CTX_PAD_BOTTOM = 40;   // padding inferior do ContextNode
+const CTX_PAD_H      = 40;   // padding horizontal dos nós filhos
+const NODE_H         = 100;  // altura estimada de um nó filho
+const NODE_GAP       = 40;   // espaçamento vertical entre nós filhos
+const CTX_COL_GAP    = 120;  // gap horizontal entre ContextNodes
+const CTX_ROW_Y      = 220;  // Y fixo de todos os ContextNodes (abaixo do GlobalConfig)
+// Aliases de compatibilidade
+const CTX_WIDTH = CTX_MIN_WIDTH;
+const CTX_GAP   = CTX_COL_GAP;
 
 // ── 1. Extração de contextos ──────────────────────────────────────────────────
 
@@ -557,17 +560,18 @@ function processContext(ctx, xOffset, stats, globalConfig, isFirstContext) {
     for (const me of macroEdges) edges.push(me);
   }
 
-  const ctxHeight = Math.max(yChild + CTX_PAD_H, 220);
+  const ctxHeight = Math.max(yChild + CTX_PAD_BOTTOM, 220);
 
   const ctxNode = {
     id:       ctxId,
     type:     'context',
+    // Posição calculada em parseConfFile a partir do CTX_ROW_Y e xOffset
     position: { x: xOffset, y: CTX_ROW_Y },
     data:     {
       contextName: ctx.name,
       ...(isMacro ? { isMacro: true } : {}),
     },
-    style:    { width: CTX_WIDTH, height: ctxHeight },
+    style:    { width: CTX_MIN_WIDTH, height: ctxHeight },
     zIndex:   -1,
   };
 
@@ -713,8 +717,8 @@ export function parseConfFile(text) {
   const configNode = {
     id:   configId,
     type: 'config',
-    // Posição X será recalculada abaixo; Y fixo no topo
-    position: { x: 50, y: 20 },
+    // Posição definitiva calculada pelo layout hierárquico — valor provisório aqui
+    position: { x: 50, y: 50 },
     data: {
       ivr:          globalConfig.ivr          || '0000',
       soundPath:    globalConfig.soundPath     || '',
@@ -722,17 +726,16 @@ export function parseConfFile(text) {
       language:     globalConfig.language      || 'pt_BR',
       comment:      globalConfig.comment       || '',
       numberDialed: globalConfig.numberDialed,
-      logIvr:       false,   // Macro(logIvr) é nó separado, não flag de config
+      logIvr:       false,
       customerAgi:  false,
     },
   };
   allNodes.push(configNode);
   stats.nodesByType['config'] = 1;
 
-  // ── Processa cada contexto ────────────────────────────────────────────────
+  // ── Processa cada contexto em grade simples — esquerda para direita ─────
   let xOffset    = 50;
   let firstCtxId = null;
-
   for (let i = 0; i < contexts.length; i++) {
     const { ctxNode, nodes, edges, ctxId } = processContext(
       contexts[i], xOffset, stats, globalConfig, i === 0
@@ -740,14 +743,14 @@ export function parseConfFile(text) {
     if (i === 0) firstCtxId = ctxId;
     allNodes.push(ctxNode, ...nodes);
     allEdges.push(...edges);
-    xOffset += CTX_WIDTH + CTX_GAP;
+    xOffset += CTX_MIN_WIDTH + CTX_COL_GAP;
   }
 
-  // ── Centraliza o GlobalConfigNode horizontalmente ──────────────────────────
-  const totalCtxWidth   = contexts.length * CTX_WIDTH + Math.max(0, contexts.length - 1) * CTX_GAP;
-  const configNodeWidth = 220; // largura estimada do ConfigNode
+  // GlobalConfigNode: centralizado horizontalmente acima de todos os contextos
+  const totalWidth   = contexts.length * CTX_MIN_WIDTH + Math.max(0, contexts.length - 1) * CTX_COL_GAP;
+  const configWidth  = 220;
   configNode.position = {
-    x: Math.max(50, 50 + (totalCtxWidth - configNodeWidth) / 2),
+    x: Math.max(50, 50 + (totalWidth - configWidth) / 2),
     y: 20,
   };
 
@@ -767,8 +770,6 @@ export function parseConfFile(text) {
   }
 
   // ── Resolução de referências a contextos ──────────────────────────────────
-  // Cria edges visuais para route/gosub/time/gotoif que apontam para contextos
-  // presentes no canvas. Referências externas (não encontradas) ficam em stats.
   const { newEdges, unresolved } = resolveReferences(allNodes, allEdges);
   allEdges.push(...newEdges);
   stats.unresolvedRefs = unresolved;

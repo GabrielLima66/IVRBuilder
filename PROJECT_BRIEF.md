@@ -1,24 +1,30 @@
-﻿# Orpen URA Builder — Project Brief
+# Orpen URA Builder — Project Brief
 
-> Fonte de verdade técnica do projeto. Atualizar sempre que novos nós, regras de compilação ou padrões forem alterados.
+> Fonte de verdade técnica do projeto. Lida por Claude Code em sessões futuras. Reescrever sempre que arquitetura mudar.
 
 ---
 
-## 1. Stack Tecnológica
+## 1. Visão Geral
 
-| Pacote | Versão | Papel |
-|---|---|---|
-| Vite | 5.3.1 | Bundler/dev server |
-| React | 18.3.1 | UI framework |
-| ReactFlow | 11.11.4 | Canvas de grafo interativo |
-| @reactflow/node-resizer | 2.2.14 | Handle de resize para ContextNode |
-| lucide-react | 0.395.0 | Ícones SVG |
-| TailwindCSS | 3.4.4 | Utility classes (uso mínimo — styling principal é CSS custom) |
-| PostCSS + autoprefixer | — | Pipeline Tailwind |
+**Nome:** Orpen URA Builder  
+**Propósito:** Editor visual de dialplan Asterisk (extensions.conf) via canvas drag-and-drop. Cada nó representa uma instrução ou bloco do dialplan; as edges representam o fluxo de execução. O resultado é um arquivo `.conf` válido gerado pelo compilador interno.
+
+**Público:** Operadores e desenvolvedores de telefonia da Orpen que precisam montar e manter URAs Asterisk sem editar texto manualmente.
 
 **Entry point:** `index.html` → `src/main.jsx` → `src/App.jsx`
 
-**JSX em `.js`**: proibido — Vite só processa JSX em `.jsx`/`.tsx`. O `src/components/nodes/index.jsx` usa essa extensão justamente por usar JSX no `mkActionType`.
+### Stack
+
+| Pacote | Papel |
+|---|---|
+| Vite 5 | Bundler / dev server |
+| React 18 | UI framework |
+| ReactFlow 11 | Canvas de grafo interativo |
+| @reactflow/node-resizer | Handle de resize para ContextNode |
+| lucide-react | Ícones SVG |
+| TailwindCSS 3 | Utility classes (uso mínimo — styling principal é CSS custom em `index.css`) |
+
+**Regra JSX:** Vite só processa JSX em `.jsx`/`.tsx`. Nunca usar JSX em `.js`.
 
 ---
 
@@ -27,7 +33,7 @@
 ### CSS Custom Properties (`:root` em `src/index.css`)
 
 ```css
---neon:    #00ff41   /* verde neon — cor primária de tudo */
+--neon:    #00ff41   /* verde neon — cor primária */
 --neon-dim:#00b32d   /* verde escurecido para labels e bordas */
 --bg:      #0d0d0d   /* fundo do canvas */
 --panel:   #131313   /* fundo dos painéis laterais */
@@ -39,21 +45,22 @@
 Stack monospace: `'JetBrains Mono', 'Fira Code', 'Courier New', ui-monospace, monospace`
 
 ### Efeitos Visuais
-- **Scanlines**: `body::before` com `repeating-linear-gradient` verde semi-transparente, `z-index:1000`, `pointer-events:none`
-- **Neon glow**: `box-shadow: 0 0 10px var(--neon), 0 0 20px rgba(0,255,65,0.5)` nos botões hover
-- **Blink cursor**: classe `.blink` com `animation: blink 1.2s steps(2, start) infinite`
+- **Scanlines:** `body::before` com `repeating-linear-gradient` verde semi-transparente, `z-index:1000`, `pointer-events:none`
+- **Neon glow:** `box-shadow` nos botões hover
+- **Blink cursor:** classe `.blink` com `animation: blink 1.2s steps(2) infinite`
+- **Orphan pulse:** `.ctx-node--orphan:not(.selected)` — borda laranja pulsante em ContextNodes sem conexão de entrada
 
-### Cores de Acento por Categoria de Nó
+### Cores de Acento por Categoria
 
-| Categoria | Cor | Nós |
-|---|---|---|
-| Estrutura core | `#00ff41` | config, menu, context, answer, wait, playback |
-| Condição temporal | `#ffcc00` | time (UI), read, saydigits, saynumber |
-| Fluxo de controle | `#00d4ff` | gosub, return; route-contexto |
-| Lógica | `#a78bfa` | agi, macro, execif, execiftime; route-macro |
-| Monitoramento | `#ff8c00` | mixmonitor, stopmonitor, chanspy; route-fila |
-| Hangup/erro | `#ff5050` | hangup; handle "closed" do time |
-| Debug | `#888888` | noop, verbose |
+| Cor | Nós/contexto |
+|---|---|
+| `#00ff41` | config, menu, context, answer, wait, playback, background, waitexten |
+| `#ffcc00` | time (handle true, edge amarela), read, saydigits, saynumber |
+| `#00d4ff` | gosub, return, gotoif, route-contexto, ContextNode macro |
+| `#a78bfa` | set, agi, macro, execif, execiftime, route-macro |
+| `#ff8c00` | mixmonitor, stopmonitor, chanspy, dial, route-fila |
+| `#ff5050` | hangup, badge "DESATIVADO" |
+| `#888888` | noop, verbose |
 
 ### Classes CSS Estruturais dos Nós
 
@@ -61,19 +68,21 @@ Stack monospace: `'JetBrains Mono', 'Fira Code', 'Courier New', ui-monospace, mo
 .rcx-node           — container base (border neon-dim, bg panel, min-width 220px)
 .rcx-node.selected  — border white + glow branco
 .rcx-node-header    — gradiente dark-green, uppercase, flex justify-between
-.rcx-node-body      — padding 8px 10px, font-family inherit
-.rcx-node-row       — flex justify-between, font 11px; .k = neon-dim, .v = #c7ffd5
-.digit-row          — flex, border-top dashed, position:relative (para handles absolutas)
-.ctx-node           — rgba(0,255,65,0.04) bg, borda dashed, flex column
+.rcx-node-body      — padding 8px 10px
+.rcx-node-row       — flex justify-between, 11px; .k=neon-dim .v=#c7ffd5
+.digit-row          — flex, border-top dashed, position:relative
+.ctx-node           — bg rgba(0,255,65,0.04), borda dashed neon, flex column
 .ctx-node.selected  — borda sólida branca
-.ctx-header         — rgba(0,255,65,0.18) bg, cursor:move
-.ctx-name-input     — input transparente editável inline
-.ctx-body-hint      — hint centralizado, pointer-events:none
+.ctx-node--orphan   — borda laranja pulsante (sem conexão de entrada)
+.ctx-header         — bg rgba(0,255,65,0.18), cursor:move
+.ctx-name-input     — input transparente editável inline no cabeçalho
+.ctx-body-hint      — hint "ARRASTE NÓS AQUI DENTRO", pointer-events:none
+.ctx-orphan-badge   — badge "SEM CONEXÃO" com tooltip
 .badge              — inline-block, border neon-dim, font 9px
 .palette-item       — border dashed line, cursor grab, hover glow
 .btn-neon           — border neon, hover inverte bg/fg
 .btn-danger         — border/color #ff3b3b
-.term-input/select  — bg #000, border line, color neon, full width
+.term-input/select/textarea — bg #000, border line, color neon, full width
 .neon-text          — text-shadow verde
 ```
 
@@ -84,1189 +93,781 @@ Stack monospace: `'JetBrains Mono', 'Fira Code', 'Courier New', ui-monospace, mo
 ```
 Construtor URA/
 ├── PROJECT_BRIEF.md          ← este arquivo
-├── index.html                ← Vite entry (sem CDN, apenas <script src="/src/main.jsx">)
+├── index.html                ← Vite entry
 ├── package.json
 ├── vite.config.js            ← defineConfig com @vitejs/plugin-react
-├── tailwind.config.js        ← content: ['./index.html','./src/**/*.{js,jsx}']
+├── tailwind.config.js
 ├── postcss.config.js
 └── src/
-    ├── main.jsx              ← ReactDOM.createRoot; importa reactflow CSS, noderesizer CSS, index.css
-    ├── App.jsx               ← Canvas component + ReactFlowProvider + estado global
-    ├── index.css             ← Todo o CSS custom (variáveis, nós, inputs, modal, time picker)
+    ├── main.jsx              ← ReactDOM.createRoot; importa reactflow CSS, node-resizer CSS, index.css
+    ├── App.jsx               ← Canvas (estado global) + App (roteamento home/canvas)
+    ├── index.css             ← Todo o CSS custom
     ├── components/
-    │   ├── nodes/
-    │   │   ├── index.jsx     ← nodeTypes registry + mkActionType factory
-    │   │   ├── ActionNode.jsx← Componente genérico para os 18 nós de ação (usa ACTION_META)
-    │   │   ├── ConfigNode.jsx← Nó START — sem handles de entrada
-    │   │   ├── ContextNode.jsx← Container resizável com ctx-start handle
-    │   │   ├── MenuNode.jsx  ← DTMF menu com handles por dígito
-    │   │   ├── RouteNode.jsx ← Destino/Roteamento unificado (3 modos)
-    │   │   └── TimeNode.jsx  ← Condição temporal (suporta formato novo e legado)
-    │   └── layout/
-    │       ├── Sidebar.jsx   ← Palette de nós draggáveis (6 categorias)
-    │       └── PropertiesPanel.jsx ← Editor de propriedades por tipo de nó
-    ├── config/
-    │   └── nodeTags.js         ← Mapa de tags semânticas por tipo de nó (usado na pesquisa da sidebar)
-    ├── contexts/
-    │   └── EdgeModeContext.js  ← Contexto React do modo de roteamento ('free'|'grid') + GRID_SIZE + snapToGrid()
-    ├── components/
+    │   ├── canvas/
+    │   │   └── AlignmentGuides.jsx   ← Renderiza linhas-guia sobre o canvas (usa useStore para viewport)
     │   ├── edges/
-    │   │   ├── EdgeWithWaypoints.jsx ← Edge 'floating' com waypoints editáveis + ortogonal routing
-    │   │   └── FloatingEdge.jsx      ← Edge simplificada (legado, substituída por EdgeWithWaypoints)
+    │   │   ├── EdgeWithWaypoints.jsx ← Componente de edge principal (floating + smoothstep)
+    │   │   └── FloatingEdge.jsx      ← Componente legacy simples (existe no disco, NÃO registrado em edgeTypes)
     │   ├── nodes/
-    │   │   ├── index.jsx     ← nodeTypes registry + mkActionType factory
-    │   │   ├── ActionNode.jsx← Componente genérico para os 22 nós de ação (usa ACTION_META)
-    │   │   ├── ConfigNode.jsx← Nó START — sem handles de entrada
-    │   │   ├── ContextNode.jsx← Container resizável com ctx-start handle e faixa START
-    │   │   ├── MenuNode.jsx  ← DTMF menu com handles por dígito
-    │   │   ├── RouteNode.jsx ← Destino/Roteamento unificado (3 modos)
-    │   │   └── TimeNode.jsx  ← Condição temporal (suporta formato novo e legado)
+    │   │   ├── index.jsx       ← nodeTypes registry + mkActionType factory
+    │   │   ├── ActionNode.jsx  ← Componente genérico para os 22 nós de ação
+    │   │   ├── CommentedNode.jsx ← Nó comentado (borda dashed amarela, exibe originalLine)
+    │   │   ├── ConfigNode.jsx  ← Nó START — apenas handles de saída (out, out-right, out-left)
+    │   │   ├── ContextNode.jsx ← Container resizável; handles ctx-in (top) e ctx-start (interno)
+    │   │   ├── MenuNode.jsx    ← Menu DTMF com handles d-N, d-i, d-t na borda direita
+    │   │   ├── RawNode.jsx     ← Linha não reconhecida (orange, textarea editável)
+    │   │   ├── RouteNode.jsx   ← Destino unificado: macro/fila/contexto
+    │   │   └── TimeNode.jsx    ← Condição temporal: handle true (right, amarelo) + closed (bottom, verde)
     │   └── layout/
-    │       ├── Sidebar.jsx   ← Palette de nós draggáveis (6 categorias)
-    │       └── PropertiesPanel.jsx ← Editor de propriedades por tipo de nó
+    │       ├── Sidebar.jsx     ← Palette accordion (6 categorias) + busca com relevância + drag-and-drop
+    │       └── PropertiesPanel.jsx ← Editor de propriedades por tipo de nó (320px, lado direito)
+    ├── config/
+    │   └── nodeTags.js         ← Mapa de tags semânticas por tipo (para busca na Sidebar)
+    ├── contexts/
+    │   └── EdgeModeContext.js  ← Context React: 'free'|'grid' + GRID_SIZE=20 + snapToGrid()
     ├── hooks/
-    │   └── useAlignmentGuides.js ← Hook de smart guides + snap (Figma-style)
+    │   └── useAlignmentGuides.js ← Smart guides Figma-style + snap ao soltar
+    ├── screens/
+    │   └── HomeScreen.jsx      ← Tela inicial: lista de projetos, criar/abrir/importar/excluir
+    ├── services/
+    │   └── projectStorage.js   ← CRUD IndexedDB: salvarProjeto, listarProjetos, carregarProjeto, excluirProjeto, projetoExiste
     └── utils/
-        ├── actionMeta.js     ← ACTION_META dict + actionLine() + validate() por tipo
-        ├── asteriskExporter.js ← generateDialplan() — compilador principal
-        ├── buildNode.js      ← Factory de nós com defaults
-        ├── common.js         ← uid(), cls(), slugify(), DEFAULT_DIGITS
-        ├── edgeUtils.js      ← getEdgeParams(), getEdgeParamsDirected(), isSemanticHandle()
-        ├── renamePropagator.js ← applyContextRename() — cascata de rename de ContextNode
-        └── timeUtils.js      ← Formatação de condições de tempo Asterisk
+        ├── actionMeta.js       ← ACTION_META (title, app, icon, color, summary, validate, terminal, supportsLabel) + actionLine()
+        ├── asteriskExporter.js ← generateDialplan(): modo hierárquico (com ContextNodes) ou legado (sem)
+        ├── buildNode.js        ← Factory de nós com todos os defaults por tipo
+        ├── common.js           ← uid(), cls(), slugify(), DEFAULT_DIGITS
+        ├── confParser.js       ← parseConfFile(): converte .conf Asterisk em nós+edges React Flow
+        ├── edgeUtils.js        ← getEdgeParams(), getEdgeParamsDirected(), isSemanticHandle(), computeObstacleAvoidance()
+        ├── renamePropagator.js ← applyContextRename(): cascata de rename em time/route/gosub
+        └── timeUtils.js        ← formatDayRange(), formatTimeRange(), buildTimeExport(), getMaxDay()
 ```
 
 ---
 
-## 4. Arquitetura dos Nós Customizados
+## 4. Nós Customizados
 
-### 4.1 Tipos de Nós e Responsabilidades
-
-Existem **dois padrões** de nó:
+### 4.1 Dois padrões de nó
 
 **A) Nós Estruturais** — componentes próprios, registrados diretamente no `nodeTypes`:
 
 | Tipo | Componente | Responsabilidade |
 |---|---|---|
-| `context` | ContextNode.jsx | Container/grupo resizável. Agrupa filhos com `parentNode`. Tem `ctx-start` para definir entry point explícito. |
-| `config` | ConfigNode.jsx | Nó START do fluxo. Define variáveis globais (IVR, paths, language). Sem handles de entrada. |
+| `context` | ContextNode.jsx | Container/grupo resizável. Agrupa filhos com `parentNode`. |
+| `config` | ConfigNode.jsx | Nó START — define variáveis globais. Sem handles de entrada. |
 | `menu` | MenuNode.jsx | Menu DTMF. Gera Background + WaitExten + extensões por dígito. |
-| `time` | TimeNode.jsx | Condição temporal. Exporta exclusivamente `GotoIfTime(...)`. |
-| `route` | RouteNode.jsx | Destino unificado (Goto, Queue ou macro Orpen). |
+| `time` | TimeNode.jsx | Condição temporal GotoIfTime. |
+| `route` | RouteNode.jsx | Destino unificado (Goto / Queue / Macro Orpen). |
+| `commented` | CommentedNode.jsx | Linha Asterisk comentada (;exten =>). Não gera output. |
+| `raw` | RawNode.jsx | Linha não reconhecida. Exporta a string literal intacta. |
 
 **B) Nós de Ação** — renderizados por `ActionNode.jsx` via `mkActionType(type)`:
 
-22 tipos registrados: `gosub, return, hangup, gotoif, set, agi, macro, execif, execiftime, noop, verbose, dial, read, saydigits, saynumber, mixmonitor, stopmonitor, chanspy, answer, wait, waitexten, playback, background`
+22 tipos: `gosub, return, hangup, gotoif, set, agi, macro, execif, execiftime, noop, verbose, dial, read, saydigits, saynumber, mixmonitor, stopmonitor, chanspy, answer, wait, waitexten, playback, background`
 
 ### 4.2 Dados (`data`) por Tipo de Nó
 
 #### `context`
 ```js
 {
-  contextName: string,  // nome do contexto Asterisk (entre colchetes no .conf)
-  order?: number|''     // opcional — posição no arquivo .conf (crescente; vazio = sem prioridade)
+  contextName: string,  // nome do contexto Asterisk — editável inline no cabeçalho
+  order?: number|'',    // opcional: posição no .conf (crescente; vazio = sem prioridade)
+  isMacro?: bool,       // true quando importado de [macro-*]; visual ciano
 }
 ```
+Handles: `ctx-in` (TOP, target, verde/ciano) = recebe edges externas; `ctx-start` (posição absoluta top:44, source, amarelo) = define entry-point do fluxo interno.
+Badge "SEM CONEXÃO" visível quando `!hasIncoming && !data.isMacro`.
 
 #### `config`
 ```js
 {
-  ivr: string,          // número do IVR → Set(__IVR=...)
+  ivr: string,          // → Set(__IVR=...)
   soundPath: string,    // → Set(SOUND_PATH=...)
   agiPath: string,      // → Set(AGI_PATH=...)
   language: string,     // → Set(CHANNEL(language)=...)
   comment: string,      // → Noop(## comment ##)
   numberDialed: bool,   // → Set(__NUMBER_DIALED=${CALLERID(num)})
   logIvr: bool,         // → Macro(logIvr,ENTER_IVR)
-  customerAgi: bool     // DEPRECATED — não gera mais código; relíquia em buildNode
+  customerAgi: bool,    // LEGADO — presente no buildNode mas ignorado pelo exportador
 }
 ```
-> **NOTA:** `customerAgi` foi removido da geração de código (Fix 2). O campo ainda existe nos defaults do `buildNode` mas o exportador o ignora. Para emitir `Agi(customerDataInboundCall_v4.php,...)`, use um nó AGI explícito.
+Handles: apenas saída — `out` (BOTTOM), `out-right` (RIGHT), `out-left` (LEFT).  
+Para emitir `Agi(customerDataInboundCall_v4.php,...)`, usar um nó AGI explícito no canvas.
 
 #### `menu`
 ```js
 {
-  contextName: string,  // nome do contexto deste menu (usado em Goto em DTMF)
-  greeting: string,     // arquivo de áudio → Background(${SOUND_PATH}/greeting)
-  waitExten: number,    // → WaitExten(n)
-  digits: [{ id: string, label: string }],  // lista de opções DTMF
-  invalidMacro: string, // macro para extensão 'i'
-  timeoutMacro: string, // macro para extensão 't'
+  contextName: string,   // nome do contexto deste menu (Goto na exportação)
+  greeting: string,      // arquivo de áudio → Background(${SOUND_PATH}/greeting)
+  waitExten: number,     // → WaitExten(n)
+  digits: [{ id: string, label: string }],  // opções DTMF (1-9, 0)
+  invalidMacro: string,  // macro extensão 'i' (fallback: macro-menu-invalid-orpen-home)
+  timeoutMacro: string,  // macro extensão 't' (fallback: macro-menu-timeout-orpen-home)
   maxRetry: number,
-  retryGoto: string,    // Goto de retry após maxRetry
-  invalidSound: string  // áudio tocado em dígito inválido sem edge
+  retryGoto: string,
+  invalidSound: string,
+  _dtmfGotos?: object,   // campo interno do confParser (consumido por resolveReferences, ignorado pelo exportador)
 }
 ```
+Handles: `in` (TOP target), `in-left` (LEFT target); `d-{digit.id}` (RIGHT source, handle semântico) para cada dígito + `d-i` + `d-t`.  
+`updateNodeInternals(id)` chamado via `useEffect([digits.length])` para reposicionar handles ao adicionar/remover dígitos.  
+O bloco DTMF usa `margin: -10px` lateral para cancelar o `padding` do `rcx-node-body`, fazendo os handles ficarem exatamente na borda do nó.
 
-#### `time` (formato atual)
+#### `time`
 ```js
 {
-  timeStart:   string,    // 'HH:MM' — início do horário (vazio = *)
-  timeEnd:     string,    // 'HH:MM' — fim do horário (vazio = *)
-  weekdays:    string[],  // ex: ['mon','tue','wed','thu','fri']
-  months:      string[],  // ex: [] (vazio = *), ou ['jan','feb',...]
+  timeStart:   string,    // 'HH:MM' (vazio = *)
+  timeEnd:     string,    // 'HH:MM' (vazio = *)
+  weekdays:    string[],  // ['sun','mon','tue','wed','thu','fri','sat']
+  months:      string[],  // ['jan','feb',...] (vazio = *)
   mday:        number|'', // dia do mês (vazio = *)
-  label:       string,    // comentário inline no .conf
-  trueContext: string,    // contexto de destino quando a condição BATER (VERDADEIRO)
-                          // OBRIGATÓRIO: vazio → linha omitida + aviso no .conf
-                          // Sincronizado bidirecionalmente com handle 'true' no canvas
+  label:       string,    // comentário inline
+  trueContext: string,    // contexto destino quando condição VERDADEIRA — obrigatório
 }
 ```
-> **Handles:** `true` (RIGHT, source, amarelo) = branch quando condição bate; `closed` (BOTTOM, source, verde) = fall-through quando condição NÃO bate (sequencial, nenhuma instrução gerada).
-> **Auto-wire bidirecional:**
-> - Edge `true` → ContextNode: preenche `trueContext` automaticamente com `contextName`
-> - Digitar `trueContext` + onBlur/Enter: cria edge `true` → ContextNode correspondente
-> - Deletar edge `true`: limpa `trueContext`
-> **Validação visual:** borda vermelha + "⚠ sem destino vinculado" quando `trueContext` vazio; borda verde + "✓ vinculado" quando preenchido.
-> Campo `closedContext` foi **removido** — não existe mais.
-> Formato legado suportado: `{ hours: 'HH:MM-HH:MM', days: 'mon-fri', monthdays: '*', months: '*', ... }`. `buildTimeExport()` detecta pelo campo `hours` ausente.
+Handles: `in` (TOP target), `in-left` (LEFT target); `true` (RIGHT source, amarelo) → branch verdadeiro; `closed` (BOTTOM source, verde) → fall-through (condição falsa, tratado como sequencial no exportador).  
+Auto-wire bidirecional:
+- Edge `true` → ContextNode: preenche `trueContext` automaticamente
+- Digitar `trueContext` + onBlur/Enter: cria edge `true` → ContextNode correspondente via `syncTrueContext`
+- Deletar edge `true`: limpa `trueContext`  
+Validação visual: borda vermelha + "⚠ sem destino vinculado" quando `trueContext` vazio.
+
+Formato legado suportado: `{ hours, days, monthdays, months }` — `buildTimeExport()` detecta pela ausência de `timeStart`.
 
 #### `route`
 ```js
 {
   routeMode: 'macro'|'fila'|'contexto',
-  queue: string,        // modo fila e macro
-  queueOptions: string, // modo fila (ex: 't')
+  queue: string,        // modo fila e macro (número/nome da fila)
+  queueOptions: string, // modo fila
   context: string,      // modo contexto
   extension: string,    // modo contexto (default: 's')
-  priority: string      // modo contexto (default: '1')
+  priority: string,     // modo contexto (default: '1')
+}
+```
+Exporta:
+- `macro` → `Set(DESTINY_TRANFER=queue)` + `Set(TYPE_TRANSFER=QUEUE)` + `Goto(orpen-ivr-transfer,s,1)`
+- `fila` → `Queue(queue[,opts])`
+- `contexto` → `Goto(context,extension,priority)`
+
+#### `commented` (CommentedNode)
+```js
+{
+  originalLine: string,  // linha original (;exten =>...)
+  text?: string,         // fallback display
+  onReactivate?: fn,     // callback para reativação (raro)
+  reactivateError?: string,
+}
+```
+Visual: borda dashed amarela, opacidade 0.7. Botão "REATIVAR" no header (se `onReactivate` existir). Não gera nenhuma linha no .conf. **Distinto de** `_commented: true` que é o mecanismo de "desativar" qualquer nó pelo menu de contexto — os dois não devem ser confundidos.
+
+#### `raw` (RawNode)
+```js
+{
+  rawLine: string,    // linha Asterisk literal (editável via textarea)
+  _commented?: bool,  // se desativado via toggle de comentário
+  _origLine?: string, // linha original quando _commented
+}
+```
+Visual: borda laranja. Textarea editável (readOnly quando `_commented`). Exporta a string `rawLine` intacta.
+
+#### Nós de Ação (`ACTION_META`) — Referência Completa
+
+| Tipo | data fields | Exporta | terminal | supportsLabel |
+|---|---|---|---|---|
+| `gosub` | context, extension, priority, params[] | `Gosub(ctx,ext,pri(args))` | — | sim |
+| `return` | value | `Return([value])` | **sim** | — |
+| `hangup` | causeCode | `Hangup([cause])` | **sim** | — |
+| `gotoif` | expression, trueDestination, falseDestination | `GotoIf($[expr]?true:false)` | — | — |
+| `set` | assignment | `Set(VAR=valor)` | — | sim |
+| `agi` | script, params[] | `Agi(${AGI_PATH}/script[,params])` | — | sim |
+| `macro` | name, params[] | `Macro(name[,params])` | — | sim |
+| `execif` | expression, action | `ExecIf($[expr]?action)` | — | — |
+| `execiftime` | hours, days, monthdays, months, action | `ExecIfTime(t,d,md,m?action)` | — | — |
+| `noop` | text | `Noop(text)` | — | sim |
+| `verbose` | level, message | `Verbose(level,msg)` | — | — |
+| `dial` | destination, timeout, options | `Dial(dest[,timeout[,opts]])` | — | — |
+| `read` | variable, audio, maxDigits, timeout | `Read(VAR,${SOUND_PATH}/audio,max,,timeout)` | — | sim |
+| `saydigits` | value | `SayDigits(value)` | — | — |
+| `saynumber` | value, gender | `SayNumber(value[,gender])` | — | — |
+| `mixmonitor` | filename, extension | `MixMonitor(file.ext)` | — | — |
+| `stopmonitor` | — | `StopMonitor()` | — | — |
+| `chanspy` | target, options | `ChanSpy(SIP/target[,opts])` | — | — |
+| `answer` | — | `Answer()` | — | — |
+| `wait` | seconds | `Wait(n)` | — | — |
+| `waitexten` | seconds | `WaitExten(n)` | — | sim |
+| `playback` | filename | `Playback(${SOUND_PATH}/file)` | — | sim |
+| `background` | filename | `Background(${SOUND_PATH}/file)` | — | sim |
+
+`terminal: true` → o exportador interrompe a cadeia sequencial neste nó (não segue próxima edge).  
+`supportsLabel: true` → o exportador emite `exten => s,n(label),Cmd()`. O PropertiesPanel mostra o campo label com validação `/^[a-z0-9-]+$/` e detecção de duplicatas no mesmo ContextNode.
+
+**Handles dos nós de ação:** `in` (TOP target), `in-left` (LEFT target); `out` (BOTTOM source), `out-right` (RIGHT source). Nós terminais omitem os handles de saída.
+
+**Estado de comentário (_commented):** qualquer nó (exceto `config` e `context`) pode ser desativado via menu de contexto ou botão no PropertiesPanel. Quando `_commented: true`:
+- Borda dashed, opacidade 0.6
+- Header mostra `// TITULO` e badge "DESATIVADO"
+- Exibe botões ATIVAR / EXCLUIR dentro do nó
+- Exportador: omite a linha (passa o `_origLine` se existir, sem gerar código)
+
+---
+
+## 5. Compilador / Exportador (asteriskExporter.js)
+
+### Entry Point
+
+```js
+export function generateDialplan(nodes, edges)
+```
+
+**Modo selecionado automaticamente:**
+- Se existir qualquer nó `type === 'context'` → **modo hierárquico** (`generateDialplanFromContexts`)
+- Caso contrário → **modo legado** (`generateDialplanLegacy`)
+
+---
+
+### 5.1 Modo Hierárquico
+
+**Cabeçalho do .conf:** timestamp ISO, número de contextos ativos.
+
+#### Passo 1 — BFS para detectar contextos ativos (`findActiveContextIds`)
+
+BFS partindo do nó `config`:
+- Segue TODAS as edges de saída (sem filtro de handle)
+- Propaga reachability para o `parentNode` de qualquer nó alcançado
+- Ao alcançar um `ContextNode`, enfileira todos os seus filhos diretos
+- Fallback: se BFS não encontrou nenhum contexto, usa todos os ContextNodes de nível superior
+
+#### Passo 2 — Ordenação dos contextos
+
+Contextos ativos são ordenados pelo campo `data.order` (crescente). Contextos sem `order` vão para o final.
+
+#### Passo 3 — Bloco standalone (Config sem edges a ContextNode)
+
+Se o ConfigNode não estiver conectado a nenhum ContextNode ativo, gera um bloco `[orpen-ivr-{IVR}]` com a cadeia de nós standalone (sem `parentNode`) que partem do Config.
+
+#### Passo 4 — Por contexto: sequência principal (sSeq)
+
+Para cada ContextNode ativo:
+1. **Injeção do GlobalConfig:** se uma edge conecta o ConfigNode diretamente a este contexto, as linhas do Config são emitidas primeiro.
+2. **Ordenação interna (`getExecChain`):**
+   - Se existe edge `ctx-start` saindo deste contexto → segue grafo explícito a partir do nó apontado
+   - Sem `ctx-start` → fallback por posição Y/X dos filhos
+3. **Geração de linhas por nó filho:**
+   - `menu` → emite `Background(...)` + `WaitExten(...)` com label `menu` (ou label customizado)
+   - nós de ação → chama `actionLine(node)` da `actionMeta.js`
+   - `time` → `GotoIfTime(spec?dest,s,1)` (omite se `trueContext` vazio, emite aviso)
+   - `route` → linha(s) conforme `routeMode`
+   - `commented` → emite `_origLine` se existir, sem processar
+   - `raw` → emite `rawLine` literal
+4. **Validação:** nós de ação com `validate()` definido têm seus erros coletados; nós inválidos são omitidos com aviso `;;`.
+
+#### Passo 5 — Extensões DTMF de cada menu
+
+Para cada MenuNode no sSeq, gera:
+- `exten => {digit},1,...` para cada dígito com edge `d-{digit}`
+- Destino suportado: ContextNode (→ Goto), RouteNode (→ linhas do route), MenuNode com contextName (→ Goto), ActionNode (→ `walkChainLines`)
+- `exten => i,...` / `exten => t,...` com fallback para macro de invalid/timeout
+
+#### Formato de prioridade
+
+```
+exten => s,1,Cmd()    ← primeiro item real (seqIdx=0)
+exten => s,n,Cmd()    ← demais
+exten => s,n(label),Cmd()  ← quando item tem label
+```
+Linhas raw (comentadas, `include =>`, que começam com `;`) são emitidas sem prefixo `exten =>`.
+
+---
+
+### 5.2 Modo Legado
+
+Geração linear: Config → TimeNodes → rootMenu, depois BFS de menus por DTMF. Gera macros de invalid/timeout ao final. Usado quando não existem ContextNodes no canvas.
+
+---
+
+### 5.3 Helpers
+
+- `isSeqEdge(edge, curNode)` — retorna `true` para handles `'out', 'out-right', 'out-bottom', 'out-left', ''`; para TimeNode, também para `'closed'`
+- `walkChainLines(startNode)` — caminha cadeia de nós sequenciais a partir de um nó de ação, retorna lista de strings para emissão
+- `jumpLabel(node)` — retorna string `ctx,s,1` ou `ctx,ext,pri` para destinos Goto inline
+
+---
+
+## 6. Parser de Importação (.conf)
+
+### Entry Point
+
+```js
+export function parseConfFile(text)
+// Retorna: { nodes, edges, stats, suggestedName }
+```
+
+### Estágios
+
+**1. `extractContexts(lines)`**  
+Divide o texto em blocos `[nome]` + suas linhas. Aceita linhas `exten =>`, `;exten =>` (comentadas) e `include =>`. Ignora `;;` (comentários duplos).
+
+**2. `extractGlobalConfig(firstCtx)`**  
+Lê o primeiro contexto para extrair variáveis globais: IVR, soundPath, agiPath, language, comment, numberDialed.
+
+**3. `processContext(ctx, xOffset, stats, globalConfig, isFirstContext)`**  
+Para cada contexto:
+- Linhas `include =>` → RawNode
+- Linhas comentadas (`;exten =>`) → nó do tipo real com `_commented: true` e `_origLine`
+- Linhas DTMF (`exten => 1,n,Cmd()`) → agrupadas em `dtmfGroups`
+- Linhas de config global repetidas no mesmo valor → ignoradas; se valor diferente → SetNode
+- Demais linhas → `cmdToNodeData()` → nó do tipo correspondente
+- MenuNode: construído ao final a partir do `dtmfGroups` (absorve WaitExten e Background imediatamente anteriores)
+- Edges sequenciais entre nós são geradas com handle `out` → `in`, tipo `floating`, `data: { waypoints: [] }`
+
+**4. `cmdToNodeData(cmdFull)`**  
+Mapeia comando Asterisk → `{ type, data }`. Comandos não mapeados → `{ type: 'raw', data: { rawLine } }`.
+
+Mapeamentos suportados: `Answer, Hangup, Wait, WaitExten, Noop, Playback, Background, GotoIfTime, Goto, Queue, Agi, Macro, Gosub, Return, GotoIf, Dial, Set, Verbose, ExecIf, ChanSpy, MixMonitor, StopMonitor, SayDigits, SayNumber`.
+
+**5. `resolveReferences(allNodes, allEdges)`**  
+Varre todos os nós e cria edges visuais para ContextNodes referenciados por nome:
+- `route` (contexto) → handle `out`, edge verde
+- `gosub` → handle `out`, edge verde
+- `time` → handle `true`, edge amarela
+- `gotoif` → `out` (true) / `out-right` (false), edges verdes
+- `menu` via `_dtmfGotos` → handles `d-{ext}`, edges smoothstep
+- Referências sem ContextNode correspondente → `stats.unresolvedRefs`
+
+### Layout Gerado
+
+```
+Constantes:
+  CTX_MIN_WIDTH  = 520   largura mínima de um ContextNode
+  CTX_PAD_TOP    = 60    espaço topo (abaixo da faixa START)
+  CTX_PAD_BOTTOM = 40
+  CTX_PAD_H      = 40    padding horizontal dos filhos
+  NODE_H         = 100   altura estimada de nó filho
+  NODE_GAP       = 40    espaçamento vertical entre filhos
+  CTX_COL_GAP    = 120   gap horizontal entre ContextNodes
+  CTX_ROW_Y      = 220   Y fixo de todos os ContextNodes
+```
+
+GlobalConfigNode posicionado centralizado horizontalmente acima de todos os contextos, y=20.
+
+### Stats Retornadas
+
+```js
+{
+  contexts: number,
+  nodesByType: { [type]: count },
+  commented: string[],       // linhas originais comentadas
+  raw: string[],             // comandos não reconhecidos
+  unresolvedRefs: string[],  // nomes de contexto referenciados mas não encontrados
 }
 ```
 
-#### Nós de Ação (via ACTION_META) — Cobertura Completa
-
-| Tipo | data fields | Exporta | Validação obrigatória |
-|---|---|---|---|
-| **Controle de Fluxo** | | | |
-| `gosub` | context, extension, priority, params[] | `Gosub(ctx,ext,pri(params...))` | context |
-| `return` | value | `Return([value])` | — |
-| `hangup` | causeCode | `Hangup([cause])` | — |
-| `gotoif` | expression, trueDestination, falseDestination | `GotoIf($[expr]?true:false)` | expression |
-| **Execução Lógica** | | | |
-| `set` | assignment | `Set(VAR=valor)` | format VAR=valor |
-| `agi` | script, params[] | `Agi(${AGI_PATH}/script[,params...])` | script |
-| `macro` | name, params[] | `Macro(name[,params...])` | name |
-| `execif` | expression, action | `ExecIf($[expression]?action)` | expression |
-| `execiftime` | hours, days, monthdays, months, action | `ExecIfTime(h,d,md,m?action)` | — |
-| `noop` | text | `Noop(text)` | — |
-| `verbose` | level, message | `Verbose(level,message)` | — |
-| **Interação & Monitoramento** | | | |
-| `dial` | destination, timeout, options | `Dial(Tech/resource[,timeout[,opts]])` | destination (Tech/res) |
-| `read` | variable, audio, maxDigits, timeout | `Read(VAR,${SOUND_PATH}/audio,max,,timeout)` | variable |
-| `saydigits` | value | `SayDigits(value)` | value |
-| `saynumber` | value, gender | `SayNumber(value[,gender])` | value |
-| `mixmonitor` | filename, extension | `MixMonitor(filename.ext)` | — |
-| `stopmonitor` | — | `StopMonitor()` | — |
-| `chanspy` | target, options | `ChanSpy(SIP/target[,options])` | target |
-| **Sistema / Áudio** | | | |
-| `answer` | — | `Answer()` | — |
-| `wait` | seconds | `Wait(seconds)` | seconds > 0 |
-| `waitexten` | seconds | `WaitExten(seconds)` | seconds > 0 |
-| `playback` | filename | `Playback(${SOUND_PATH}/filename)` | filename |
-| `background` | filename | `Background(${SOUND_PATH}/filename)` | filename |
-
-> **Params variádicos (agi, macro, gosub):** armazenados em `data.params: string[]`. Backward-compat com campo legado `data.args` (string CSV). `resolveParams()` em actionMeta.js decide qual usar.
-> **Validação dual:** `ACTION_META[type].validate(data)` → `string[]`. Chamada pelo ActionNode (canvas, borda vermelha) E pelo exporter (omite linha + aviso `;; AVISO: tipo [id=...] — motivo`). Sumário ao final do .conf se houver erros.
-
-### 4.3 Handles por Tipo de Nó
-
-**Convenção geral para nós de ação:**
-- `in` (top, target), `in-left` (left, target)
-- `out` (bottom, source), `out-right` (right, source) — ausentes se `terminal: true`
-
-**Exceções e handles especiais:**
-
-| Nó | Handles |
-|---|---|
-| `config` | `out` (bottom src), `out-right` (right src), `out-left` (left src) — SEM targets |
-| `menu` | `in` (top tgt), `in-left` (left tgt); `d-{digit}` (right src, por dígito), `d-i` (right src, laranja), `d-t` (right src, laranja) |
-| `time` | `in` (top tgt), `in-left` (left tgt); `true` (RIGHT src, amarelo #ffcc00) = branch para destino verdadeiro; `closed` (bottom src, verde) = fall-through condição falsa. `closed` NÃO está em SEQ_HANDLES global — tratado inline via `isSeqEdge()`. |
-| `context` | `ctx-in` (top tgt, 14×14, verde); `ctx-start` (bottom, source, amarelo, y≈44px/center da faixa START) — entry point do fluxo interno. A faixa START é uma div HTML separada do header (não drag handle). |
-| `route` | `in` (top tgt), `in-left` (left tgt), `out` (bottom src), `out-right` (right src) |
-| `ActionNode` terminal | Apenas `in` + `in-left` (sem source handles) |
-
-**`SEQ_HANDLES`** (constante no exporter): `{'out', 'out-right', 'out-bottom', 'out-left', ''}` — handles de fluxo sequencial. Handle `closed` do TimeNode NÃO está no set global; é tratado inline via função `isSeqEdge(e, curNode)` que retorna `true` para `closed` quando `curNode.type === 'time'`. Handles de branching excluídos: `d-1`, `d-i`, `d-t`, `true`, `open`.
-
 ---
 
-## 5. Compilador/Exportador — Regras de Negócio
+## 7. Sistema de Edges
 
-Arquivo: `src/utils/asteriskExporter.js`
-Entry point: `generateDialplan(nodes, edges)` — detecta modo e delega.
+### 7.1 Tipos Registrados
 
-### 5.1 Modo Hierárquico (quando qualquer nó `context` existe)
-
-**Trigger:** `nodes.some(n => n.type === 'context')`
-
-#### Fase 1: Anti-Orphan BFS (`findActiveContextIds`)
-```
-1. Inicia de config.id (se não há config → retorna Set vazio)
-2. BFS pelas edges: para cada nó alcançado, segue TODAS as edges de saída
-3. Propagação de parentNode: se nó N é alcançável e tem parentNode P, P é marcado como alcançável
-4. Propagação de filhos de ContextNode: quando um ContextNode é visitado, todos os seus filhos
-   diretos (parentNode === ctx.id) são enfileirados — garante que RouteNode e outros filhos
-   internos sejam percorridos mesmo sem edge explícita ContextNode→filho (pós-importação)
-5. Contextos ativos = nodes.type==='context' ∩ reachable
-```
-**Resultado:** apenas contextos conectados (direta ou indiretamente) ao config são exportados.
-
-> **Por que o passo 4 é necessário:** após importação de .conf, não há edge `ctx-start` automática (só é criada manualmente pelo usuário). Sem ela, o BFS visitaria o ContextNode mas nunca seus filhos (RouteNode, etc.) — logo nunca encontraria as edges `RouteNode → ContextNode Y` e todos os contextos além do primeiro ficariam fora do output.
-
-#### Fase 2: Ordenação dos Contextos
 ```js
-sort((a,b) => {
-  ao = a.data.order !== undefined && a.data.order !== '' ? Number(a.data.order) : Infinity
-  bo = b.data.order !== undefined && b.data.order !== '' ? Number(b.data.order) : Infinity
-  return ao - bo
-})
-```
-- Contextos com `order` preenchido vêm primeiro, em ordem crescente.
-- Contextos sem `order` (Infinity) mantêm ordem relativa do array `nodes`.
-- **`order` é apenas de output** — não afeta lógica de conexões ou anti-orphan.
-
-#### Fase 2.5: Contexto de entrada para nós standalone
-
-Antes de iterar os ContextNodes, o exportador verifica se existe um `config` sem `parentNode` (flutuando fora de qualquer caixa de contexto). Se existir:
-- Constrói uma cadeia seguindo edges sequenciais (`isSeqEdge`) por nós que também não têm `parentNode` (standalone)
-- Gera `[orpen-ivr-{IVR}]` com o mesmo pipeline sSeq/DTMF dos contextos normais
-- O contexto de entrada aparece ANTES dos demais contextos no .conf
-- Isso suporta o padrão onde Config → TimeNode → MenuNode ficam no canvas SEM serem colocados dentro de um ContextBox
-
-#### Fase 3: `getExecChain(ctx, children)` — Ordem de execução interna
-
-```
-1. Busca edge de ctx-start: edges.source===ctx.id && sourceHandle==='ctx-start'
-2. SE EXISTE:
-   - Inicia do target dessa edge
-   - Walk: a cada nó, busca edge SEQ_HANDLES dentro do mesmo childSet
-   - Para ao sair do contexto ou não encontrar próxima edge
-3. SE NÃO EXISTE (fallback):
-   - Filtra children excluindo type==='context'
-   - Ordena por position.y, depois position.x
+const edgeTypes = {
+  floating:   EdgeWithWaypoints,  // edges com pontos de conexão dinâmicos + offset elástico
+  smoothstep: EdgeWithWaypoints,  // mesmo componente — handles posicionados de forma fixa
+};
 ```
 
-#### Fase 4: `linesForChild(n)` — Geração de linhas por tipo
+`FloatingEdge.jsx` existe no disco mas **NÃO está registrado** em `edgeTypes`. É um componente legacy não usado.
 
-| Tipo | Linhas geradas |
-|---|---|
-| `ACTION_META[type]` | `[actionLine(n)]` (delegado a actionMeta.js) |
-| `config` | `Set(__IVR=...)`, `Set(__NUMBER_DIALED=...)` (se numberDialed), `Set(SOUND_PATH=...)`, `Set(AGI_PATH=...)`, `Macro(logIvr,ENTER_IVR)` (se logIvr), `Set(CHANNEL(language)=...)`, `Noop(## comment ##)` |
-| `time` | `GotoIfTime(times,weekdays,mdays,months?dest,s,1)`. Destino resolvido em 3 prioridades: **(1)** edge com `sourceHandle === 'true'` (ou `'open'` para compat.) → lê `contextName` do target em tempo de export; **(2)** `data.trueContext` (campo de texto); **(3)** varredura ampla: qualquer edge do nó que aponte para ContextNode. Se nenhuma resolve → `[]` + aviso standalone `;; AVISO: TimeCondition sem destino configurado — nó ignorado [id=...]` (nunca embutido em `exten =>`). |
-| `route` | fila: `Queue(queue[,opts])` / macro: 3 linhas Set+Goto / contexto: `Goto(ctx,ext,pri)` |
-| `menu`, `context` | `[]` (menus são tratados separadamente pelo sSeq) |
-| nó com `data._commented` | Verificado **antes** de qualquer outro tipo: retorna `[n.data._origLine]` (linha original com `;`) ou `[]`. A linha é marcada `isRaw: true` no sSeq e emitida sem prefixo `exten =>`. |
+### 7.2 Handles Semânticos (`isSemanticHandle`)
 
-**Regras de emissão do sSeq (correto):**
-- `item.isRaw = true`: emit direto da linha — sem `exten => s,...`. Casos: `data._commented`, `include =>`, linha começa com `;`
-- `item.isRaw = false`: `seqIdx === 0 → exten => s,1,...` / `seqIdx > 0 → exten => s,n,...`. O `seqIdx` só incrementa para linhas não-raw, garantindo numeração correta mesmo com comentários intercalados.
-
-**GlobalConfigNode e primeiro ContextNode:**
-- Quando o GlobalConfigNode (sem `parentNode`) está conectado diretamente a um ContextNode via edge, o bloco standalone `[orpen-ivr-{IVR}]` NÃO é gerado.
-- As linhas do GlobalConfigNode são injetadas no início do `sSeq` do ContextNode conectado, ANTES das linhas dos filhos.
-- Resultado: `[rcx-ivr-2900]` contém `Set(__IVR=...)` etc. como primeiras linhas.
-
-**Menus no sSeq:** quando menu está no chain, adiciona `Background(${SOUND_PATH}/greeting)` com label `(menu)` e `WaitExten(n)`.
-
-#### Fase 5: Formatação do sSeq
-
-```
-i=0 → 'exten => s,1,...'
-i>0 → 'exten => s,n,...'
-item.label → 'exten => s,n(label),...'
-```
-
-#### Fase 6: DTMF (`emitDigit`)
-
-Para cada menu filho, gera extensões DTMF:
-- `context` target → `Goto(contextName,s,1)`
-- `route` target → inline `linesForChild(route)` como `exten => digit,1/n,...`
-- `menu` target com contextName → `Goto(contextName,s,1)`
-- `ACTION_META` target → `walkChainLines(target)` inline
-- `i`/`t` handles: usa edge se conectada, senão fallback com Macro(invalidMacro/timeoutMacro)
-
-#### `walkChainLines(startNode)` — Cadeia de ações
-
-Segue nodes sequencialmente via SEQ_HANDLES. Para quando:
-- `cur.type === 'route'` (sempre terminal)
-- `ACTION_META[type].terminal === true` (return, hangup)
-- Sem edge SEQ_HANDLES de saída
-- Próximo nó é `context` → emite `Goto(contextName,s,1)` e para
-
-#### `jumpLabel(node)` — Destino de salto
-
-| Tipo | Retorna |
-|---|---|
-| `context` | `contextName,s,1` |
-| `menu` (com contextName) | `contextName,s,1` |
-| `route` fila | `null` |
-| `route` macro | `orpen-ivr-transfer,s,1` |
-| `route` contexto | `context,extension,priority` |
-| outros | `null` |
-
-### 5.2 Modo Legado (sem Context Nodes)
-
-**Trigger:** `!nodes.some(n => n.type === 'context')`
-
-Fluxo de geração:
-1. Encontra `config` → gera `[orpen-ivr-{IVR}]` com variáveis
-2. Caminha `config → time* → menu` via `outEdges` (sem filtro de handle)
-3. Gera `GotoIfTime(...)` para cada time no chain
-4. BFS de menus a partir do rootMenu:
-   - Gera contexto por menu
-   - Para cada dígito: gera extensão inline para route, sub-contexto para action chains
-5. Gera sub-contextos de action chains
-6. Gera macros de invalid/timeout
-
-> **NOTA:** customerAgi foi **removido** do modo legado também (Fix 2).
-
-### 5.3 Formato de Saída (.conf)
-
-```asterisk
-;;===========================================================================
-;; URA Orpen :: GERADO POR orpen-ura-builder :: 2026-05-16T...
-;; MODO HIERÁRQUICO :: N contexto(s) ativos
-;;===========================================================================
-
-[nome-do-contexto]
-exten => s,1,PrimeiraApp(args)
-exten => s,n,SegundaApp(args)
-exten => s,n(menu),Background(${SOUND_PATH}/greeting)
-exten => s,n,WaitExten(4)
-
-exten => 1,1,Goto(outro-contexto,s,1)
-exten => 2,1,Queue(7000)
-exten => i,1,Macro(menu-invalid-orpen-home)
-exten => i,n,Goto(nome-do-contexto,s,menu)
-exten => t,1,Macro(menu-timeout-orpen-home)
-exten => t,n,Goto(nome-do-contexto,s,menu)
-
-[segundo-contexto]
-...
-```
-
----
-
-## 6. Padrões Asterisk Seguidos
-
-### Contextos
-- Nomes: kebab-case, prefixo `orpen-ivr-`, ex: `orpen-ivr-home`, `orpen-ivr-transfer`
-- Macro de transfer: `orpen-ivr-transfer` (hardcoded no modo macro do RouteNode)
-- Incluído: `include => hangup-ivr` no modo legado
-
-### Variáveis de Canal
-- `__IVR` (duplo underscore = herdável): número do IVR
-- `__NUMBER_DIALED`: número discado original
-- `SOUND_PATH`: caminho base dos áudios
-- `AGI_PATH`: caminho base dos scripts AGI
-- `DESTINY_TRANFER` (typo intencional, padrão Orpen): destino do transfer macro
-- `TYPE_TRANSFER`: tipo do transfer (QUEUE)
-
-### Macros Orpen
-- `logIvr,ENTER_IVR`: log de entrada no IVR
-- `logIvr,ENTER_CONTEXT,{ctx}`: log de entrada em sub-contexto
-- `{nomeMenu-invalid/timeout}`: fallback de dígito inválido/timeout
-
-### GotoIfTime Syntax
-```asterisk
-GotoIfTime(times,weekdays,mdays,months?context,s,1)
-```
-- `times`: `HH:MM-HH:MM` ou `*`
-- `weekdays`: `mon-fri` (range consecutivo) ou `mon&wed` (não-consecutivo) ou `*`
-- `mdays`: `1`-`31` ou `*`
-- `months`: mesmo padrão que weekdays (`jan`, `feb`, ..., `dec`)
-
-### Formatos de Extensão
-```asterisk
-exten => s,1,App()       ; primeira prioridade
-exten => s,n,App()       ; próxima prioridade sequencial
-exten => s,n(label),App(); com label para Goto
-exten => N,1,App()       ; extensão DTMF (N = dígito, i, t)
-```
-
----
-
-## 6.5 Sistema de Edges Dinâmicas — Floating Handles + Waypoints + Routing Ortogonal
-
-### Arquitetura de Arquivos
-
-| Arquivo | Papel |
-|---|---|
-| `src/utils/edgeUtils.js` | Geometria: `getEdgeParams`, `getEdgeParamsDirected`, `isSemanticHandle` |
-| `src/components/edges/EdgeWithWaypoints.jsx` | Edge `type: 'floating'` — floating handles + waypoints editáveis + routing ortogonal |
-| `src/contexts/EdgeModeContext.js` | Contexto React: modo `'free'`\|`'grid'`, `GRID_SIZE=20`, `snapToGrid()` |
-
-### Funções Geométricas (`edgeUtils.js`)
-
-**`getEdgeParams(sourceNode, targetNode)`** — interseção elipse/bounding-box entre os centros dos dois nós. Retorna `{sx, sy, tx, ty, sourcePos, targetPos}`.
-
-**`getEdgeParamsDirected(sourceNode, targetNode, firstWp, lastWp)`** — versão dirigida para quando há waypoints:
-- `sx/sy`: endpoint do source calculado em direção ao **primeiro waypoint**
-- `tx/ty`: endpoint do target calculado a partir do **último waypoint**
-- Garante que a edge entre/saia pelo lado geometricamente correto (evita endpoints na borda errada)
-
-**`isSemanticHandle(handle)`** — retorna `true` para handles com posição fixa obrigatória.
-
-### Classificação de Handles
-
-**Fixo (semântico)** — `type: 'smoothstep'`, posição não pode ser calculada dinamicamente:
-
-| Handle | Nó | Motivo |
-|---|---|---|
-| `ctx-start` | ContextNode | Deve sair da faixa START — posição visual obrigatória |
-| `d-*` (DTMF) | MenuNode | Cada dígito alinhado à sua linha — fixo à direita |
-
-**Floating (dinâmico)** — `type: 'floating'`, todos os demais: `in`, `in-left`, `out`, `out-right`, `ctx-in`, `true`, `closed`, `out-left`, etc. Endpoints reposicionados automaticamente ao mover nós.
-
-> **Mudança de design:** `ctx-in`, `true`, `closed` e `open` foram **removidos** de `FIXED_HANDLES` para permitir waypoints nessas edges. A edge amarela do `true` handle continua `smoothstep` porque é explicitamente criada com esse tipo no bloco dedicado de `onConnect`.
-
-### Critério de Seleção do Tipo de Edge
-
-Em `onConnect`, `isSemanticHandle(sourceHandle) || isSemanticHandle(targetHandle)`:
-- `true` → `type: 'smoothstep'` — EdgeWithWaypoints com posição fixa de handle (ctx-start, d-*), **sem waypoints editáveis**
-- `false` → `type: 'floating'` — EdgeWithWaypoints com floating endpoints, **suporta waypoints e routing ortogonal**
-
-Ambos os tipos (`floating` e `smoothstep`) são registrados em `edgeTypes` apontando para `EdgeWithWaypoints`. A diferença interna:
-- `smoothstep`: `isFixed = true` → usa `sourceX/Y, targetX/Y` fornecidos pelo React Flow (posição exata do handle), renderiza `getSmoothStepPath`, sem `EdgeLabelRenderer`
-- `floating`: `isFixed = false` → usa cálculo dinâmico via `getEdgeParams`/`getEdgeParamsDirected`, exibe controles de waypoint
-
-O handle `true` do TimeNode (edges amarelas) usa `type: 'floating'` — suporta waypoints editáveis apesar da cor amarela especial.
-
-### Path Ortogonal (`buildOrthogonalPath`)
-
-**Sempre usado** com waypoints — sem diagonais, apenas segmentos horizontais e verticais:
-- Pontos já alinhados (mesmo x ou y): linha reta direta
-- Caso contrário: **L-shape** com canto arredondado (R=6px): horizontal até B.x, depois vertical até B.y via `Q (corner) (ax,ay)`
-
-### Sistema de Waypoints
-
-**Dados**: `edge.data.waypoints = [{x,y}, ...]` — vazio por padrão. Serializado com o estado do React Flow.
-
-**Path sem waypoints**: `getSmoothStepPath` (borderRadius=6) — visual suave.  
-**Path com waypoints**: `buildOrthogonalPath(allPoints)` — ortogonal com cantos arredondados. `allPoints = [endpoint_src, ...waypoints, endpoint_tgt]` onde os endpoints usam `getEdgeParamsDirected`.
-
-**Controles** — visíveis **somente quando a edge está selecionada** (EdgeLabelRenderer HTML, não SVG):
-- `SegmentMidHandle` ⊕: ponto sutil no centro de cada segmento. Hover → cresce. MouseDown → cria waypoint no ponto clicado + drag imediato (um único gesto)
-- `WaypointDot` ●: bolinha sobre cada waypoint existente. Drag = mover. Hover = botão ×. Botão direito = menu "Remover ponto" (via `createPortal` no `document.body`)
-
-**Por que `EdgeLabelRenderer` (HTML) e não SVG?** Eventos `onMouseDown` em SVG dentro de custom edges do React Flow são interceptados pelo sistema interno antes de chegarem aos handlers — HTML divs no `EdgeLabelRenderer` têm event handling confiável.
-
-**Regra dos Hooks:** todos os `useCallback`/`useStore`/`useReactFlow` são chamados **antes** de qualquer early return condicional. O early return (que aguarda dimensões dos nós) vem **depois** de todos os hooks.
-
-### Modo de Roteamento (EdgeModeContext)
-
-**Estado:** `edgeMode: 'free' | 'grid'` — gerenciado em `Canvas` (App.jsx), compartilhado via `EdgeModeContext.Provider`.
-
-**Toggle:** botão no status bar "◌ LIVRE" ↔ "⊞ GRADE".
-
-**Modo grade:** waypoints e midpoints snappam para `Math.round(v / 20) * 20` ao serem criados e durante o drag. Coincide com `<Background gap={20} />`.
-
-**Snap aplicado em:**
-- `SegmentMidHandle.handleMouseDown`: posição inicial do waypoint
-- `startSegmentDrag.onMove`: cada evento mousemove
-- `WaypointDot.handleDown.move`: cada evento mousemove
-
-### Context Menu da Edge (clique direito)
-
-- **"↺ Redefinir trajeto"**: limpa `data.waypoints = []` → só aparece para `type: 'floating'` com waypoints existentes
-- **"⌫ Remover conexão"**: sempre disponível; aplica cleanup do `trueContext` se `sourceHandle === 'true'`
-
-## 7. Lógica de Interação do Canvas (App.jsx)
-
-### Estado Global (Canvas component)
 ```js
-nodes         // useNodesState — array React Flow
-edges         // useEdgesState — array React Flow
-selectedId    // useState — ID do nó selecionado
-showExport    // useState — visibilidade do modal
-exportText    // useState — texto gerado do .conf
-edgeMenu      // useState — { x, y, edgeId } | null — context menu de edge (botão direito)
-edgeMode      // useState — 'free' | 'grid' — modo de roteamento de waypoints
-              //            Compartilhado via EdgeModeContext.Provider
+const FIXED_HANDLES = new Set(['ctx-start']);
+
+export function isSemanticHandle(handle) {
+  if (!handle) return false;
+  return FIXED_HANDLES.has(handle) || /^d-/.test(handle);
+}
 ```
 
-### Exclusão e Interação de Edges
+Handles semânticos: `ctx-start` e qualquer `d-*` (DTMF do MenuNode).  
+Edges com pelo menos um handle semântico usam `type: 'smoothstep'` — o caminho respeita a posição exata do handle (não flutua).  
+Edges com ambos os handles genéricos usam `type: 'floating'` — os pontos de conexão são calculados dinamicamente.
 
-**Seleção visual:** clicar em uma edge a seleciona. CSS: `.react-flow__edge.selected .react-flow__edge-path` → stroke `#ffcc00` (amarelo neon) + `drop-shadow`. Área de interação: `stroke-width: 24` na classe `.react-flow__edge-interaction`.
+### 7.3 Seleção de Tipo na Conexão (`onConnect`)
 
-**Delete por teclado:** `deleteKeyCode={['Backspace', 'Delete']}` no ReactFlow. Quando edge é deletada, `handleEdgesChange` intercepta o change de tipo `'remove'` e aplica cleanup (ver Auto-wire bidirecional).
-
-**Context menu (botão direito):** `onEdgeContextMenu` no ReactFlow → `setEdgeMenu({ x, y, edgeId })`. Renderiza um menu fixo (position: fixed) com overlay invisível. Itens: "↺ Redefinir trajeto" (só para floating com waypoints) + "⌫ Remover conexão".
-
-**`removeEdgeById(edgeId)`:** função em App.jsx que:
-1. Verifica se a edge tem `sourceHandle === 'true'` → limpa `data.trueContext` no nó de origem
-2. Remove a edge via `setEdges`
-3. Fecha o context menu
-
-**Auto-wire cleanup em `handleEdgesChange`:**
-Sempre que uma edge com `sourceHandle === 'true'` é removida (via teclado, botão direito, ou qualquer outro mecanismo), o campo `data.trueContext` do TimeNode de origem é automaticamente zerado.
-
-### Drag & Drop
-1. Sidebar: `onDragStart` → `setData('application/rcx-node', type)`
-2. Canvas `onDrop`: `buildNode(type, rfInstance.project(dropPosition))`
-3. **Auto-reparenting ao drop**: `findContextAt(absPos, nodes)` — encontra ContextNode mais profundo (iterando de trás pra frente) cujo bounding box contém a posição. Se encontrado, `newNode.parentNode = ctx.id`, `extent = 'parent'`, position ajustada para relativa.
-4. Config único: alerta se `nodes.some(n => n.type === 'config')` ao tentar dropar outro.
-
-### Re-parenting ao Arrastar (`onNodeDragStop`)
-
-**Reset de waypoints (executado primeiro, para todos os tipos de nó):**
-1. Calcula o conjunto `movedIds`: o nó arrastado + todos seus filhos diretos (se for ContextNode)
-2. Para cada edge onde `source` ou `target` esteja em `movedIds` e `data.waypoints.length > 0`: define `waypoints: []`
-3. Isso dispara o recálculo automático do traçado pelos floating handles
-4. Reset ocorre ao **soltar** o nó (`onNodeDragStop`), não durante o arraste — evita re-renders excessivos
-5. Edges não conectadas ao(s) nó(s) movido(s) não são afetadas
-
-**Re-parenting (só para nós não-contexto, executado depois):**
-- Calcula posição absoluta do nó (soma parentNode.position se tiver pai)
-- `findContextAt` com a posição absoluta
-- Se targetId !== currentParent → `setNodes` reescrevendo parentNode/extent
-- Garante ordenação no array: filho deve aparecer DEPOIS do pai (exigência React Flow)
-
-### Sincronização Goto-Context
-`useEffect([edges])`: quando edge conecta um nó `goto` a um `context`, copia `contextName` para `goto.data.context` automaticamente (eliminado pois `goto` foi removido — mantido por histórico).
-
-### ReactFlow Config
-```jsx
-connectionLineType="smoothstep"
-deleteKeyCode={['Backspace', 'Delete']}
-multiSelectionKeyCode={['Meta', 'Control']}
-edgeTypes={stableEdgeTypes}   // { floating: EdgeWithWaypoints }
-defaultEdgeOptions={{
-  type: 'smoothstep',
-  style: { stroke: '#00ff41', strokeWidth: 1.5 },
-  markerEnd: { type: MarkerType.ArrowClosed, color: '#00ff41' }
-}}
-```
-
-### MiniMap Cores
 ```js
-config  → '#00ff41'
-menu    → '#00b32d'
-time    → '#ffcc00'
-route   → '#ff8c00'  // (não mapeado explicitamente, cai no else '#888')
-ACTION_META[type] → meta.color
-default → '#888'
+const useFloating = !isSemanticHandle(sourceHandle) && !isSemanticHandle(targetHandle);
+// floating: { type: 'floating', data: { offsetX: 0, offsetY: 0 } }
+// smoothstep: { type: 'smoothstep' } — sem data de offset
 ```
 
----
+Exceção: handle `true` do TimeNode → sempre `floating`, edge amarela (`stroke: '#ffcc00'`).
 
-## 8. Convenções de Código
+### 7.4 Normalização na Carga de Projeto (`initEdges`)
 
-### Padrão de Componente de Nó
-
-Todo nó é um componente `memo` com `displayName`:
-
-```jsx
-const MeuNode = memo(({ id, data, selected }) => {
-  return (
-    <div className={cls('rcx-node', selected && 'selected')} style={{ borderColor: COR }}>
-      <Handle type="target" position={Position.Top}    id="in"        />
-      <Handle type="target" position={Position.Left}   id="in-left"   />
-      <div className="rcx-node-header">...</div>
-      <div className="rcx-node-body">
-        <div className="rcx-node-row"><span className="k">key</span><span className="v">value</span></div>
-      </div>
-      <Handle type="source" position={Position.Bottom} id="out"       />
-      <Handle type="source" position={Position.Right}  id="out-right" />
-    </div>
-  );
+```js
+raw.map((e) => {
+  if (e.type === 'floating' && (isSemanticHandle(e.sourceHandle) || isSemanticHandle(e.targetHandle))) {
+    return { ...e, type: 'smoothstep' };
+  }
+  return e;
 });
-MeuNode.displayName = 'MeuNode';
-export default MeuNode;
 ```
 
-### Como Adicionar um Novo Nó de Ação (ActionNode)
+Migra edges antigas: handles semânticos (`d-*`, `ctx-start`) que foram salvas como `floating` são convertidas para `smoothstep` no mount.
 
-1. **`actionMeta.js`**: Adicionar entrada em `ACTION_META` com `title`, `app`, `icon`, `color`, `category`, `summary`, e `terminal` se aplicável. Adicionar `case` em `actionLine()`.
-2. **`buildNode.js`**: Adicionar `case 'tipo'` com `data` defaults.
-3. **`nodes/index.jsx`**: `tipo: mkActionType('tipo')` no objeto `nodeTypes`.
-4. **`Sidebar.jsx`**: Importar ícone, adicionar item na categoria correta de `CATEGORIES`.
-5. **`PropertiesPanel.jsx`**: Adicionar `{node.type === 'tipo' && (...)}` com `Field`/`Toggle` adequados.
+### 7.5 EdgeWithWaypoints — Componente Principal
 
-### Como Adicionar um Nó Estrutural Customizado
+**Arquivo:** `src/components/edges/EdgeWithWaypoints.jsx`
 
-1. Criar `src/components/nodes/NomeNode.jsx` (padrão memo + displayName).
-2. Importar e registrar diretamente em `nodeTypes` (não via `mkActionType`).
-3. Adicionar à palette da Sidebar.
-4. Implementar lógica em `linesForChild()` no exporter.
-5. Se tiver handles não-padrão, adicionar ao SEQ_HANDLES check se necessário.
+**Props:** `id, source, target, data, markerEnd, style, selected`  
+**`data`:** `{ offsetX: number, offsetY: number }` — offset elástico do midpoint. Padrão `0,0`.
 
-### `Field` e `Toggle` — Componentes de Input
+#### Cálculo de Caminho
 
-Definidos **fora** do PropertiesPanel (escopo de módulo) para evitar recriação a cada render:
+```
+hasOffset = Math.abs(offsetX) > 1 || Math.abs(offsetY) > 1
 
-```jsx
-// Field — input text/number/select
-<Field d={d} set={set} label="Label" k="chave" type="text|number" placeholder="..." options={['a','b']} />
+SEM offset → getSmoothStepPath({ sx, sy, sourcePos, tx, ty, targetPos, borderRadius: 6 })
 
-// Toggle — checkbox
-<Toggle d={d} set={set} label="Label" k="chave" />
-
-// set function padrão:
-const set = (key, val) => updateNodeData(node.id, { ...d, [key]: val });
+COM offset → buildOrthogonalPath([
+  { x: dsx, y: dsy },          ← saída calculada pelo getEdgeParamsDirected em direção ao waypoint
+  { x: midX + offsetX, y: midY + offsetY },   ← waypoint único
+  { x: dtx, y: dty }           ← entrada calculada em direção ao waypoint
+])
 ```
 
-### WeekdayPicker / MonthPicker
+`buildOrthogonalPath(pts)`: gera SVG path com segmentos horizontais/verticais e cantos arredondados (R=6) via quadratic bezier.
 
-Componentes memo para o TimeNode. Recebem `selected: string[]` e `onChange: (string[]) => void`. Detectam sequência consecutiva para exibir preview `mon-fri` vs `mon&wed`.
+#### `getEdgeParams(sourceNode, targetNode)`
 
-### Naming
+Calcula qual lado (Left/Right/Top/Bottom) de cada nó usar com regra **horizontal-first**:
+- `|dx| < 30` → saída/entrada vertical (Top/Bottom)
+- `|dy| < 30` → saída/entrada horizontal (Left/Right)
+- diagonal → saída horizontal (Right/Left), entrada vertical (Top/Bottom)
 
-- **Tipos de nó**: kebab-case singular (`config`, `menu`, `time`, `route`, `context`, `gosub`, `execiftime`, ...)
-- **Handles**: kebab-case (`in`, `out`, `in-left`, `out-right`, `ctx-in`, `ctx-start`, `d-{digit}`, `open`, `closed`)
-- **CSS classes**: prefixo `rcx-` para nós (`.rcx-node`, `.rcx-node-header`, `.ctx-node`, `.ctx-header`)
-- **IDs de nós**: `'n_' + uid()` (uid = 7 chars base36)
+#### `getEdgeParamsDirected(sourceNode, targetNode, firstWp, lastWp)`
+
+Versão usada quando `hasOffset`:
+- Source exit calculado em direção ao waypoint (não ao nó destino)
+- Target entry calculado a partir do waypoint (não do nó origem)
+
+#### MidpointDragHandle
+
+Subcomponente `React.memo` renderizado via `EdgeLabelRenderer` **somente quando `selected === true`**.
+
+- Visual: quadrado 12×12px (18×18px no hover/drag), borda verde neon, bg `#0d0d0d`
+- Ícone: `·` normal, `↕` no hover/drag
+- Drag via `document.addEventListener('mousemove/mouseup')` — acumula deslocamento em `offsetX/offsetY`
+- Divide o deslocamento pelo `zoom` atual (lido via `useStore((s) => s.transform[2])`)
+- NÃO há `onEdgeMouseDown` no ReactFlow — foi removido pois quebrava a conexão de handles DTMF
+
+#### Auto-reset de Offset
+
+```js
+useEffect(() => {
+  if (!mountedRef.current) { mountedRef.current = true; return; }
+  if (offsetX === 0 && offsetY === 0) return;
+  setEdges((es) => es.map((e) => e.id === id ? { ...e, data: { ...e.data, offsetX: 0, offsetY: 0 } } : e));
+}, [srcPosKey, tgtPosKey]);
+```
+
+Quando qualquer nó conectado se move, o offset é zerado automaticamente.  
+`srcPosKey`/`tgtPosKey` = string `"x,y"` da `positionAbsolute` arredondada.
+
+#### Reset pelo Usuário
+
+Menu de contexto (botão direito na edge) → "↺ Redefinir trajeto" → `resetEdgeOffset(edgeId)` → `{ offsetX: 0, offsetY: 0 }`.
+
+### 7.6 `computeObstacleAvoidance` (DESATIVADO)
+
+A função `computeObstacleAvoidance()` existe em `edgeUtils.js` mas **não é chamada em nenhum lugar**. Foi desativada porque causava bugs visuais com ContextNodes. A detecção de colisão calcula um ponto de desvio no midpoint projetado em cada lado do bbox do obstáculo, mas o resultado não é mais aplicado.
+
+### 7.7 Auto-reset de Offset ao Arrastar Nó
+
+Em `onNodeDragStop`, as edges conectadas ao nó movido têm seu offset zerado:
+
+```js
+setEdges((es) => es.map((e) => {
+  if ((movedIds.has(e.source) || movedIds.has(e.target)) &&
+      ((e.data?.offsetX || 0) !== 0 || (e.data?.offsetY || 0) !== 0)) {
+    return { ...e, data: { ...e.data, offsetX: 0, offsetY: 0 } };
+  }
+  return e;
+}));
+```
+
+### 7.8 EdgeModeContext
+
+`EdgeModeContext` expõe o modo `'free' | 'grid'`. Atualmente o contexto existe e é provido pelo Canvas, mas **nenhum componente de edge o consome ativamente** para snap de grid. O toggle na status bar alterna o valor mas o comportamento de snap não está implementado nas edges.
+
+### 7.9 Aparência das Edges por Tipo
+
+| Tipo de edge | Cor `stroke` | `markerEnd` |
+|---|---|---|
+| Genérica (floating/smoothstep) | `#00ff41` | ArrowClosed verde |
+| Handle `true` (TimeNode) | `#ffcc00` | ArrowClosed amarelo |
+| Edge selecionada (CSS global) | Sobrescrita por `stroke: #ffcc00`, `stroke-width: 2.5`, `filter: drop-shadow` |
+| Edge hover (CSS global) | `stroke: #fff`, `stroke-width: 2` |
 
 ---
 
-## 8.4 Sistema de Labels no Dialplan
+## 8. Sistema de Alinhamento (`useAlignmentGuides`)
 
-### Conceito
-Labels marcam uma linha específica dentro de uma extensão: `exten => s,n(label),Cmd()`. Permitem que `Goto`, `GotoIf` e `GotoIfTime` saltem diretamente para aquele ponto dentro do contexto.
+**Arquivo:** `src/hooks/useAlignmentGuides.js`  
+**Integração:** `src/components/canvas/AlignmentGuides.jsx`
 
-### Nós que suportam label (`supportsLabel: true` em ACTION_META)
+### API do Hook
 
-| Tipo | Motivo |
-|---|---|
-| `background` | Padrão `(menu)` — destino clássico de Goto. Permite re-exibir o menu. |
-| `playback` | Ponto de re-início de reprodução de áudio. |
-| `waitexten` | Re-entrada na espera de DTMF após loop ou validação. |
-| `noop` | Marcador/âncora no fluxo — uso como label puro. |
-| `set` | Reset de estado — re-entrada após configuração de variável. |
-| `agi` | Re-entrada em consulta AGI (ex: busca de dados). |
-| `macro` | Re-entrada em execução de macro. |
-| `read` | Re-prompt de entrada DTMF após validação. |
-
-**NÃO elegíveis:** gosub, return, hangup, gotoif (são saltos, não alvos); answer, wait, dial, execif, execiftime (não são destinos típicos); nós de monitoramento.
-
-### Regras de validação do campo label
-
-- Formato: `/^[a-z0-9-]+$/` — apenas letras minúsculas, números e hífen
-- Validação é aplicada automaticamente no `onChange` (normalização automática: strip de caracteres inválidos)
-- **Borda vermelha** + mensagem inline: formato inválido
-- **Borda laranja** + mensagem inline: label duplicado dentro do mesmo ContextNode pai
-- **Preview amarelo**: `exten => s,n(label),Cmd()` quando válido
-
-### Geração no .conf
-
-- Com label: `exten => s,n(menu),Background(...)` — somente na **primeira** linha do nó
-- Sem label: `exten => s,n,Background(...)` — sem parênteses
-- Menu estrutural (`menu` node): usa `data.label` se definido, senão `'menu'` (padrão histórico)
-
-### Autocomplete de labels em GotoIf
-
-- Campo "Destino Verdadeiro" e "Destino Falso" usam `<datalist>` com todas as combinações `contextName,s,label` disponíveis no canvas
-- Sugestões calculadas em tempo real a partir dos nós com `supportsLabel: true` e `data.label` não-vazio
-- Se o label referenciado não existir no canvas: `;; AVISO: Goto referencia label 'X' que não foi encontrado no canvas` emitido no .conf
-
-### Display no canvas
-
-Badge amarelo `(label)` aparece entre o cabeçalho e o corpo do ActionNode quando label está preenchido.
-
-## 8.4.5 Sidebar — Pesquisa, Accordion e Tags Semânticas
-
-### Estrutura de Dados
-
-`CATEGORIES` é um array de objetos `{ label, items[] }` onde cada item tem `{ type, title, desc, accent, Icon }`. O `desc` geralmente contém o comando Asterisk correspondente embutido (ex: `"GotoIfTime · horário/dias/meses"`).
-
-### Sistema de Pesquisa com Scoring de Relevância
-
-- **Estado:** `query: string`, `searchFocused: boolean` (useState)
-- **Ativação:** `isSearching = normalize(query.trim()).length > 0`
-- **Normalização:** função `normalize(str)` remove acentos e converte para minúsculo — permite `"validacao"` bater com `"validação"`, `"audio"` com `"áudio"`, etc.
-- **Scoring por item** (`scoreItem(item, nq)`):
-  | Score | Critério |
-  |---|---|
-  | 4 | Título exatamente igual ao termo |
-  | 3 | Título contém o termo |
-  | 2 | Descrição ou type contém o termo |
-  | 1 | Tag semântica contém o termo |
-  | 0 | Nenhum match — item excluído |
-- **Ordenação:** itens com score > 0 ordenados por score decrescente dentro de cada categoria
-- **Hierarquia de categorias:** preservada — apenas os itens são reordenados/filtrados
-- **"Nenhum resultado":** div centralizado `// nenhum resultado` com opacidade 0.4
-- **Botão ×:** limpa campo e devolve foco ao input
-- **CSS do placeholder:** `.sidebar-search::placeholder` em `index.css` — cor neon, opacity 0.35, itálico
-
-### Tags Semânticas
-
-**Arquivo:** `src/config/nodeTags.js`
-
-Mapa `NODE_TAGS: Record<nodeType, string[]>` com tags em português para cada tipo de nó. A busca usa correspondência parcial normalizada (`normalize(tag).includes(normalize(query))`).
-
-**Exemplos de termos e resultados:**
-
-| Termo digitado | Nós encontrados |
-|---|---|
-| `audio` | Playback, Background, Menu DTMF, Wait Exten |
-| `validação` ou `val` | Time Cond, GotoIf, ExecIf, ExecIfTime |
-| `fila` | Destino/Rota, Dial |
-| `script` | AGI |
-| `espera` | Wait, WaitExten |
-| `menu` | Menu DTMF, GotoIf, WaitExten |
-| `encerrar` | Hangup |
-| `log` | Noop, Verbose |
-| `gravação` | MixMonitor, StopMonitor |
-
-**Como adicionar tags para um novo nó:**
-1. Abrir `src/config/nodeTags.js`
-2. Adicionar entrada: `nomeDoType: ['tag1', 'tag2', ...]`
-3. Usar termos em português, sem acentos, minúsculos
-4. Focar em conceitos (não apenas nome técnico)
-
-### Hint Semântico
-
-Aparece abaixo do campo de pesquisa quando `searchFocused && !query`:
+```js
+const { guides, onNodeDragStart, onNodeDrag, onNodeDragStop: alignDragStop } = useAlignmentGuides(nodes, setNodes);
 ```
-// ex: "audio", "validação", "fila", "script"
+
+Os handlers são passados ao `<ReactFlow>`. `onNodeDragStop` do Canvas COMBINA `alignDragStop` + lógica própria de re-parenting.
+
+### Comportamento
+
+**Regras de escopo (quais nós são comparados):**
+- Filho (tem `parentNode`) → compara com irmãos + o próprio pai ContextNode
+- ContextNode ou ConfigNode (sem `parentNode`) → compara com outros ContextNodes e ConfigNode de nível superior
+- Nó standalone sem pai → compara com outros nós de nível superior
+
+**`onNodeDragStart`:** constrói cache estático de bounds (`staticBoundsRef`) — não atualizado durante o drag.
+
+**`onNodeDrag`:** throttled via `requestAnimationFrame` — chama `computeGuides` e atualiza `guides` + `snapRef`.
+
+**`computeGuides`:** compara cada borda do nó arrastado contra as 4 bordas de cada nó estático. Threshold = 8px. Retorna guias visíveis + posição de snap.
+
+**`onNodeDragStop`:** aplica snap (conversão abs→relativo levando em conta `parentNode`) e limpa guias.
+
+### AlignmentGuides (Componente)
+
+Renderiza linhas verticais (guias `{ x }`) e horizontais (guias `{ y }`) como `div` absolutas de 1px sobre o canvas. Converte coordenadas de flow para tela via `useStore((s) => s.transform)`. Retorna `null` quando não há guias — evita subscriptions desnecessárias durante pan/zoom.
+
+---
+
+## 9. Features do Canvas
+
+### 9.1 Roteamento e Seleção de Nós
+
+- **Drop da sidebar:** `onDrop` detecta o tipo via `e.dataTransfer.getData('application/rcx-node')`, converte posição de tela para flow via `rfInstance.project()`, detecta `ContextNode` pai via `findContextAt`, atribui `parentNode` + `extent: 'parent'` automaticamente
+- **Re-parenting:** `onNodeDragStop` verifica se o nó caiu dentro de um ContextNode diferente do atual e reatribui `parentNode`/`position`
+- **Ordenação no array:** filho sempre DEPOIS do pai (exigência do React Flow para renderização correta)
+- **ConfigNode único:** `onDrop` bloqueia criação de segundo nó `config`
+
+### 9.2 Propagação de Rename de ContextNode
+
+**Arquivo:** `src/utils/renamePropagator.js`
+
+```js
+export function applyContextRename(nodes, oldName, newName)
 ```
-Desaparece ao começar a digitar (controlado por `searchFocused` + `query`).
 
-### Accordion Colapsável (inalterado)
+Atualiza `data.trueContext` (TimeNode), `data.context` (RouteNode modo 'contexto'), `data.context` (Gosub).
 
-- **Estado:** `collapsed: Record<label, boolean>` + `localStorage['orpen-sidebar-collapsed']`
-- Animação: `maxHeight: 0 → 2000px` com `transition: 0.22s ease`
-- Indicadores `▼` / `►` no header
-- Pesquisa sempre mostra conteúdo independente do estado colapsado
+Disparado em dois pontos:
+1. **Inline no ContextNode** (`onBlur` do input do header) → `propagateRename` via `useReactFlow().setNodes`
+2. **PropertiesPanel** (`onBlur` do campo contextName) → `propagateContextRename` via callback do Canvas
 
-### Accordion Colapsável
+### 9.3 Sincronização TimeNode ↔ Edge `true`
 
-- **Estado:** `collapsed: Record<label, boolean>` (useState + localStorage)
-- **Chave localStorage:** `'orpen-sidebar-collapsed'`
-- **Padrão inicial:** todas expandidas (objeto vazio = nenhuma colapsada)
-- **Animação:** `maxHeight: 0 → 2000px` com `transition: max-height 0.22s ease`
-- **Indicador visual:** `▼` (expandida) e `►` (colapsada) alinhados à direita do header
-- **Hover do header:** background ligeiramente mais claro (`rgba(0,255,65,0.11)`) — desativado durante pesquisa
-- **Cursor:** `pointer` no header quando não há pesquisa; `default` quando há pesquisa ativa
-- **Override de pesquisa:** `isCollapsed = !isSearching && !!collapsed[label]` — pesquisa sempre exibe conteúdo mesmo se categoria estiver colapsada
+**`syncTrueContext(timeNodeId, trueCtx)`** (Canvas → PropertiesPanel via prop):
+- Vazio → remove edge `true` saindo do TimeNode
+- Não-vazio + ContextNode encontrado → recria edge `true` (amarela, floating)
 
-### Comportamento Integrado
+**`handleEdgesChange`:** quando edge `true` é removida → limpa `data.trueContext` do nó
 
-| Ação | Resultado |
-|---|---|
-| Digitar na pesquisa | Filtra itens, expande todas as categorias visíveis, oculta dica de rodapé |
-| Clicar × | Limpa pesquisa, restaura estado colapsado do localStorage, restaura dica |
-| Clicar header da categoria | Alterna colapso; persiste no localStorage; ignorado durante pesquisa |
-| Recarregar página | Estado colapsado restaurado do localStorage; pesquisa vazia |
-| Drag de item colapsado | Não possível (item oculto); drag de item em resultado de pesquisa funciona normalmente |
+**`useEffect([edges])`:** sincroniza `data.context` dos nós GotoIf/Route quando a edge conectada muda de destino (auto-sync para GoTo).
 
-## 8.5 Sistema de Propagação de Rename de ContextNode
+### 9.4 Detecção de Órfãos
 
-Arquivo central: `src/utils/renamePropagator.js` — exporta `applyContextRename(nodes, oldName, newName)`.
+`ContextNode` subscreve ao store via `useStore((s) => s.edges.some((e) => e.target === id))`. ContextNodes do tipo macro (`data.isMacro`) são excluídos da detecção.
 
-### Funcionamento
+### 9.5 Sidebar — Busca com Pontuação de Relevância
 
-Quando o `contextName` de um ContextNode é alterado, a função percorre todos os nós e atualiza os campos que referenciam aquele nome por string. A propagação é **silenciosa e imediata** (sem dialog de confirmação), disparada no evento `onBlur` do campo de nome.
+Função `scoreItem(item, nq)` retorna 0-4:
+- 4: match exato no título
+- 3: título contém o termo
+- 2: desc ou type contém
+- 1: tag semântica de `NODE_TAGS[type]` contém
 
-### Dois pontos de disparo
+Normalização remove acentos e converte para minúsculo. Durante busca, accordion não é colapsável e itens são ordenados por score descendente.
 
-| Ponto | Como | Quando |
-|---|---|---|
-| **ContextNode inline** (cabeçalho do nó) | `useRef` captura nome no `onFocus`; `onBlur` chama `propagateRename(old, new)` via `useReactFlow().setNodes` | Ao sair do campo de texto no cabeçalho do nó |
-| **PropertiesPanel** (campo "Nome do Contexto Asterisk") | `useRef` captura nome no `onFocus`; `onBlur` chama `propagateContextRename(old, new)` via prop do App.jsx | Ao sair do campo no painel de propriedades |
+Estado colapsado das categorias persiste em `localStorage` com chave `'orpen-sidebar-collapsed'`.
 
-### Nós afetados pela cascata
+### 9.6 Context Menu (Botão Direito)
 
-| Tipo | Campo atualizado | Condição |
-|---|---|---|
-| `time` | `data.trueContext` | sempre (campo "Destino se verdadeiro") |
-| `route` | `data.context` | somente quando `data.routeMode === 'contexto'` |
-| `gosub` | `data.context` | sempre (destino do Gosub) |
+**Em edges:** Menu "// CONEXÃO" com:
+- "↺ Redefinir trajeto" — visível apenas para edges `floating` com offset ≠ 0
+- "⌫ Remover conexão" — remove edge + limpa `trueContext` se for edge `true`
 
-### Fora do escopo da cascata
+**Em nós:** Menu "// NÓ" com:
+- "// DESATIVAR nó" / "▶ ATIVAR nó" — toggle `_commented` (exceto `config` e `context`)
+- "⌫ Excluir nó" — (exceto `config`)
 
-- `menu.contextName`: identidade própria do menu no dialplan, não referência cruzada
-- `execif.action`, `execiftime.action`: texto livre, não parseável automaticamente
-- `menu.retryGoto`: string livre "ctx,ext,pri"
-- Edges: conectam por ID de nó, não por nome — não precisam de atualização
+### 9.7 Auto-save com Debounce
 
-### Detalhe de implementação
+`useEffect([nodes, edges])` com debounce de 2 segundos:
+- Status bar mostra `// salvando...` (amarelo) → `// salvo` (verde, some em 3s)
+- `flushSave()` força save imediato (chamado antes de "VOLTAR" com alterações)
+- Modal "ALTERAÇÕES NÃO SALVAS" ao tentar voltar com `isDirtyRef.current === true`
 
-A função `applyContextRename` usa mapeamento funcional (`nodes.map`) e retorna o array ORIGINAL se nenhum nó foi alterado (evita re-render desnecessário no React Flow). O `useRef` é necessário porque `onChange` já sobrescreve `data.contextName` a cada tecla — sem o ref, o "nome antigo" seria perdido ao chegar no `onBlur`.
+### 9.8 Exportação
 
-## 8.6 Sistema de Gerenciamento de Projetos (Home Screen)
+Botão "⤓ EXPORTAR URA (.conf)" (bottom-right absoluto). Modal com preview, botão COPIAR e BAIXAR (filename: `orpen-ura-gerada.conf`). Usa LF como quebra de linha na exportação.
 
-### Roteamento
+---
 
-Estado simples em `App` (raiz): `screen: 'home' | 'canvas'`. Sem dependências de roteador externo. A aplicação inicia sempre em `'home'`.
+## 10. Persistência e Projetos
 
-### Arquivos
+### IndexedDB
 
-| Arquivo | Papel |
-|---|---|
-| `src/screens/HomeScreen.jsx` | Tela inicial — lista projetos, cria, importa |
-| `src/App.jsx` | Gerencia estado de roteamento e projetos; passa props ao Canvas |
+**Arquivo:** `src/services/projectStorage.js`  
+**DB:** `orpen-ura-db` v1, object store `projects`, keyPath: `'id'`
 
-### Camada de Persistência — IndexedDB
+#### Schema de Projeto
 
-**Arquivo:** `src/services/projectStorage.js`
-
-| Função | Descrição |
-|---|---|
-| `salvarProjeto(projeto)` | Cria ou atualiza (upsert) pelo `id` |
-| `listarProjetos()` | Retorna todos, ordenados por `dataModificacao` desc |
-| `carregarProjeto(id)` | Retorna projeto completo ou `null` |
-| `excluirProjeto(id)` | Remove pelo `id` |
-| `projetoExiste(id)` | Verifica existência sem ler o flow completo |
-
-**Banco:** `orpen-ura-db` v1. ObjectStore `projects` com `keyPath: 'id'`. Criado automaticamente na primeira chamada.
-
-**Auto-save no Canvas:** `useEffect([nodes, edges])` com debounce de 2s. Após mudança, exibe `// salvando...` (amarelo) no status bar. Após salvo, exibe `// salvo` (verde) por 3s. Não faz download de arquivo — o save é silencioso.
-
-**Eventos que disparam download de arquivo:** apenas ações explícitas do usuário: "EXPORTAR URA (.CONF)" e "EXPORTAR .JSON" nos cards da Home.
-
-### Estrutura do arquivo JSON de projeto
-
-```json
+```js
 {
-  "id": "1716000000000",
-  "name": "orpen-ivr-suporte",
-  "dataCriacao": "2026-05-17T...",
-  "dataModificacao": "2026-05-17T...",
-  "flow": {
-    "nodes": [...],
-    "edges": [...],
-    "viewport": { "x": 0, "y": 0, "zoom": 1 }
+  id:              string,  // Date.now().toString()
+  name:            string,  // slug lowercase a-z0-9-
+  dataCriacao:     string,  // ISO 8601
+  dataModificacao: string,  // ISO 8601
+  flow: {
+    nodes:    Node[],       // array de nós React Flow
+    edges:    Edge[],       // array de edges React Flow
+    viewport: { x, y, zoom }
   }
 }
 ```
 
-### Ciclo de vida de um projeto
-
-```
-Home → [+ NOVO PROJETO] → modal de criação → Canvas (flow vazio)
-                                               ↓
-Home ← [← VOLTAR] ← confirmação se dirty ← Canvas (edição)
-                                               ↓
-Home ← card "EXPORTAR .JSON" ←── [SALVAR .JSON] (Canvas salva + atualiza projects[])
-Home → [IMPORTAR .JSON] → FileReader → valida → adiciona ao projects[]
-Home → card "ABRIR" → modal confirm → Canvas (flow carregado)
-```
-
-### Estado de projetos
-
-- **In-memory**: `projects: Project[]` em `App`. Não persiste entre reloads (sem localStorage).
-- **`key={currentProject?.id}`** no Canvas força remount ao trocar projeto — garante estado limpo.
-- **`pendingFlow`**: flow a ser carregado no próximo mount do Canvas.
-
-### Rastreamento de alterações não salvas
-
-`isDirtyRef` (`useRef<boolean>`) no Canvas. Setado para `true` em `useEffect([nodes, edges])` após o primeiro render (`skipDirtyRef` ignora a inicialização). Zerado após save. Ao clicar "← VOLTAR" com dirty = true, exibe modal de confirmação com opções "SALVAR E VOLTAR", "SAIR SEM SALVAR", "CANCELAR".
-
-### Props do Canvas (opcionais para modo standalone)
-
-```ts
-{
-  initialFlow?: { nodes, edges, viewport }  // null → flow padrão (config node)
-  projectName?: string                       // exibe botão SALVAR .JSON
-  projectCreatedAt?: string                  // ISO date preservado no JSON salvo
-  currentProjectId?: string                  // key para atualizar projects[]
-  onGoBack?: () => void                      // exibe botão ← VOLTAR
-  onProjectSaved?: (project) => void         // callback após save
-}
-```
-
-### Validação do nome de projeto
-
-`/^[a-z0-9-]+$/` mínimo 3 caracteres. Validação em tempo real no modal — borda vermelha + mensagem inline se inválido. Botão CRIAR desabilitado enquanto inválido.
-
-### Parser de .conf (`src/utils/confParser.js`)
-
-**Entry point:** `parseConfFile(text)` → `{ nodes, edges, stats, suggestedName }`
-
-#### Regras de parsing do GlobalConfigNode
-
-- **Exatamente UM GlobalConfigNode** por importação, fora de qualquer ContextNode
-- **Fonte de verdade:** valores extraídos do **primeiro contexto** do arquivo
-- Campos capturados: `Set(__IVR=)`, `Set(__NUMBER_DIALED=)`, `Set(SOUND_PATH=)`, `Set(AGI_PATH=)`, `Set(CHANNEL(language)=)`, `Noop(## texto ##)` (comment)
-- **Nos contextos secundários:** linha de config global é ignorada se o valor for idêntico ao do primeiro contexto → evita duplicação de configuração que é repetida por convenção do Asterisk
-- Se o valor for **diferente** (ex: `Set(__IVR=2502)` quando global é `2505`) → cria `Set` node normal (sobrescrita intencional)
-- `Macro(logIvr,...)` **NÃO** é absorvida pelo GlobalConfigNode — cria nó Macro normal em cada contexto onde aparecer (é uma chamada de log, não configuração global)
-- O campo `logIvr` do GlobalConfigNode fica como `false`; o Macro node é responsável por gerar a linha
-- **Posicionamento:** `x` calculado para centralizar horizontalmente sobre todos os ContextNodes; `y: 20` (topo do canvas)
-- **Edge:** GlobalConfig.`out` → firstContextNode.`ctx-in` (tipo `floating`)
-
-#### Regras de parsing de contextos
-
-- Cada bloco `[nome-do-contexto]` → exatamente **um ContextNode**
-- Contextos com prefixo `macro-` → ContextNode normal com `data.isMacro: true`
-  - Visual diferenciado: borda e header em `#00d4ff` (ciano), badge "MACRO" no header
-- ContextNodes posicionados em linha horizontal (`y: 220`), da esquerda para direita na ordem do arquivo
-- Nós filhos empilhados verticalmente dentro de cada ContextNode, na ordem das linhas do .conf
-- `include => hangup-ivr` e similares → **RawNode** (não é uma exten suportada pelo builder)
-- Linhas comentadas `;exten =>` → **CommentedNode**
-
-#### Mapeamento de comandos Asterisk → tipo de nó
-
-| Comando | Tipo gerado |
-|---|---|
-| `Set(__IVR=)`, `Set(SOUND_PATH=)`, `Set(AGI_PATH=)`, `Set(CHANNEL(language)=)`, `Set(__NUMBER_DIALED=)`, `Noop(## ##)` | Capturados no GlobalConfigNode (1 por importação) |
-| `Macro(logIvr,...)` | `macro` (nó normal — chamada real de log) |
-| `Answer`, `Hangup`, `Wait`, `WaitExten`, `Noop`, `Playback`, `Background` | Nó correspondente |
-| `GotoIfTime` | `time` (com campos preenchidos) |
-| `Goto(ctx,...)` | `route` (modo contexto) |
-| `Queue(num)` | `route` (modo fila) |
-| `AGI`, `Macro`, `Gosub`, `Return`, `GotoIf`, `Dial`, `Set`, `Verbose`, `ChanSpy` | Nó correspondente |
-| Bloco DTMF (exten => 1/2/.../i/t) | **MenuNode** (ver regras abaixo) |
-| `include => ...` | **RawNode** |
-| `;exten => ...` (comentado) | Nó do tipo real com `data._commented: true` (ver seção abaixo) |
-| Comando não reconhecido | **RawNode** |
-
-#### Nós Comentados (`data._commented`)
-
-Linhas `;exten => s,n,Cmd(params)` no `.conf` são identificadas e convertidas para o **mesmo tipo de nó** que a linha ativa correspondente representaria, mas com `data._commented: true` e `data._origLine: rawLine`.
-
-**Parsing:** `parseExtenLine` detecta o prefixo `;+\s*exten =>` e retorna `_commented: true`. O bloco de tratamento em `processContext` então:
-1. Remove o `;` e re-parseia a linha como `exten => ...` usando `parseExtenLine` + `cmdToNodeData`
-2. Se reconhecido (ex: `Hangup()` → `hangup`, `GotoIfTime(...)` → `time`): cria nó do tipo real com `{ ...realData, _commented: true, _origLine: rawLine }`
-3. Se não reconhecido ou se for linha de config global (`_configField`): cria nó `raw` com `{ rawLine: parsed.originalLine, _commented: true, _origLine: rawLine }`
-
-**Campos especiais:**
-- `data._commented: true` — flag que ativa o visual de desativado
-- `data._origLine: string` — linha original completa (ex: `;exten => s,n,Hangup()`) para export
-
-**Visual de desativado (aplicado em ActionNode, TimeNode, RouteNode, RawNode):**
-- `opacity: 0.6` no container
-- `borderStyle: 'dashed'`
-- Cor de borda reduzida (ex: `meta.color + '44'`)
-- Header: prefixo `//` no título (ex: `// HANGUP`)
-- Badge: "DESATIVADO" em vermelho em vez do badge normal
-- Botões ATIVAR e EXCLUIR no rodapé do nó
-- Inputs desabilitados (`readOnly`) no RawNode
-
-**ATIVAR:** remove `_commented` e `_origLine` do `data` → nó volta ao estado ativo normal.
-
-**EXCLUIR:** remove o nó do canvas + todas as edges conectadas a ele (via `setNodes` filter + `setEdges` filter).
-
-**Edges conectadas a nós desativados:** `EdgeWithWaypoints` detecta `sourceNode?.data?._commented || targetNode?.data?._commented` via `useStore` e aplica `opacity: 0.3` no `BaseEdge`.
-
-**Export:** `linesForChild(n)` verifica `n.data?._commented` primeiro — se verdadeiro, retorna `[n.data._origLine]` (a linha original comentada) sem processar o tipo de nó. Nós sem `_origLine` retornam `[]`.
-
-**Compatibilidade:** o tipo `commented` (CommentedNode.jsx) continua registrado no `nodeTypes` para projetos JSON salvos antes dessa mudança. Ao importar `.conf`, esse tipo não é mais gerado — apenas tipos reais com `_commented: true`.
-
-#### Detecção e Conversão do Padrão DTMF → MenuNode
-
-**Ativação:** quando `parseExtenLine` retorna `_dtmf: true` (extensão é um único dígito `0-9`, `i`, ou `t`), o parser entra no modo de coleta de DTMF. Todas as linhas com extensões DTMF são agrupadas em `dtmfGroups: Map<extensão, cmdFull[]>`. Nenhum nó individual é criado para essas linhas.
-
-**Absorção de Background e WaitExten:** imediatamente antes de criar o MenuNode, o parser percorre os últimos nós do sequential em sentido inverso e absorve:
-1. `WaitExten(n)` (se for o último nó) → `data.waitExten = n`
-2. `Background(arquivo)` (se vier antes do WaitExten) → `data.greeting = arquivo`
-
-Os nós absorvidos são **removidos** do array `nodes` e `sequential` para evitar duplicação no export (o exporter já gera `Background` + `WaitExten` a partir dos campos do MenuNode).
-
-**Construção do MenuNode:**
-
-| Fonte no .conf | Campo no MenuNode |
-|---|---|
-| Background() absorvido | `greeting` |
-| WaitExten() absorvido | `waitExten` |
-| Extensões 1-9 e 0 presentes | `digits: [{ id, label }]` |
-| `Goto(ctx,...)` em extensão `N` | `_dtmfGotos.N = ctx` (resolvido depois) |
-| `Macro(name,...)` em extensão `i` | `invalidMacro = name` + NóMacro filho |
-| `Macro(name,...)` em extensão `t` | `timeoutMacro = name` + NóMacro filho |
-| `Goto(ctx,...)` em extensão `i`/`t` | `_dtmfGotos.i/t = ctx` (resolvido depois) |
-| `Noop(...)`, `Macro(logIvr,...)` interno | **Ignorado** (convenção de log) |
-
-**NósMacro para i/t:** quando `i` ou `t` usa `Macro()`, cria-se um `macro` node filho do ContextNode posicionado verticalmente abaixo do MenuNode. A edge `d-i` ou `d-t` → macro's `in` é criada imediatamente (tipo `smoothstep`).
-
-**`_dtmfGotos`:** campo interno armazenado no `data` do MenuNode, consumido por `resolveReferences` para criar edges `d-{ext}` → ContextNode de destino (tipo `smoothstep`). Ignorado pelo exporter.
-
-**Handles DTMF → tipo de edge:** handles `d-*` são semânticos (posição fixa), portanto todas as edges de saída DTMF usam `type: 'smoothstep'` (EdgeWithWaypoints com `isFixed=true`, sem waypoints editáveis).
-
-**CommentedNode** — visual: borda dashed `#ffcc00`, opacidade 0.7. Não gera linha no .conf. Botão "REATIVAR" tenta converter para o nó equivalente.
-
-**RawNode** — visual: borda `#ff8c00`. Armazena e exibe o comando original em textarea editável. Exporta a linha intacta no .conf.
-
-Ambos registrados em `nodeTypes` e tratados em `linesForChild()` no exporter.
-
-**Modal de resumo:** exibido antes de abrir no canvas. Mostra: contextos importados, nós por tipo, lista de CommentedNodes e RawNodes com o comando original, e referências externas não resolvidas. Usuário nomeia o projeto antes de confirmar.
-
-#### Etapa de Resolução de Referências (`resolveReferences`)
-
-Executada **após** a criação de todos os nós e ContextNodes, **antes** de retornar o estado do React Flow. Reconstrói as edges visuais entre nós que referenciam contextos e os ContextNodes correspondentes.
-
-**Algoritmo:**
-1. Constrói índice `{ contextName → nodeId }` a partir de todos os ContextNodes criados
-2. Varre todos os nós verificando campos de referência a contexto:
-
-| Tipo de nó | Campo | Handle de saída | Cor |
-|---|---|---|---|
-| `route` (routeMode=contexto) | `data.context` | `out` | verde `#00ff41` |
-| `gosub` | `data.context` | `out` | verde `#00ff41` |
-| `time` | `data.trueContext` | `true` | amarelo `#ffcc00` |
-| `gotoif` | `data.trueDestination` (extrai ctx antes da 1ª vírgula) | `out` | verde `#00ff41` |
-| `gotoif` | `data.falseDestination` (extrai ctx antes da 1ª vírgula) | `out-right` | verde `#00ff41` |
-
-3. Para cada referência, verifica se o nome de contexto existe no índice:
-   - **Existe:** cria edge `floating` (`sourceHandle → ctx-in`), idêntica às edges manuais (EdgeWithWaypoints, waypoints editáveis, menu de contexto)
-   - **Não existe:** registra como referência externa não resolvida em `stats.unresolvedRefs`
-4. Strings que são claramente prioridades/extensões inline (`"1"`, `"s"`, `"n"`, single-char) são filtradas antes da tentativa de resolução
-
-**Filtro de duplicatas:** rastreia chaves `source|handle|target` para evitar edges duplas mesmo se o mesmo contexto for referenciado múltiplas vezes.
-
-**`stats.unresolvedRefs: string[]`** — lista ordenada de nomes de contextos referenciados mas não presentes no arquivo importado (ex: `rcx-queue`, `hangup-ivr`). Exibida no modal de resumo na seção "// REFERÊNCIAS EXTERNAS NÃO VINCULADAS" em ciano (`#00d4ff`).
-
-## 8.7 Sistema de Alinhamento Inteligente (Smart Guides + Snap)
-
-### Arquivos
-
-| Arquivo | Papel |
-|---|---|
-| `src/hooks/useAlignmentGuides.js` | Hook com toda a lógica de cálculo de alinhamento e snap |
-| `src/components/canvas/AlignmentGuides.jsx` | Componente de renderização das linhas guia |
-
-### Hook `useAlignmentGuides(nodes, setNodes)`
-
-**Retorna:** `{ guides, onNodeDragStart, onNodeDrag, onNodeDragStop }`
-
-- `guides: ({ x: number } | { y: number })[]` — linhas guia ativas para renderização
-- `onNodeDragStart` → wire a `<ReactFlow onNodeDragStart>`
-- `onNodeDrag` → wire a `<ReactFlow onNodeDrag>`
-- `onNodeDragStop` → chamado dentro do `onNodeDragStop` existente em App.jsx (antes do re-parenting)
-
-### Detecção de Alinhamento
-
-**Threshold:** `ALIGNMENT_THRESHOLD = 8` px em coordenadas de flow.
-
-**Bordas comparadas** — para cada nó candidato, compara-se:
-- `left`, `right` do nó arrastado vs `left`, `right` do candidato → guia vertical (eixo X)
-- `top`, `bottom` do nó arrastado vs `top`, `bottom` do candidato → guia horizontal (eixo Y)
-
-**Dimensões:** `style.width || node.width` para suportar ContextNodes (que usam `style`).
-
-**Performance:** bounds dos nós estáticos cacheados em `staticBoundsRef` no `onNodeDragStart` — recalculados apenas ao iniciar cada drag. Cálculo por frame throttlado via `requestAnimationFrame`.
-
-### Regras de Escopo de Alinhamento
-
-| Nó arrastado | Candidatos |
-|---|---|
-| Nó filho (tem `parentNode`) | Irmãos (mesmo `parentNode`) + o ContextNode pai |
-| ContextNode / GlobalConfigNode (sem parent) | Outros ContextNodes + GlobalConfigNode |
-| Nó standalone (sem parent, não context/config) | Outros nós de topo sem parent |
-
-> Nós filhos nunca alinham com nós externos ao seu contexto. ContextNodes nunca alinham com filhos de outros contextos.
-
-### Comportamento de Snap
-
-Ao soltar o nó (`onNodeDragStop`):
-- Se ao menos uma guia estiver ativa: reposiciona o nó para a posição exata do alinhamento
-- Dois eixos simultâneos: ambos são snappados
-- Múltiplos candidatos no mesmo eixo: usa o mais próximo
-- Posição calculada em coordenadas relativas ao pai (se existir)
-- Sem animação — snap imediato via `setNodes`
-
-### Componente `AlignmentGuides`
-
-Renderizado dentro do wrapper do canvas (irmão do `<ReactFlow>`). Usa `useStore(s => s.transform)` para converter coordenadas de flow para screen (`screenX = flowX * zoom + tx`).
-
-Otimização de subscrição: `GuideLines` (componente interno que usa `useStore`) só é montado quando `guides.length > 0` — evita subscrição ao transform durante pan/zoom quando não há drag ativo.
-
-**Estilo das linhas:** `rgba(0,255,65,0.7)`, 1px, `pointerEvents: none`, `zIndex: 10`.
-
-### Integração em App.jsx
+#### API
 
 ```js
-// Dentro do Canvas component:
-const { guides, onNodeDragStart, onNodeDrag, onNodeDragStop: alignDragStop } = useAlignmentGuides(nodes, setNodes);
+salvarProjeto(projeto)      // upsert (put)
+listarProjetos()            // getAll, ordenado por dataModificacao DESC
+carregarProjeto(id)         // get por id
+excluirProjeto(id)          // delete por id
+projetoExiste(id)           // boolean
+```
 
-// onNodeDragStop combinado (snap primeiro, depois re-parenting):
-const onNodeDragStop = useCallback((event, draggedNode) => {
-  alignDragStop(event, draggedNode);
-  // ... lógica existente de waypoints + re-parenting
-}, [alignDragStop, nodes, setNodes, setEdges]);
+### HomeScreen (`src/screens/HomeScreen.jsx`)
+
+Tela inicial com roteamento simples gerenciado pelo `App`:
+
+- **Grid de cards** — `repeat(auto-fill, minmax(280px,1fr))` — cada card mostra nome, datas, botões ABRIR / EXP .JSON / ⌫
+- **Criar projeto** — modal `CreateProjectModal`: valida slug (`/^[a-z0-9-]+$/`, mín. 3 chars)
+- **Abrir projeto** — modal `ConfirmOpenModal` → `handleOpenProject` → Canvas keyed por `project.id`
+- **Importar .JSON** — valida campos `name, dataCriacao, flow.nodes`; atribui novo `id` (Date.now())
+- **Importar .CONF** — `parseConfFile()` → modal `ConfImportModal` com stats; após confirmar, abre canvas
+- **Exportar .JSON** — download direto (sem modal)
+- **Excluir** — modal `ConfirmDeleteModal` + `excluirProjeto(id)` + refresh da lista
+
+### Roteamento App
+
+```
+App state: 'home' | 'canvas'
+```
+
+`Canvas` recebe `key={currentProject.id}` → remount completo ao trocar de projeto, garantindo estado limpo.
+
+---
+
+## 11. Padrões de Código
+
+### Como Adicionar um Novo Tipo de Nó de Ação
+
+1. **`src/utils/actionMeta.js`** — adicionar entrada no `ACTION_META`:
+   ```js
+   mynewtype: {
+     title: 'MEUTYPE', app: 'MeuApp', icon: SomeIcon, color: '#xxxxxx', category: 'logic',
+     terminal: false,       // omitir se false
+     supportsLabel: false,  // omitir se false
+     summary: (d) => [{ k: 'campo', v: d.campo || '—' }],
+     validate: (d) => d.campo ? [] : ['campo obrigatório'],
+   }
+   ```
+   Adicionar `actionLine()` no switch correspondente.
+
+2. **`src/utils/buildNode.js`** — adicionar case em `buildNode()` com defaults.
+
+3. **`src/utils/confParser.js`** — adicionar case em `cmdToNodeData()` se o comando Asterisk deve ser importado.
+
+4. **`src/components/nodes/index.jsx`** — adicionar `mynewtype: mkActionType('mynewtype')` no `nodeTypes`.
+
+5. **`src/components/layout/Sidebar.jsx`** — adicionar item em uma categoria de `CATEGORIES`.
+
+6. **`src/config/nodeTags.js`** — adicionar tags semânticas para busca.
+
+7. **`src/components/layout/PropertiesPanel.jsx`** — adicionar bloco de edição `{node.type === 'mynewtype' && (...)}`.
+
+### Como Adicionar um Nó Estrutural
+
+Mesmos passos acima, mas com componente próprio em `src/components/nodes/MyNode.jsx` e registro direto (não via `mkActionType`) no `nodeTypes`.
+
+### Convenções Gerais
+
+- **IDs de nó:** `n_` + `uid()` (7 chars aleatórios base36)
+- **IDs de edge:** `e-{sourceId}-{targetId}` (gerado pelo React Flow via `addEdge`) ou `e-ref-{uid()}` (confParser)
+- **Handles de entrada:** `id="in"` (TOP) e `id="in-left"` (LEFT) na maioria dos nós
+- **Handles de saída:** `id="out"` (BOTTOM) e `id="out-right"` (RIGHT) nos nós não-terminais
+- **Handles DTMF:** `id="d-{digitId}"` (RIGHT) no MenuNode — semânticos, forçam smoothstep
+- **Handle ctx-start:** posição absoluta `top: 44, left: 50%` no ContextNode — semântico, força smoothstep
+- **Styling inline predominante** — TailwindCSS é importado mas quase não usado; CSS custom em `index.css` é a fonte principal
+- **`React.memo` em todos os componentes de nó** — crítico para performance no ReactFlow
+- **`useCallback` em todos os handlers** passados como props ou usados em `useEffect`
+- **`useMemo`** para `nodeTypes` e `edgeTypes` no Canvas — evita remount dos nós a cada render
+- **`cls(...)`** de `common.js` para concatenar classes condicionalmente
+
+### Comportamento de Comentário de Nó (_commented)
+
+O flag `_commented: true` no `data` de qualquer nó (exceto `config` e `context`) é o mecanismo de "desativar". Ativado/desativado por:
+- `toggleComment(id)` no Canvas (via menu de contexto ou botão no PropertiesPanel)
+- `ActionNode`, `TimeNode`, `RouteNode`, `RawNode` exibem botões ATIVAR/EXCLUIR inline quando comentados
+
+O exportador:
+- Para `commented` type: não gera linha (passa `_origLine` bruta se existir)
+- Para `raw` type com `_commented`: não gera
+- Para outros com `_commented`: omite a linha e passa o `_origLine` se existir
+
+---
+
+## 12. Fluxo de Renderização
+
+```
+App
+├── HomeScreen (quando screen === 'home')
+└── ReactFlowProvider
+    └── Canvas (key=projectId, remontado ao trocar projeto)
+        ├── EdgeModeContext.Provider (value: 'free'|'grid')
+        ├── Sidebar (palette + search)
+        ├── div.wrapperRef (onDrop, onDragOver)
+        │   ├── ReactFlow
+        │   │   ├── Background gap=20
+        │   │   ├── Controls
+        │   │   ├── MiniMap
+        │   │   └── [nós e edges renderizados pelos tipos registrados]
+        │   ├── AlignmentGuides (guides=[])
+        │   ├── Botão ← VOLTAR (quando onGoBack)
+        │   ├── Status bar (NODES|EDGES|STATUS|save|toggle LIVRE/GRADE)
+        │   └── Botão ⤓ EXPORTAR
+        ├── PropertiesPanel (node selecionado)
+        ├── Context menu de edge (edgeMenu state)
+        ├── Context menu de nó (nodeMenu state)
+        ├── Modal ALTERAÇÕES NÃO SALVAS
+        └── Modal de exportação .conf
 ```
 
 ---
 
-## 9. Decisões Arquiteturais
+## 13. Armadilhas e Decisões Conhecidas
 
-| Decisão | Motivo |
-|---|---|
-| **Estado global no Canvas (App.jsx) sem Zustand/Redux** | Projeto de escopo controlado; React Flow `useNodesState`/`useEdgesState` são suficientes. Evita overhead de setup de store externo. |
-| **ActionNode genérico + ACTION_META** | Evita proliferação de um componente por tipo de ação. Novo nó de ação requer apenas entrada no dict, não novo componente. |
-| **`mkActionType` factory em index.jsx** | Injeta `type` como prop sem criar novo componente por tipo. O arquivo `.jsx` é necessário pela sintaxe JSX no factory. |
-| **ContextNode usa `useReactFlow().setNodes` diretamente** | Eliminou o anti-padrão `window.__rcxUpdateNodeData` do protótipo original. |
-| **`SEQ_HANDLES` como Set** | Garante O(1) lookup ao filtrar edges em walkChainLines/getExecChain. |
-| **Dois modos de exportação (hierárquico/legado)** | Hierárquico usa ContextNodes como containers e é o modo principal. Legado mantém compatibilidade com canvas sem contextos. |
-| **Anti-orphan BFS** | Contextos desconectados não poluem o .conf gerado. Propagação pelo `parentNode` garante que contextos implicitamente alcançados (por conter nós alcançados) também sejam incluídos. |
-| **`order` field para ordenação de output** | Não altera lógica de conexões. Permite usuário controlar a sequência dos blocos `[contexto]` no arquivo sem mover nós no canvas. |
-| **customerAgi removido da geração automática** | Fix 2: AGI de busca de cadastro deve ser declarado explicitamente via nó AGI no canvas. Evita emissão incorreta de AGI adjacente a GotoIfTime em contextos com TimeCondition. |
-| **timeUtils.js separado** | Evita duplicação da lógica de formatação entre TimeNode.jsx (visual) e asteriskExporter.js. `buildTimeExport` suporta formato novo e legado via duck-typing. |
-| **Handles omnidirecionais (4 lados)** | Permite diagramas mais naturais sem forçar conexões top→bottom. SEQ_HANDLES garante que o exporter identifique apenas handles de fluxo sequencial. |
-| **`connectionLineType="smoothstep"`** | Preview de conexão usa o mesmo estilo das edges finais. |
-| **`slugify` em common.js** | Legado do HolidayNode (removido). Atualmente sem uso ativo no codebase, mas mantido como utilitário. |
-| **EdgeLabelRenderer para controles de waypoint (não SVG)** | Eventos `onMouseDown` em SVG dentro de custom edges são interceptados pelo React Flow antes dos handlers. HTML divs no EdgeLabelRenderer têm event handling confiável. |
-| **`getEdgeParamsDirected` para endpoints com waypoints** | Sem direção explícita, o endpoint do target é calculado em relação ao source — resultando em borda errada quando há waypoints. A versão dirigida usa o último waypoint como referência para o endpoint do target. |
-| **Path ortogonal com `buildOrthogonalPath`** | Linhas diagonais entre waypoints são visualmente confusas em diagramas de dialplan. L-shapes (horizontal→vertical) são o padrão em ferramentas como Lucidchart e draw.io. |
-| **EdgeModeContext para modo LIVRE/GRADE** | O modo afeta todos os EdgeWithWaypoints no canvas; React context evita passar o estado como prop por todo o tree. |
-| **Hooks antes do early return em EdgeWithWaypoints** | Rules of Hooks: useCallback/useStore após um `if (...) return null` viola as regras e causa comportamento indefinido. Todos os hooks devem ser chamados incondicionalmente, antes de qualquer return condicional. |
-| **Controles de waypoint visíveis só quando edge selecionada** | Mostrar ⊕ em todas as edges simultaneamente polui o canvas. A seleção é o gatilho natural para edição — padrão usado em todas as ferramentas profissionais. |
-| **FIXED_HANDLES reduzido a {'ctx-start'} + /d-/\*** | ctx-in, true, closed eram "fixos" por posição de handle, não por impedimento de waypoints. Separar os dois conceitos permite curvar qualquer edge mantendo semântica de handle onde relevante. |
-| **`edgeTypes` registra ambos `floating` e `smoothstep` → EdgeWithWaypoints** | EdgeWithWaypoints detecta `isFixed` via `isSemanticHandle(sourceHandleId)`. Edges fixas usam coords do RF e sem controles; floating usam cálculo dinâmico. Isso garante que TODAS as edges usem o mesmo componente, incluindo as amarelas do TimeNode. |
-| **Snap aplicado antes do re-parenting em `onNodeDragStop`** | `alignDragStop` faz `setNodes` com a posição snappada; o re-parenting faz outro `setNodes` que pode sobrescrever. Isso é correto: snap aplica quando não há re-parenting (mesmo pai); quando há re-parenting (mudança de contexto grande), o re-parenting domina e o snap de ≤8px é irrelevante. React 18 batcha ambas as chamadas. |
-| **`GuideLines` como subcomponente interno** | `AlignmentGuides` retorna null quando não há guias — evita que o componente subscreva ao `useStore(transform)` durante pan/zoom sem drag ativo. `GuideLines` só é montado quando guias existem. |
-| **Cache de bounds em `staticBoundsRef` + rAF** | Calcular bounds de todos os nós a cada evento `onNodeDrag` seria caro. Cache no `onNodeDragStart` reduz a O(1) por frame; `requestAnimationFrame` garante no máximo um cálculo por frame de renderização. |
-| **Reset de waypoints em `onNodeDragStop`** | Waypoints são coordenadas absolutas — ao mover um nó, as coordenadas ficam desatualizadas e distorcem o traçado. Reset automático ao soltar o nó (não durante o drag) retorna ao traçado automático dos floating handles. ContextNode arrasta filhos implicitamente, então movedIds inclui todos os filhos. |
-| **`resolveReferences` como etapa pós-parsing** | Separar a resolução de referências do parsing linha-a-linha permite que qualquer contexto seja referenciado antes de ser declarado no arquivo (forward references). O índice é construído uma única vez após todos os ContextNodes existirem, e as edges criadas são idênticas às criadas manualmente — sem tipos especiais de edge. |
-| **Filtro de strings curtas e numéricas em `tryLink`** | Destinos de GotoIf podem ser `"s"`, `"n"`, `"1"` (extensões/prioridades inline). Tentar resolver esses como contextos geraria falsos positivos no relatório de referências externas. O filtro `length > 1 && !/^\d+$/` descarta esses casos. |
-| **Absorção de Background+WaitExten no MenuNode** | O exporter gera `Background` e `WaitExten` automaticamente a partir dos campos do MenuNode. Manter esses como nós separados causaria duplicação no .conf exportado. A absorção garante fidelidade round-trip: importar → exportar produz o mesmo dialplan. |
-| **`_dtmfGotos` como campo interno do MenuNode** | As saídas DTMF precisam ser resolvidas em `resolveReferences` (que tem o índice de contextos), mas o MenuNode é criado em `processContext` (sem acesso ao índice ainda). O campo temporário `_dtmfGotos` serve de ponte; é ignorado pelo exporter e por todos os componentes React. |
-| **Edges DTMF como `smoothstep`** | Handles `d-*` são semânticos (posição fixa por linha do menu). Edges `floating` usam cálculo dinâmico de endpoint que não respeita a posição vertical do handle — geraria endpoints na borda errada. `smoothstep` com `isFixed=true` usa `sourceX/Y` fornecido pelo React Flow. |
-
----
-
-## 10. Itens Removidos / Histórico
-
-| Item | Status | Motivo |
-|---|---|---|
-| `HolidayNode` | Removido | Abstração desnecessária — usar nós nativos GotoIfTime/ExecIf |
-| `QueueNode` (tipo `queue`) | Removido | Incorporado ao `RouteNode` modo `fila` |
-| Tipo `goto` (action) | Removido | Incorporado ao `RouteNode` modo `contexto` |
-| `window.__rcxUpdateNodeData` | Removido | Substituído por `useReactFlow().setNodes` no ContextNode |
-| `window.__rcxPatchNodeStyle` | Removido | `patchNodeStyle` passado como prop para PropertiesPanel |
-| `customerAgi` auto-gerado | Removido da compilação | Fix 2 — usar nó AGI explícito |
-| Babel Standalone + ImportMap | Removido | Migração do protótipo CDN para Vite+React modular |
-| `FloatingEdge.jsx` | Supersedido | EdgeWithWaypoints cobre todos os casos (sem waypoints = SmoothStep, com waypoints = ortogonal) |
-| `ctx-in`, `true`, `closed`, `open` em FIXED_HANDLES | Removidos | Permitem now waypoints; `true` handle continua smoothstep por código explícito em onConnect |
-| `buildWaypointPath` | Substituído por `buildOrthogonalPath` | Eliminava diagonais; ortogonal é o padrão correto para diagramas de dialplan |
-| Sidebar com "SISTEMA/ÁUDIO" mostrando apenas answer/wait/playback | Expandido | + waitexten, background; categorias CONTROLE DE FLUXO (+gotoif), EXECUÇÃO LÓGICA (+set), INTERAÇÃO (+dial) |
-
----
-
-## 11. Utilitários (`src/utils/`)
-
-### `common.js`
-```js
-uid()              // → Math.random().toString(36).slice(2,9)  — IDs de nó
-cls(...classes)    // → filtra falsies e join(' ')  — className helper
-slugify(s)         // → NFD normalize, remove combining chars, lowercase, kebab  — não usado ativamente
-DEFAULT_DIGITS     // → [{id:'1',label:'Opcao 1'}, ...{id:'4'}]  — digits padrão de menu
-```
-> **Atenção:** `DEFAULT_DIGITS` tem labels sem acento (`Opcao`) por limitação de encoding do PowerShell durante criação. Corrigir manualmente se necessário.
-
-### `timeUtils.js`
-```js
-WEEKDAY_ORDER      // ['sun','mon','tue','wed','thu','fri','sat']
-MONTH_ORDER        // ['jan','feb','mar','apr','may','jun','jul','aug','sep','oct','nov','dec']
-MAX_DAYS_PER_MONTH // {jan:31, feb:29, mar:31, apr:30, ...}
-formatDayRange(selected, order)  // → 'mon-fri' | 'mon&wed' | '*'
-formatTimeRange(start, end)      // → 'HH:MM-HH:MM' | '*'
-getMaxDay(selectedMonths)        // → min dos MAX_DAYS dos meses selecionados (1-31)
-buildTimeExport(d)               // → 'times,weekdays,mdays,months' — suporta novo e legado
-```
-
-### `actionMeta.js`
-```js
-ACTION_META        // dict tipo→{title,app,icon,color,category,terminal?,summary}
-actionLine(n)      // n={type,data} → string Asterisk ou null
-```
-
-### `buildNode.js`
-```js
-buildNode(type, position)  // → node object com id='n_'+uid(), type, position, data defaults
-                           // context tem style:{width:480,height:320} e zIndex:-1
-```
-
----
-
-*Última atualização: 2026-05-19 — adicionado sistema de alinhamento inteligente (§8.7)*
-*Arquivos lidos para construção deste brief: todos os 16 arquivos em `src/` + `package.json` + `vite.config.js`*
+- **`onEdgeMouseDown` foi REMOVIDO do ReactFlow** — quebrava a conexão de handles DTMF (`d-*`). O drag do midpoint é feito via `EdgeLabelRenderer` + listeners globais no `document`.
+- **`computeObstacleAvoidance()` está desativado** — existe em `edgeUtils.js` mas não é chamado. Causava bugs visuais com ContextNodes.
+- **`FloatingEdge.jsx` existe mas não é usado** — `edgeTypes` mapeia `floating` para `EdgeWithWaypoints`. Mantido como referência legacy.
+- **`data.waypoints: []`** ainda aparece em edges geradas pelo `confParser` (legado de implementação anterior). O `EdgeWithWaypoints` atual ignora esse campo completamente — usa apenas `offsetX/offsetY`.
+- **ContextNode tem `zIndex: -1`** — deve aparecer atrás dos nós filhos para não bloquear interação.
+- **Filho deve aparecer DEPOIS do pai no array de nós** — o Canvas garante isso ao re-parenting via splice.
+- **`skipDirtyRef`** — o primeiro render do Canvas não marca como dirty (evita auto-save imediato ao abrir projeto).
+- **`nodesWithSel`** — `selected` é injetado via `useMemo` sem armazenar em state do React Flow, evitando conflito com seleção nativa.
+- **GotoIf `falseDestination` vazio é válido** no Asterisk (fall-through) — não é um erro de validação.
+- **MenuNode `contextName`** é usado apenas no modo legado para o Goto dentro do menu; no modo hierárquico, o ContextNode pai define o nome do bloco.

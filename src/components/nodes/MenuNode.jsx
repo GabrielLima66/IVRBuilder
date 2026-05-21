@@ -23,10 +23,14 @@ const MenuNode = memo(({ id, data, selected }) => {
       <div className="rcx-node-body">
         <div className="rcx-node-row"><span className="k">audio</span><span className="v">{data.greeting || '1-bem-vindo'}</span></div>
         <div className="rcx-node-row"><span className="k">wait</span><span className="v">{data.waitExten || 4}s</span></div>
-        <div style={{ marginTop: 6 }}>
-          {/* Handles de DTMF — lado direito (posição relativa via CSS) */}
+
+        {/*
+          Bloco DTMF — margens negativas laterais cancelam o padding do body (10px)
+          para que os handles fiquem exatamente na borda direita do nó.
+        */}
+        <div style={{ marginTop: 6, marginLeft: -10, marginRight: -10 }}>
           {digits.map((d) => (
-            <div key={d.id} className="digit-row">
+            <div key={d.id} className="digit-row" style={{ paddingLeft: 10, paddingRight: 10, position: 'relative' }}>
               <span>
                 <span className="badge" style={{ marginRight: 6 }}>{d.id}</span>
                 {d.label}
@@ -35,25 +39,26 @@ const MenuNode = memo(({ id, data, selected }) => {
                 type="source"
                 position={Position.Right}
                 id={`d-${d.id}`}
-                style={{ position: 'absolute', right: -5, top: '50%', transform: 'translateY(-50%)' }}
               />
             </div>
           ))}
-          <div className="digit-row" style={{ color: '#ff8c00', position: 'relative' }}>
+
+          <div className="digit-row" style={{ color: '#ff8c00', paddingLeft: 10, paddingRight: 10, position: 'relative' }}>
             <span>
               <span className="badge" style={{ borderColor: '#ff8c00', color: '#ff8c00', marginRight: 6 }}>i</span>
               invalid
             </span>
             <Handle type="source" position={Position.Right} id="d-i"
-              style={{ position: 'absolute', right: -5, top: '50%', transform: 'translateY(-50%)', background: '#ff8c00' }} />
+              style={{ background: '#ff8c00' }} />
           </div>
-          <div className="digit-row" style={{ color: '#ff8c00', position: 'relative' }}>
+
+          <div className="digit-row" style={{ color: '#ff8c00', paddingLeft: 10, paddingRight: 10, position: 'relative' }}>
             <span>
               <span className="badge" style={{ borderColor: '#ff8c00', color: '#ff8c00', marginRight: 6 }}>t</span>
               timeout
             </span>
             <Handle type="source" position={Position.Right} id="d-t"
-              style={{ position: 'absolute', right: -5, top: '50%', transform: 'translateY(-50%)', background: '#ff8c00' }} />
+              style={{ background: '#ff8c00' }} />
           </div>
         </div>
       </div>

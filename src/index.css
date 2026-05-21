@@ -279,6 +279,61 @@ body::before {
   opacity: 0.2;
 }
 
+/* ContextNode sem conexão de entrada — borda laranja pulsante ───────────── */
+@keyframes ctx-orphan-pulse {
+  0%, 100% { opacity: 1; }
+  50%       { opacity: 0.55; }
+}
+
+/* Só aplica quando NÃO está selecionado (selecionado mantém borda branca) */
+.ctx-node--orphan:not(.selected) {
+  border-color: #ff9900;
+  border-style: dashed;
+  animation: ctx-orphan-pulse 2s ease-in-out infinite;
+}
+
+/* Badge "SEM CONEXÃO" no header */
+.ctx-orphan-badge {
+  font-size: 8px;
+  color: #ff9900;
+  border: 1px solid #ff990055;
+  border-radius: 2px;
+  padding: 1px 5px;
+  letter-spacing: 0.8px;
+  font-family: inherit;
+  cursor: default;
+  position: relative;
+  white-space: nowrap;
+  flex-shrink: 0;
+}
+
+/* Tooltip ao hover no badge */
+.ctx-orphan-badge::after {
+  content: attr(data-tooltip);
+  position: absolute;
+  top: calc(100% + 6px);
+  right: 0;
+  background: var(--panel-2);
+  border: 1px solid #ff990066;
+  color: #ff9900;
+  padding: 6px 10px;
+  border-radius: 3px;
+  font-size: 9px;
+  width: 220px;
+  white-space: normal;
+  line-height: 1.5;
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 0.15s;
+  z-index: 10000;
+  box-shadow: 0 4px 12px rgba(0,0,0,0.6);
+  letter-spacing: 0.3px;
+}
+
+.ctx-orphan-badge:hover::after {
+  opacity: 1;
+}
+
 /* input[type="time"] — tema dark */
 .term-input[type="time"]::-webkit-calendar-picker-indicator {
   filter: invert(1) sepia(1) saturate(3) hue-rotate(90deg);

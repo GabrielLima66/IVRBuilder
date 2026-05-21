@@ -50,11 +50,18 @@ function Canvas({ initialFlow, projectName, projectCreatedAt, currentProjectId, 
   // eslint-disable-next-line react-hooks/exhaustive-deps
   const initEdges = useMemo(() => {
     const raw = initialFlow?.edges || [];
-    // Migra edges antigas: handles semânticos (d-*, ctx-start) devem ser smoothstep,
-    // não floating, para que o caminho respeite a posição exata do handle.
+    // Normalização de edges ao carregar projeto:
+    // - ctx-start: deve ser smoothstep (fixed handle, built-in renderer é OK)
+    // - d-* (DTMF): deve ser floating (EdgeWithWaypoints usa rfSourceX/Y do RF
+    //   para posição real de cada handle, com roteamento floating no target)
     return raw.map((e) => {
-      if (e.type === 'floating' && (isSemanticHandle(e.sourceHandle) || isSemanticHandle(e.targetHandle))) {
+      // ctx-start salvo como floating (legado) → converte para smoothstep
+      if (e.type === 'floating' && isSemanticHandle(e.sourceHandle)) {
         return { ...e, type: 'smoothstep' };
+      }
+      // d-* salvo como smoothstep (sessão anterior) → converte de volta para floating
+      if (e.type === 'smoothstep' && /^d-/.test(e.sourceHandle)) {
+        return { ...e, type: 'floating', data: { offsetX: 0, offsetY: 0, ...(e.data || {}) } };
       }
       return e;
     });

@@ -1,13 +1,21 @@
 /**
- * EdgeWithWaypoints — edge com offset elástico.
+ * EdgeWithWaypoints — edge com offset elástico + path DTMF independente.
  *
- * Interação de drag:
- *   - Selecione a edge clicando nela (React Flow nativo)
- *   - Quando selecionada, um handle "⣿ arrastar" aparece no midpoint
- *   - Clique e arraste esse handle para mover a linha inteira como elástico
+ * ── Edges DTMF (sourceHandle d-*) ────────────────────────────────────────────
+ *   Usam Bézier cúbico com arm horizontal fixo de DTMF_ARM px.
+ *   Path: M sx sy  C sx+ARM sy,  tx-ARM ty,  tx ty
+ *   - sx/sy: posição real do handle (rfSourceX/Y fornecido pelo React Flow)
+ *   - tx/ty: posição real do target handle (rfTargetX/Y do React Flow)
+ *   - Primeiro control point: mesmo Y que sy → saída 100% horizontal
+ *   - Segundo control point:  mesmo Y que ty → chegada 100% horizontal
+ *   Cada edge sai paralela no seu próprio Y antes de curvar ao destino.
+ *   Sem offset elástico, sem floating recalc, sem MidpointDragHandle.
  *
- * O offset é salvo como { offsetX, offsetY } no edge.data.
- * Reset automático quando um dos nós conectados se move.
+ * ── Edges floating (demais handles) ─────────────────────────────────────────
+ *   Floating handles calculados por getEdgeParams/getEdgeParamsDirected.
+ *   Offset elástico via { offsetX, offsetY } em edge.data.
+ *   MidpointDragHandle aparece quando a edge está selecionada.
+ *   Reset automático quando um dos nós conectados se move.
  */
 
 import React, { useState, useCallback, useEffect, useRef } from 'react';
@@ -17,8 +25,11 @@ import {
 } from 'reactflow';
 import { getEdgeParams, getEdgeParamsDirected } from '../../utils/edgeUtils';
 
+// Comprimento do arm horizontal na saída/chegada das edges DTMF (px no canvas).
+const DTMF_ARM = 80;
+
 // ─────────────────────────────────────────────────────────────────────────────
-// Path ORTOGONAL
+// Path ORTOGONAL (usado pelas edges floating com offset)
 // ─────────────────────────────────────────────────────────────────────────────
 function buildOrthogonalPath(pts) {
   if (pts.length < 2) return '';
@@ -38,7 +49,7 @@ function buildOrthogonalPath(pts) {
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// Handle de drag do midpoint (via EdgeLabelRenderer)
+// Handle de drag do midpoint (apenas para edges floating não-DTMF)
 // ─────────────────────────────────────────────────────────────────────────────
 const MidpointDragHandle = React.memo(function MidpointDragHandle({ x, y, zoom, onDrag }) {
   const [hov, setHov] = useState(false);
@@ -71,7 +82,7 @@ const MidpointDragHandle = React.memo(function MidpointDragHandle({ x, y, zoom, 
         cursor:    drag ? 'grabbing' : 'grab',
         pointerEvents: 'all',
         zIndex:    1001,
-        padding:   6,           // área de clique ampliada
+        padding:   6,
         display:   'flex', alignItems: 'center', justifyContent: 'center',
       }}
       onMouseEnter={() => setHov(true)}
@@ -102,16 +113,22 @@ const MidpointDragHandle = React.memo(function MidpointDragHandle({ x, y, zoom, 
 // EdgeWithWaypoints
 // ─────────────────────────────────────────────────────────────────────────────
 export default function EdgeWithWaypoints({
-  id, source, target, data, markerEnd, style, selected,
+  id, source, target,
+  // React Flow v11 passa handle IDs como sourceHandleId/targetHandleId (não sourceHandle).
+  // sourceX/Y e targetX/Y são calculados a partir do handle registrado via updateNodeInternals.
+  // Para handles DTMF (d-*), cada linha do MenuNode tem rfSourceX/Y próprios.
+  sourceX: rfSourceX, sourceY: rfSourceY,
+  targetX: rfTargetX, targetY: rfTargetY,
+  sourceHandleId,          // ← nome real do prop no React Flow v11
+  data, markerEnd, style, selected,
 }) {
   const { setEdges } = useReactFlow();
   const zoom = useStore((s) => s.transform[2]);
 
-  // Subscrições ao store — TODAS antes do early return
+  // Subscrições ao store — TODAS antes do early return (Rules of Hooks)
   const sourceNode = useStore(useCallback((s) => s.nodeInternals.get(source), [source]));
   const targetNode = useStore(useCallback((s) => s.nodeInternals.get(target), [target]));
 
-  // Chaves de posição para detectar movimento dos nós conectados
   const srcPosKey = useStore(useCallback((s) => {
     const n = s.nodeInternals.get(source);
     return n?.positionAbsolute
@@ -128,7 +145,7 @@ export default function EdgeWithWaypoints({
   const offsetX = data?.offsetX ?? 0;
   const offsetY = data?.offsetY ?? 0;
 
-  // Reseta offset quando nó se move (após o mount inicial)
+  // Reset de offset quando nó conectado se move (no-op para DTMF que não usam offset)
   const mountedRef = useRef(false);
   useEffect(() => {
     if (!mountedRef.current) { mountedRef.current = true; return; }
@@ -142,7 +159,38 @@ export default function EdgeWithWaypoints({
   if (!sourceNode?.positionAbsolute || !targetNode?.positionAbsolute ||
       !sourceNode.width             || !targetNode.width) return null;
 
-  // ── Cálculo de path ─────────────────────────────────────────────────────
+  // ── Detecção de handle DTMF ───────────────────────────────────────────────
+  // sourceHandleId é o prop correto em React Flow v11 (não sourceHandle).
+  const isDtmf = /^d-/.test(sourceHandleId);
+
+  // ── DTMF: Bézier cúbico com arm horizontal independente por handle ─────────
+  if (isDtmf && rfSourceX != null) {
+    const sx = rfSourceX;
+    const sy = rfSourceY;
+
+    // Ponto de chegada: usa posição real do targetHandle fornecida pelo React Flow.
+    // Fallback para getEdgeParamsDirected se RF não disponibilizou rfTargetX.
+    let tx, ty;
+    if (rfTargetX != null) {
+      tx = rfTargetX;
+      ty = rfTargetY;
+    } else {
+      const d = getEdgeParamsDirected(sourceNode, targetNode, { x: sx, y: sy }, { x: sx, y: sy });
+      tx = d.tx; ty = d.ty;
+    }
+
+    // Bézier cúbico: arm horizontal garante saída/chegada paralelas por handle.
+    // C1 = (sx+ARM, sy) → sai horizontalmente no Y exato do handle.
+    // C2 = (tx-ARM, ty) → chega horizontalmente no Y do target handle.
+    // Cada edge tem seu próprio sy, portanto as curvas NÃO convergem.
+    const pathD = `M ${sx} ${sy} C ${sx + DTMF_ARM} ${sy}, ${tx - DTMF_ARM} ${ty}, ${tx} ${ty}`;
+
+    return (
+      <BaseEdge id={id} path={pathD} markerEnd={markerEnd} style={style} />
+    );
+  }
+
+  // ── Floating padrão (todos os demais handles) ─────────────────────────────
   const { sx, sy, tx, ty, sourcePos, targetPos } = getEdgeParams(sourceNode, targetNode);
   const hasOffset = Math.abs(offsetX) > 1 || Math.abs(offsetY) > 1;
 
@@ -161,11 +209,9 @@ export default function EdgeWithWaypoints({
     pathD = buildOrthogonalPath([{ x: dsx, y: dsy }, { x: wpX, y: wpY }, { x: dtx, y: dty }]);
   }
 
-  // Posição do handle de drag (midpoint com offset)
   const midX = (sx + tx) / 2 + offsetX;
   const midY = (sy + ty) / 2 + offsetY;
 
-  // Callback de drag: acumula o deslocamento sobre o offset atual
   const handleDrag = useCallback((dx, dy) => {
     setEdges((es) =>
       es.map((e) => {
@@ -178,16 +224,9 @@ export default function EdgeWithWaypoints({
   return (
     <>
       <BaseEdge id={id} path={pathD} markerEnd={markerEnd} style={style} />
-
-      {/* Handle de drag visível quando edge está selecionada */}
       {selected && (
         <EdgeLabelRenderer>
-          <MidpointDragHandle
-            x={midX}
-            y={midY}
-            zoom={zoom}
-            onDrag={handleDrag}
-          />
+          <MidpointDragHandle x={midX} y={midY} zoom={zoom} onDrag={handleDrag} />
         </EdgeLabelRenderer>
       )}
     </>

@@ -206,12 +206,14 @@ export function computeObstacleAvoidance(sx, sy, tx, ty, allNodes, sourceId, tar
  *
  * ctx-start : ContextNode SOURCE — determina o 1º nó da sequência interna.
  *             Deve sair da faixa START, posição visual obrigatória.
- * d-*       : MenuNode DTMF — cada dígito tem uma linha de saída à direita.
- *             Manter fixo preserva o alinhamento visual com a linha do dígito.
+ *
+ * d-* (DTMF): NÃO usa smoothstep. Permanece como 'floating' (EdgeWithWaypoints),
+ *             que lê rfSourceX/Y do React Flow para usar a posição real de cada
+ *             handle e aplica roteamento floating-style no lado do target.
  */
 const FIXED_HANDLES = new Set(['ctx-start']);
 
 export function isSemanticHandle(handle) {
   if (!handle) return false;
-  return FIXED_HANDLES.has(handle) || /^d-/.test(handle);
+  return FIXED_HANDLES.has(handle);
 }

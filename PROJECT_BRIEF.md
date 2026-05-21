@@ -484,13 +484,13 @@ const FIXED_HANDLES = new Set(['ctx-start']);
 
 export function isSemanticHandle(handle) {
   if (!handle) return false;
-  return FIXED_HANDLES.has(handle) || /^d-/.test(handle);
+  return FIXED_HANDLES.has(handle);  // d-* NÃO está aqui — veja seção 7.5
 }
 ```
 
-Handles semânticos: `ctx-start` e qualquer `d-*` (DTMF do MenuNode).  
-Edges com pelo menos um handle semântico usam `type: 'smoothstep'` — o caminho respeita a posição exata do handle (não flutua).  
-Edges com ambos os handles genéricos usam `type: 'floating'` — os pontos de conexão são calculados dinamicamente.
+**`ctx-start`** (ContextNode): único handle semântico → usa `type: 'smoothstep'` (renderer nativo do React Flow).
+
+**`d-*` (DTMF):** **NÃO é mais semântico** no sentido de `isSemanticHandle`. Usa `type: 'floating'` (EdgeWithWaypoints), mas com cálculo de path totalmente independente via Bézier cúbico — veja seção 7.5.
 
 ### 7.3 Seleção de Tipo na Conexão (`onConnect`)
 
@@ -500,83 +500,117 @@ const useFloating = !isSemanticHandle(sourceHandle) && !isSemanticHandle(targetH
 // smoothstep: { type: 'smoothstep' } — sem data de offset
 ```
 
-Exceção: handle `true` do TimeNode → sempre `floating`, edge amarela (`stroke: '#ffcc00'`).
+- `ctx-start` → `smoothstep` (via `isSemanticHandle`)
+- `d-*` → `floating` (isSemanticHandle retorna false → EdgeWithWaypoints com Bézier DTMF)
+- Exceção: handle `true` do TimeNode → sempre `floating`, edge amarela (`stroke: '#ffcc00'`)
 
 ### 7.4 Normalização na Carga de Projeto (`initEdges`)
 
 ```js
 raw.map((e) => {
-  if (e.type === 'floating' && (isSemanticHandle(e.sourceHandle) || isSemanticHandle(e.targetHandle))) {
+  // ctx-start salvo como floating (legado) → converte para smoothstep
+  if (e.type === 'floating' && isSemanticHandle(e.sourceHandle)) {
     return { ...e, type: 'smoothstep' };
+  }
+  // d-* salvo como smoothstep (migração anterior) → converte de volta para floating
+  if (e.type === 'smoothstep' && /^d-/.test(e.sourceHandle)) {
+    return { ...e, type: 'floating', data: { offsetX: 0, offsetY: 0, ...(e.data || {}) } };
   }
   return e;
 });
 ```
 
-Migra edges antigas: handles semânticos (`d-*`, `ctx-start`) que foram salvas como `floating` são convertidas para `smoothstep` no mount.
-
 ### 7.5 EdgeWithWaypoints — Componente Principal
 
 **Arquivo:** `src/components/edges/EdgeWithWaypoints.jsx`
 
-**Props:** `id, source, target, data, markerEnd, style, selected`  
-**`data`:** `{ offsetX: number, offsetY: number }` — offset elástico do midpoint. Padrão `0,0`.
+**Props adicionais lidas do React Flow:** `sourceX, sourceY, targetX, targetY, sourceHandleId`
 
-#### Cálculo de Caminho
+> ⚠️ **Armadilha crítica — React Flow v11:** O prop do handle de origem é `sourceHandleId` (não `sourceHandle`). React Flow passa `sourceHandleId` e `targetHandleId` para componentes de edge customizados. Usar `sourceHandle` resulta em `undefined` sempre, quebrando toda a detecção de DTMF.
+
+O React Flow computa `sourceX/Y` e `targetX/Y` a partir dos handles registrados via `updateNodeInternals`. Para handles DTMF, cada linha tem seu próprio `Y` individual.
+
+---
+
+#### 7.5.1 Branch DTMF (`/^d-/.test(sourceHandleId)`)
+
+**Sem offset, sem floating recalc, sem MidpointDragHandle.**
+
+```
+sx = rfSourceX  (posição real do handle d-N, fornecida pelo React Flow)
+sy = rfSourceY  (Y único para cada linha de opção do menu)
+tx = rfTargetX  (handle de entrada do nó destino, fornecido pelo React Flow)
+ty = rfTargetY  (fallback: getEdgeParamsDirected se rfTargetX for null)
+
+pathD = `M ${sx} ${sy}
+         C ${sx + 80} ${sy},
+           ${tx - 80} ${ty},
+           ${tx} ${ty}`
+```
+
+**Por que Bézier cúbico com arm fixo de 80px?**
+
+`getSmoothStepPath` usa o centro dos nós para calcular pontos de controle. Quando múltiplos handles DTMF compartilham o mesmo nó de origem, os pontos de controle são idênticos — as curvas convergem visualmente mesmo saindo de Y diferentes.
+
+O Bézier `C sx+80 sy, tx-80 ty, tx ty` garante:
+- **Primeiro controle** `(sx+80, sy)`: exatamente no Y do handle → saída 100% horizontal
+- **Segundo controle** `(tx-80, ty)`: no Y do target → chegada 100% horizontal
+- Cada edge tem `sy` próprio → **curvas nunca convergem**
+- Totalmente independente de `getEdgeParams` e de posições de centros de nós
+
+#### 7.5.2 Branch Floating padrão (demais handles)
+
+**`data`:** `{ offsetX: number, offsetY: number }` — offset elástico do midpoint. Padrão `0,0`.
 
 ```
 hasOffset = Math.abs(offsetX) > 1 || Math.abs(offsetY) > 1
 
 SEM offset → getSmoothStepPath({ sx, sy, sourcePos, tx, ty, targetPos, borderRadius: 6 })
+             sx/sy/tx/ty de getEdgeParams(sourceNode, targetNode)
 
 COM offset → buildOrthogonalPath([
-  { x: dsx, y: dsy },          ← saída calculada pelo getEdgeParamsDirected em direção ao waypoint
-  { x: midX + offsetX, y: midY + offsetY },   ← waypoint único
-  { x: dtx, y: dty }           ← entrada calculada em direção ao waypoint
+  { x: dsx, y: dsy },                          ← getEdgeParamsDirected direcionado ao waypoint
+  { x: (sx+tx)/2 + offsetX, y: (sy+ty)/2 + offsetY },   ← waypoint único
+  { x: dtx, y: dty }
 ])
 ```
 
-`buildOrthogonalPath(pts)`: gera SVG path com segmentos horizontais/verticais e cantos arredondados (R=6) via quadratic bezier.
+`buildOrthogonalPath(pts)`: SVG path com segmentos H/V e cantos arredondados (R=6px) via quadratic Bézier.
 
-#### `getEdgeParams(sourceNode, targetNode)`
+#### `getEdgeParams(sourceNode, targetNode)` — regra horizontal-first
 
-Calcula qual lado (Left/Right/Top/Bottom) de cada nó usar com regra **horizontal-first**:
-- `|dx| < 30` → saída/entrada vertical (Top/Bottom)
-- `|dy| < 30` → saída/entrada horizontal (Left/Right)
-- diagonal → saída horizontal (Right/Left), entrada vertical (Top/Bottom)
+- `|dx| < 30` → Top/Bottom
+- `|dy| < 30` → Left/Right
+- diagonal → Right/Left (saída), Top/Bottom (entrada)
 
-#### `getEdgeParamsDirected(sourceNode, targetNode, firstWp, lastWp)`
+#### `getEdgeParamsDirected(srcNode, tgtNode, firstWp, lastWp)`
 
-Versão usada quando `hasOffset`:
-- Source exit calculado em direção ao waypoint (não ao nó destino)
-- Target entry calculado a partir do waypoint (não do nó origem)
+- Source exit: calculado em direção ao `firstWp` (não ao target center)
+- Target entry: calculado a partir do `lastWp` (não do source center)
 
-#### MidpointDragHandle
+#### MidpointDragHandle (apenas branch floating, nunca DTMF)
 
-Subcomponente `React.memo` renderizado via `EdgeLabelRenderer` **somente quando `selected === true`**.
+Subcomponente `React.memo` via `EdgeLabelRenderer` **somente quando `selected === true` e `!isDtmf`**.
 
-- Visual: quadrado 12×12px (18×18px no hover/drag), borda verde neon, bg `#0d0d0d`
-- Ícone: `·` normal, `↕` no hover/drag
-- Drag via `document.addEventListener('mousemove/mouseup')` — acumula deslocamento em `offsetX/offsetY`
-- Divide o deslocamento pelo `zoom` atual (lido via `useStore((s) => s.transform[2])`)
-- NÃO há `onEdgeMouseDown` no ReactFlow — foi removido pois quebrava a conexão de handles DTMF
+- Visual: quadrado 12→18px, borda verde neon, bg `#0d0d0d`; ícone `·` / `↕`
+- Drag: `document.addEventListener('mousemove/mouseup')` → acumula em `offsetX/offsetY`
+- Zoom: `useStore((s) => s.transform[2])` — converte pixels de tela em unidades do canvas
 
-#### Auto-reset de Offset
+#### Auto-reset de Offset (floating only)
 
 ```js
 useEffect(() => {
   if (!mountedRef.current) { mountedRef.current = true; return; }
   if (offsetX === 0 && offsetY === 0) return;
-  setEdges((es) => es.map((e) => e.id === id ? { ...e, data: { ...e.data, offsetX: 0, offsetY: 0 } } : e));
+  setEdges(es => es.map(e => e.id === id ? { ...e, data: { ...e.data, offsetX: 0, offsetY: 0 } } : e));
 }, [srcPosKey, tgtPosKey]);
 ```
 
-Quando qualquer nó conectado se move, o offset é zerado automaticamente.  
-`srcPosKey`/`tgtPosKey` = string `"x,y"` da `positionAbsolute` arredondada.
+`srcPosKey`/`tgtPosKey` = string `"x,y"` da `positionAbsolute` arredondada. No-op para DTMF (offset sempre = 0).
 
 #### Reset pelo Usuário
 
-Menu de contexto (botão direito na edge) → "↺ Redefinir trajeto" → `resetEdgeOffset(edgeId)` → `{ offsetX: 0, offsetY: 0 }`.
+Botão direito na edge → "↺ Redefinir trajeto" → `resetEdgeOffset(edgeId)` → `{ offsetX: 0, offsetY: 0 }`.
 
 ### 7.6 `computeObstacleAvoidance` (DESATIVADO)
 
@@ -810,7 +844,7 @@ Mesmos passos acima, mas com componente próprio em `src/components/nodes/MyNode
 - **IDs de edge:** `e-{sourceId}-{targetId}` (gerado pelo React Flow via `addEdge`) ou `e-ref-{uid()}` (confParser)
 - **Handles de entrada:** `id="in"` (TOP) e `id="in-left"` (LEFT) na maioria dos nós
 - **Handles de saída:** `id="out"` (BOTTOM) e `id="out-right"` (RIGHT) nos nós não-terminais
-- **Handles DTMF:** `id="d-{digitId}"` (RIGHT) no MenuNode — semânticos, forçam smoothstep
+- **Handles DTMF:** `id="d-{digitId}"` (RIGHT) no MenuNode — usam `floating` (EdgeWithWaypoints) com Bézier cúbico `C sx+80 sy, tx-80 ty, tx ty`; não passam por getEdgeParams nem por offset/drag
 - **Handle ctx-start:** posição absoluta `top: 44, left: 50%` no ContextNode — semântico, força smoothstep
 - **Styling inline predominante** — TailwindCSS é importado mas quase não usado; CSS custom em `index.css` é a fonte principal
 - **`React.memo` em todos os componentes de nó** — crítico para performance no ReactFlow
@@ -861,6 +895,7 @@ App
 
 ## 13. Armadilhas e Decisões Conhecidas
 
+- **`sourceHandleId` vs `sourceHandle` em edge components** — React Flow v11 passa o handle como `sourceHandleId` (e `targetHandleId`) para componentes de edge customizados. Usar `sourceHandle` retorna sempre `undefined`. `EdgeWithWaypoints` usa `sourceHandleId` para a detecção DTMF.
 - **`onEdgeMouseDown` foi REMOVIDO do ReactFlow** — quebrava a conexão de handles DTMF (`d-*`). O drag do midpoint é feito via `EdgeLabelRenderer` + listeners globais no `document`.
 - **`computeObstacleAvoidance()` está desativado** — existe em `edgeUtils.js` mas não é chamado. Causava bugs visuais com ContextNodes.
 - **`FloatingEdge.jsx` existe mas não é usado** — `edgeTypes` mapeia `floating` para `EdgeWithWaypoints`. Mantido como referência legacy.

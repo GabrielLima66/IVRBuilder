@@ -434,7 +434,7 @@ function processContext(ctx, xOffset, stats, globalConfig, isFirstContext) {
       target:       sequential[i + 1],
       targetHandle: 'in',
       type:         'floating',
-      data:         { waypoints: [] },
+      data:         { offsetX: 0, offsetY: 0 },
       style:        { stroke: '#00ff41', strokeWidth: 1.5 },
       markerEnd:    { type: 'arrowclosed', color: '#00ff41' },
     });
@@ -519,8 +519,8 @@ function processContext(ctx, xOffset, stats, globalConfig, isFirstContext) {
           sourceHandle: `d-${ext}`,
           target:       mnId,
           targetHandle: 'in',
-          type:         'smoothstep',
-          data:         { waypoints: [] },
+          type:         'floating',
+          data:         { offsetX: 0, offsetY: 0 },
           style:        { stroke: '#ff8c00', strokeWidth: 1.5 },
           markerEnd:    { type: 'arrowclosed', color: '#ff8c00' },
         });
@@ -611,10 +611,11 @@ function resolveReferences(allNodes, allEdges) {
   const newEdges   = [];
 
   // Cada appearance inclui type de edge (floating ou smoothstep)
-  const green   = { type: 'floating',   style: { stroke: '#00ff41', strokeWidth: 1.5 }, markerEnd: { type: 'arrowclosed', color: '#00ff41' } };
-  const yellow  = { type: 'floating',   style: { stroke: '#ffcc00', strokeWidth: 1.5 }, markerEnd: { type: 'arrowclosed', color: '#ffcc00' } };
-  // Handles d-* (DTMF) são semânticos → smoothstep (posição fixa, sem waypoints)
-  const dtmfApp = { type: 'smoothstep', style: { stroke: '#00ff41', strokeWidth: 1.5 }, markerEnd: { type: 'arrowclosed', color: '#00ff41' } };
+  const green   = { type: 'floating',   data: { offsetX: 0, offsetY: 0 }, style: { stroke: '#00ff41', strokeWidth: 1.5 }, markerEnd: { type: 'arrowclosed', color: '#00ff41' } };
+  const yellow  = { type: 'floating',   data: { offsetX: 0, offsetY: 0 }, style: { stroke: '#ffcc00', strokeWidth: 1.5 }, markerEnd: { type: 'arrowclosed', color: '#ffcc00' } };
+  // Handles d-* (DTMF): floating (EdgeWithWaypoints usa rfSourceX/Y do React Flow
+  // para posição real de cada handle) com roteamento floating-style no target.
+  const dtmfApp = { type: 'floating',   data: { offsetX: 0, offsetY: 0 }, style: { stroke: '#00ff41', strokeWidth: 1.5 }, markerEnd: { type: 'arrowclosed', color: '#00ff41' } };
 
   function tryLink(sourceId, sourceHandle, rawCtxName, appearance) {
     // Ignora strings que são claramente prioridades ou extensões inline ("1", "s", "n")
@@ -633,7 +634,7 @@ function resolveReferences(allNodes, allEdges) {
           target:       targetId,
           targetHandle: 'ctx-in',
           type:         appearance.type,
-          data:         { waypoints: [] },
+          data:         { offsetX: 0, offsetY: 0 },
           animated:     false,
           style:        appearance.style,
           markerEnd:    appearance.markerEnd,
@@ -674,7 +675,7 @@ function resolveReferences(allNodes, allEdges) {
       }
 
       case 'menu': {
-        // Cada saída DTMF (d-digit, d-i, d-t) usa smoothstep (handle semântico)
+        // Cada saída DTMF (d-digit, d-i, d-t) usa floating (EdgeWithWaypoints handle-aware)
         const dtmfGotos = n.data?._dtmfGotos || {};
         for (const [ext, ctxName] of Object.entries(dtmfGotos)) {
           tryLink(n.id, `d-${ext}`, ctxName, dtmfApp);
@@ -763,7 +764,7 @@ export function parseConfFile(text) {
       target:       firstCtxId,
       targetHandle: 'ctx-in',
       type:         'floating',
-      data:         { waypoints: [] },
+      data:         { offsetX: 0, offsetY: 0 },
       style:        { stroke: '#00ff41', strokeWidth: 1.5 },
       markerEnd:    { type: 'arrowclosed', color: '#00ff41' },
     });

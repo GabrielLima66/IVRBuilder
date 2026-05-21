@@ -214,10 +214,22 @@ function generateDialplanFromContexts(nodes, edges, findNode, outEdges) {
     return out;
   }
 
-  // Determina ordem de execução dentro de um contexto:
-  // 1) ctx-start edge → grafo explícito
-  // 2) Sem ctx-start → fallback por posição Y/X
+  // Determina ordem de execução dentro de um contexto.
+  // Fonte de verdade: data.childOrder (array de ids na ordem de execução).
+  // Fallback legado: posição Y/X dos filhos (projetos sem childOrder).
   function getExecChain(ctx, children) {
+    const childOrder = ctx.data?.childOrder;
+
+    // ── Modo childOrder (novo) ───────────────────────────────────────────────
+    if (childOrder && childOrder.length > 0) {
+      const childById = {};
+      for (const c of children) childById[c.id] = c;
+      return childOrder
+        .map((cid) => childById[cid])
+        .filter((c) => c && c.type !== 'context');
+    }
+
+    // ── Fallback legado: edge ctx-start ou posição Y/X ───────────────────────
     const entryEdge = edges.find(
       (e) => e.source === ctx.id && e.sourceHandle === 'ctx-start'
     );
@@ -236,7 +248,6 @@ function generateDialplanFromContexts(nodes, edges, findNode, outEdges) {
     while (cur && !visited.has(cur.id) && childSet.has(cur.id)) {
       visited.add(cur.id);
       if (cur.type !== 'context') chain.push(cur);
-
       const next = edges.find((e) => {
         if (e.source !== cur.id) return false;
         if (!isSeqEdge(e, cur)) return false;

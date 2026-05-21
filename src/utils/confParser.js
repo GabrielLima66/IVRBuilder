@@ -14,12 +14,12 @@
 import { uid } from './common';
 
 // ── Constantes de layout ──────────────────────────────────────────────────────
-const CTX_MIN_WIDTH  = 520;  // largura mínima de um ContextNode
-const CTX_PAD_TOP    = 60;   // padding topo (espaço abaixo da barra START)
-const CTX_PAD_BOTTOM = 40;   // padding inferior do ContextNode
-const CTX_PAD_H      = 40;   // padding horizontal dos nós filhos
-const NODE_H         = 100;  // altura estimada de um nó filho
-const NODE_GAP       = 40;   // espaçamento vertical entre nós filhos
+const CTX_MIN_WIDTH  = 520;  // largura mínima de um ContextNode (deve ser ≥ CTX_MIN_W do ContextNode)
+const CTX_PAD_TOP    = 34;   // padding topo = altura do header (sem barra START)
+const CTX_PAD_BOTTOM = 20;   // padding inferior do ContextNode
+const CTX_PAD_H      = 20;   // padding horizontal dos nós filhos (igual ao CTX_PAD_H do ContextNode)
+const NODE_H         = 60;   // altura estimada de um nó filho (sem gap)
+const NODE_GAP       = 0;    // sem espaçamento entre filhos — colados verticalmente
 const CTX_COL_GAP    = 120;  // gap horizontal entre ContextNodes
 const CTX_ROW_Y      = 220;  // Y fixo de todos os ContextNodes (abaixo do GlobalConfig)
 // Aliases de compatibilidade
@@ -325,6 +325,7 @@ function processContext(ctx, xOffset, stats, globalConfig, isFirstContext) {
         data:     { rawLine: line },
         parentNode: ctxId,
         extent:   'parent',
+        draggable: false,
       });
       sequential.push(nid);
       yChild += NODE_H + NODE_GAP;
@@ -358,6 +359,7 @@ function processContext(ctx, xOffset, stats, globalConfig, isFirstContext) {
         data:       { ...realData, _commented: true, _origLine: rawLine },
         parentNode: ctxId,
         extent:     'parent',
+        draggable:  false,
       });
       sequential.push(cid);
       yChild += NODE_H + NODE_GAP;
@@ -390,6 +392,7 @@ function processContext(ctx, xOffset, stats, globalConfig, isFirstContext) {
         data:     { assignment, label: '' },
         parentNode: ctxId,
         extent:   'parent',
+        draggable: false,
       });
       sequential.push(nid);
       yChild += NODE_H + NODE_GAP;
@@ -416,6 +419,7 @@ function processContext(ctx, xOffset, stats, globalConfig, isFirstContext) {
       data:     nodeData.data || {},
       parentNode: ctxId,
       extent:   'parent',
+      draggable: false,
     });
     sequential.push(nid);
     yChild += NODE_H + NODE_GAP;
@@ -512,6 +516,7 @@ function processContext(ctx, xOffset, stats, globalConfig, isFirstContext) {
           data:       { name, params: parts.slice(1).filter(Boolean), label: '' },
           parentNode: ctxId,
           extent:     'parent',
+          draggable:  false,
         });
         macroEdges.push({
           id:           `e-ref-${uid()}`,
@@ -551,6 +556,7 @@ function processContext(ctx, xOffset, stats, globalConfig, isFirstContext) {
       },
       parentNode: ctxId,
       extent:     'parent',
+      draggable:  false,
     });
     sequential.push(menuId);
     stats.nodesByType['menu'] = (stats.nodesByType['menu'] || 0) + 1;
@@ -562,6 +568,10 @@ function processContext(ctx, xOffset, stats, globalConfig, isFirstContext) {
 
   const ctxHeight = Math.max(yChild + CTX_PAD_BOTTOM, 220);
 
+  // childOrder: ids dos filhos na ordem em que aparecem no .conf
+  // O MenuNode é incluído; macroNodes de i/t ficam fora do fluxo sequencial principal
+  const childOrder = [...sequential];
+
   const ctxNode = {
     id:       ctxId,
     type:     'context',
@@ -569,6 +579,7 @@ function processContext(ctx, xOffset, stats, globalConfig, isFirstContext) {
     position: { x: xOffset, y: CTX_ROW_Y },
     data:     {
       contextName: ctx.name,
+      childOrder,
       ...(isMacro ? { isMacro: true } : {}),
     },
     style:    { width: CTX_MIN_WIDTH, height: ctxHeight },

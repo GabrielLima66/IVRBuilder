@@ -7,8 +7,8 @@ export function buildNode(type, position) {
     case 'context':
       return {
         ...base,
-        data: { contextName: 'orpen-ivr-novo-contexto' },
-        style: { width: 480, height: 320 },
+        data: { contextName: 'orpen-ivr-novo-contexto', childOrder: [] },
+        style: { width: 320, height: 54 }, // altura inicial = só o header; expande com filhos
         zIndex: -1,
       };
     case 'config':

@@ -1,22 +1,98 @@
-import React, { memo, useCallback, useRef } from 'react';
+import React, { memo, useCallback, useRef, useEffect, useMemo } from 'react';
 import { Handle, Position, useReactFlow, useStore } from 'reactflow';
-import { NodeResizer } from '@reactflow/node-resizer';
 import { FolderTree } from 'lucide-react';
 import { cls } from '../../utils/common';
 import { applyContextRename } from '../../utils/renamePropagator';
 
+// Constantes de layout — fonte de verdade compartilhada com ContextOrderOverlay
+export const CTX_HEADER_H  = 34;  // px — altura do cabeçalho (padding 6px*2 + ícone + borda)
+export const CTX_PAD_H     = 20;  // px — padding esquerdo dos filhos
+export const CTX_PAD_BOTTOM = 20; // px — padding inferior
+export const CTX_MIN_W     = 320; // px — largura mínima do contexto
+
 const ContextNode = memo(({ id, data, selected }) => {
   const { setNodes } = useReactFlow();
 
-  const nameOnFocus = useRef('');
+  const childOrder = useMemo(() => data.childOrder || [], [data.childOrder]);
 
-  // Detecta se existe alguma edge apontando para este ContextNode.
-  // Reativo: recalculado automaticamente quando edges mudam.
+  const nameOnFocus   = useRef('');
+  const lastLayoutKey = useRef(null); // evita chamadas redundantes a setNodes
+
+  // Detecta edge de entrada → badge "SEM CONEXÃO"
   const hasIncoming = useStore((s) => s.edges.some((e) => e.target === id));
+  const isOrphan    = !hasIncoming && !data.isMacro;
 
-  // Contexto sem edges de entrada (exceto macros, que são chamados implicitamente)
-  const isOrphan = !hasIncoming && !data.isMacro;
+  // Dimensões medidas dos filhos (nodeInternals é atualizado pelo RF após DOM render)
+  const childMeasures = useStore((s) => {
+    const result = {};
+    for (const cid of childOrder) {
+      const n = s.nodeInternals.get(cid);
+      if (n) result[cid] = { w: n.width || 220, h: n.height || 60 };
+    }
+    return result;
+  });
 
+  // Calcula layout: largura do contexto, altura e posição de cada filho
+  const layout = useMemo(() => {
+    let maxW = CTX_MIN_W - 40; // mínimo da área interna
+    for (const cid of childOrder) {
+      maxW = Math.max(maxW, childMeasures[cid]?.w || 220);
+    }
+    const ctxW   = maxW + 40;   // 20px padding cada lado
+    const childW = ctxW - 40;   // largura forçada nos filhos
+
+    let y = CTX_HEADER_H;
+    const positions = {};
+    for (const cid of childOrder) {
+      positions[cid] = { x: CTX_PAD_H, y };
+      y += childMeasures[cid]?.h || 60;
+    }
+    const ctxH = y + CTX_PAD_BOTTOM;
+
+    return { ctxW, ctxH, childW, positions };
+  }, [childOrder, childMeasures]);
+
+  // Aplica posições dos filhos e dimensões do contexto via setNodes
+  useEffect(() => {
+    const layoutKey = `${layout.ctxW},${layout.ctxH},${
+      childOrder.map((cid) => `${cid}:${layout.positions[cid]?.x},${layout.positions[cid]?.y}`).join('|')
+    }`;
+    if (layoutKey === lastLayoutKey.current) return;
+    lastLayoutKey.current = layoutKey;
+
+    setNodes((ns) => {
+      let changed = false;
+      const updated = ns.map((n) => {
+        // Atualiza dimensão do próprio contexto
+        if (n.id === id) {
+          if (n.style?.width === layout.ctxW && n.style?.height === layout.ctxH) return n;
+          changed = true;
+          return { ...n, style: { ...n.style, width: layout.ctxW, height: layout.ctxH } };
+        }
+        // Atualiza posição e largura de cada filho
+        if (n.parentNode === id) {
+          const pos = layout.positions[n.id];
+          if (!pos) return n;
+          const samePosW =
+            n.position.x === pos.x &&
+            n.position.y === pos.y &&
+            (n.style?.width === layout.childW || n.style?.width === undefined && layout.childW === 220);
+          if (samePosW) return n;
+          changed = true;
+          return {
+            ...n,
+            position: pos,
+            draggable: false, // filho gerenciado pelo contexto
+            style: { ...n.style, width: layout.childW },
+          };
+        }
+        return n;
+      });
+      return changed ? updated : ns;
+    });
+  }); // sem deps — ref guard evita loops
+
+  // Rename handlers
   const onRename = useCallback(
     (v) => {
       setNodes((ns) =>
@@ -33,7 +109,6 @@ const ContextNode = memo(({ id, data, selected }) => {
     [setNodes]
   );
 
-  // Cor de acento: ciano para macros, neon para contextos normais
   const accent    = data.isMacro ? '#00d4ff' : 'var(--neon)';
   const accentDim = data.isMacro ? '#0099bb' : 'var(--neon-dim)';
 
@@ -46,50 +121,30 @@ const ContextNode = memo(({ id, data, selected }) => {
       )}
       style={data.isMacro ? { borderColor: '#00d4ff' } : {}}
     >
-      <NodeResizer
-        isVisible={selected}
-        minWidth={260}
-        minHeight={180}
-        lineClassName="line"
-        handleClassName="handle"
-      />
-
-      {/* ctx-in: recebe edges externas */}
+      {/* ctx-in: recebe edges externas de outros contextos */}
       <Handle
         type="target"
         position={Position.Top}
         id="ctx-in"
-        style={{ background: accent, width: 14, height: 14, top: -7, border: '2px solid #000' }}
-      />
-
-      {/* ctx-start: origina edge para o 1º nó do fluxo interno */}
-      <Handle
-        type="source"
-        position={Position.Bottom}
-        id="ctx-start"
         style={{
-          bottom: 'auto',
-          top: 44,
-          left: '50%',
-          transform: 'translateX(-50%)',
-          zIndex: 10,
-          background: '#ffcc00',
-          width: 10, height: 10,
-          border: '1px solid #000',
-          boxShadow: '0 0 6px #ffcc0088',
+          background: accent,
+          width: 14, height: 14,
+          top: -7,
+          border: '2px solid #000',
         }}
       />
 
       {/* Header: nome do contexto */}
       <div
         className="ctx-header"
-        style={data.isMacro
-          ? { background: 'rgba(0,212,255,0.15)', borderBottomColor: '#00d4ff' }
-          : {}}
+        style={
+          data.isMacro
+            ? { background: 'rgba(0,212,255,0.15)', borderBottomColor: '#00d4ff' }
+            : {}
+        }
       >
         <FolderTree size={13} style={data.isMacro ? { color: '#00d4ff' } : {}} />
 
-        {/* Badge MACRO */}
         {data.isMacro && (
           <span style={{
             fontSize: 8, letterSpacing: 1.5, color: '#00d4ff',
@@ -119,7 +174,6 @@ const ContextNode = memo(({ id, data, selected }) => {
         />
         <span style={{ color: accentDim, fontSize: 11, letterSpacing: 1 }}>]</span>
 
-        {/* Badge SEM CONEXÃO — visível apenas quando isOrphan */}
         {isOrphan && (
           <span
             className="ctx-orphan-badge"
@@ -130,35 +184,10 @@ const ContextNode = memo(({ id, data, selected }) => {
         )}
       </div>
 
-      {/* Faixa START */}
-      <div
-        style={{
-          position: 'relative',
-          height: 20,
-          flexShrink: 0,
-          borderBottom: '1px dashed var(--line)',
-          background: 'rgba(255,204,0,0.04)',
-          cursor: 'default',
-        }}
-        onMouseDown={(e) => e.stopPropagation()}
-      >
-        <span style={{
-          position: 'absolute',
-          top: '50%',
-          left: 'calc(50% + 10px)',
-          transform: 'translateY(-50%)',
-          fontSize: 8,
-          color: '#ffcc00',
-          letterSpacing: 1,
-          opacity: 0.85,
-          whiteSpace: 'nowrap',
-          pointerEvents: 'none',
-        }}>
-          START
-        </span>
-      </div>
-
-      <div className="ctx-body-hint">// ARRASTE NÓS AQUI DENTRO //</div>
+      {/* Hint quando não há filhos */}
+      {childOrder.length === 0 && (
+        <div className="ctx-body-hint">// ARRASTE NÓS AQUI DENTRO //</div>
+      )}
     </div>
   );
 });

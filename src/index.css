@@ -344,6 +344,27 @@ body::before {
   opacity: 1;
 }
 
+/* ContextNode — controles de reordenação (drag handle, ↑↓, campo numérico) ─── */
+.ctx-drag-handle {
+  opacity: 0;
+  transition: opacity 0.12s;
+}
+.ctx-drag-handle:hover {
+  opacity: 1;
+  color: var(--neon);
+  background: rgba(0,255,65,0.08) !important;
+}
+/* Quando o nó está sendo reordenado, mostra o handle */
+.ctx-reorder-control {
+  opacity: 0;
+  transition: opacity 0.12s;
+}
+/* O overlay detecta hover via mousePos; usa classe JS para forçar visibilidade */
+.ctx-reorder-visible .ctx-reorder-control,
+.ctx-reorder-visible .ctx-drag-handle {
+  opacity: 1;
+}
+
 /* Modal */
 .modal-backdrop {
   position: fixed; inset: 0;

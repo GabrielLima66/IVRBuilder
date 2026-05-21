@@ -3,6 +3,7 @@ import { Handle, Position, useReactFlow, useStore } from 'reactflow';
 import { FolderTree } from 'lucide-react';
 import { cls } from '../../utils/common';
 import { applyContextRename } from '../../utils/renamePropagator';
+import { useActiveSelection } from '../../contexts/ActiveSelectionContext';
 
 // Constantes de layout — fonte de verdade compartilhada com ContextOrderOverlay
 export const CTX_HEADER_H  = 34;  // px — altura do cabeçalho (padding 6px*2 + ícone + borda)
@@ -14,6 +15,9 @@ const ContextNode = memo(({ id, data, selected }) => {
   const { setNodes } = useReactFlow();
 
   const childOrder = useMemo(() => data.childOrder || [], [data.childOrder]);
+
+  const { activeNodeIds } = useActiveSelection();
+  const isConnectedActive = activeNodeIds.has(id);
 
   const nameOnFocus   = useRef('');
   const lastLayoutKey = useRef(null); // evita chamadas redundantes a setNodes
@@ -112,14 +116,24 @@ const ContextNode = memo(({ id, data, selected }) => {
   const accent    = data.isMacro ? '#00d4ff' : 'var(--neon)';
   const accentDim = data.isMacro ? '#0099bb' : 'var(--neon-dim)';
 
+  const accentActive = data.isMacro ? '#00d4ff' : 'var(--neon)';
+  const accentActiveGlow = data.isMacro ? 'rgba(0,212,255,0.65)' : 'rgba(0,255,65,0.65)';
+
   return (
     <div
       className={cls(
         'ctx-node',
         selected && 'selected',
-        isOrphan && 'ctx-node--orphan'
+        isOrphan && 'ctx-node--orphan',
+        isConnectedActive && 'node-connected-active'
       )}
-      style={data.isMacro ? { borderColor: '#00d4ff' } : {}}
+      style={{
+        ...(data.isMacro ? { borderColor: '#00d4ff' } : {}),
+        ...(isConnectedActive && {
+          '--node-active-color': accentActive,
+          '--node-active-glow': accentActiveGlow,
+        }),
+      }}
     >
       {/* ctx-in: recebe edges externas de outros contextos */}
       <Handle

@@ -1,9 +1,13 @@
 import React, { memo } from 'react';
 import { Handle, Position } from 'reactflow';
 import { cls } from '../../utils/common';
+import { useActiveSelection } from '../../contexts/ActiveSelectionContext';
 
-const ConfigNode = memo(({ data, selected }) => (
-  <div className={cls('rcx-node', selected && 'selected')} style={{ borderColor: '#00ff41' }}>
+const ConfigNode = memo(({ id, data, selected }) => {
+  const { activeNodeIds } = useActiveSelection();
+  const isConnectedActive = activeNodeIds.has(id);
+  return (
+  <div className={cls('rcx-node', selected && 'selected', isConnectedActive && 'node-connected-active')} style={{ borderColor: '#00ff41' }}>
     <div className="rcx-node-header">
       <span className="neon-text">▶ CONFIG / START</span>
       <span className="badge">IVR {data.ivr || '----'}</span>
@@ -35,7 +39,8 @@ const ConfigNode = memo(({ data, selected }) => (
     <Handle type="source" position={Position.Right}  id="out-right" style={{ background: '#00ff41' }} />
     <Handle type="source" position={Position.Left}   id="out-left"  style={{ background: '#00ff41' }} />
   </div>
-));
+  );
+});
 
 ConfigNode.displayName = 'ConfigNode';
 export default ConfigNode;

@@ -20,6 +20,7 @@ import { ACTION_META } from './utils/actionMeta';
 import { applyContextRename } from './utils/renamePropagator';
 import { isSemanticHandle } from './utils/edgeUtils';
 import { EdgeModeContext } from './contexts/EdgeModeContext';
+import { ActiveSelectionContext } from './contexts/ActiveSelectionContext';
 import HomeScreen from './screens/HomeScreen';
 import { salvarProjeto, listarProjetos } from './services/projectStorage';
 import { parseConfFile } from './utils/confParser';
@@ -94,6 +95,18 @@ function Canvas({ initialFlow, projectName, projectCreatedAt, currentProjectId, 
   const [nodes, setNodes, onNodesChange] = useNodesState(initNodes);
   const [edges, setEdges, onEdgesChange] = useEdgesState(initEdges);
   const [selectedId,      setSelectedId]      = useState(null);
+  // ── Seleção visual de edges/nós vizinhos ─────────────────────────────────
+  // activeEdgeIds: edges em estado ativo (sólidas, pulsantes)
+  // activeNodeIds: nós vizinhos em estado ativo (borda pulsante)
+  // Propagação de 1 nível: apenas edges/nós diretamente conectados ao clicado.
+  const [activeEdgeIds,   setActiveEdgeIds]   = useState(() => new Set());
+  const [activeNodeIds,   setActiveNodeIds]   = useState(() => new Set());
+
+  const activeSelectionValue = useMemo(() => ({
+    activeEdgeIds,
+    activeNodeIds,
+  }), [activeEdgeIds, activeNodeIds]);
+
   const [showExport,      setShowExport]      = useState(false);
   const [exportText,      setExportText]      = useState('');
   // Modo de roteamento das edges: 'free' | 'grid'
@@ -450,8 +463,43 @@ function Canvas({ initialFlow, projectName, projectCreatedAt, currentProjectId, 
   }, [nodes, setNodes, setEdges]); // alignDragStop omitido — é estável
 
   // ── Seleção ───────────────────────────────────────────────────────────────
-  const onNodeClick  = useCallback((_, n) => { setSelectedId(n.id); setEdgeMenu(null); setNodeMenu(null); }, []);
-  const onPaneClick  = useCallback(() => { setSelectedId(null); setEdgeMenu(null); setNodeMenu(null); }, []);
+
+  // Helpers para calcular conjunto ativo a partir de um nó clicado
+  const computeActiveFromNode = useCallback((nodeId) => {
+    const connectedEdges = edges.filter((e) => e.source === nodeId || e.target === nodeId);
+    const newEdgeIds     = new Set(connectedEdges.map((e) => e.id));
+    const newNodeIds     = new Set();
+    for (const e of connectedEdges) {
+      newNodeIds.add(e.source === nodeId ? e.target : e.source);
+    }
+    setActiveEdgeIds(newEdgeIds);
+    setActiveNodeIds(newNodeIds);
+  }, [edges]);
+
+  const onNodeClick  = useCallback((_, n) => {
+    setSelectedId(n.id);
+    setEdgeMenu(null);
+    setNodeMenu(null);
+    computeActiveFromNode(n.id);
+  }, [computeActiveFromNode]);
+
+  // Clicar em edge → ativa a edge + os dois nós das extremidades
+  const onEdgeClick  = useCallback((_, edge) => {
+    setSelectedId(null);
+    setEdgeMenu(null);
+    setNodeMenu(null);
+    setActiveEdgeIds(new Set([edge.id]));
+    setActiveNodeIds(new Set([edge.source, edge.target]));
+  }, []);
+
+  // Clicar no canvas → volta ao repouso imediatamente
+  const onPaneClick  = useCallback(() => {
+    setSelectedId(null);
+    setEdgeMenu(null);
+    setNodeMenu(null);
+    setActiveEdgeIds(new Set());
+    setActiveNodeIds(new Set());
+  }, []);
 
   // ── Atualização de dados e estilo ─────────────────────────────────────────
   const updateNodeData = useCallback((id, data) => {
@@ -600,7 +648,8 @@ function Canvas({ initialFlow, projectName, projectCreatedAt, currentProjectId, 
     event.stopPropagation();
     setNodeMenu({ x: event.clientX, y: event.clientY, nodeId: n.id });
     setSelectedId(n.id);
-  }, []);
+    computeActiveFromNode(n.id);
+  }, [computeActiveFromNode]);
 
   // ── Forçar save imediato (sem aguardar debounce) ─────────────────────────
   const flushSave = useCallback(async () => {
@@ -672,6 +721,7 @@ function Canvas({ initialFlow, projectName, projectCreatedAt, currentProjectId, 
   const selectedNode = nodes.find((n) => n.id === selectedId) || null;
 
   return (
+    <ActiveSelectionContext.Provider value={activeSelectionValue}>
     <EdgeModeContext.Provider value={edgeMode}>
     <div style={{ display: 'flex', height: '100%', width: '100%' }}>
       <Sidebar />
@@ -764,6 +814,7 @@ function Canvas({ initialFlow, projectName, projectCreatedAt, currentProjectId, 
           onEdgesChange={handleEdgesChange}
           onConnect={onConnect}
           onNodeClick={onNodeClick}
+          onEdgeClick={onEdgeClick}
           onPaneClick={onPaneClick}
           onNodeDragStart={onNodeDragStart}
           onNodeDrag={onNodeDrag}
@@ -1046,6 +1097,7 @@ function Canvas({ initialFlow, projectName, projectCreatedAt, currentProjectId, 
       )}
     </div>
     </EdgeModeContext.Provider>
+    </ActiveSelectionContext.Provider>
   );
 }
 

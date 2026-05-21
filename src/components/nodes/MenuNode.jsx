@@ -1,17 +1,23 @@
 import React, { memo, useEffect } from 'react';
 import { Handle, Position, useUpdateNodeInternals } from 'reactflow';
 import { cls } from '../../utils/common';
+import { useActiveSelection } from '../../contexts/ActiveSelectionContext';
 
 const MenuNode = memo(({ id, data, selected }) => {
   const digits = data.digits || [];
   const updateNodeInternals = useUpdateNodeInternals();
+  const { activeNodeIds } = useActiveSelection();
+  const isConnectedActive = activeNodeIds.has(id);
 
   useEffect(() => {
     updateNodeInternals(id);
   }, [digits.length, id, updateNodeInternals]);
 
   return (
-    <div className={cls('rcx-node', selected && 'selected')} style={{ minWidth: 240 }}>
+    <div
+      className={cls('rcx-node', selected && 'selected', isConnectedActive && 'node-connected-active')}
+      style={{ minWidth: 240 }}
+    >
       {/* Entradas: topo e esquerda */}
       <Handle type="target" position={Position.Top}  id="in"      />
       <Handle type="target" position={Position.Left} id="in-left" />

@@ -24,6 +24,7 @@ import {
   EdgeLabelRenderer, BaseEdge, getSmoothStepPath,
 } from 'reactflow';
 import { getEdgeParams, getEdgeParamsDirected } from '../../utils/edgeUtils';
+import { useActiveSelection } from '../../contexts/ActiveSelectionContext';
 
 // Comprimento do arm horizontal na saída/chegada das edges DTMF (px no canvas).
 const DTMF_ARM = 80;
@@ -125,6 +126,31 @@ export default function EdgeWithWaypoints({
   const { setEdges } = useReactFlow();
   const zoom = useStore((s) => s.transform[2]);
 
+  // Estado de seleção visual — ANTES do early return (Rules of Hooks)
+  const { activeEdgeIds } = useActiveSelection();
+  const isActive      = activeEdgeIds.has(id);
+  // Edge em repouso: tracejada, 25% opacidade.
+  // Edge ativa: sólida, 100% opacidade, brilho pulsante.
+  const strokeColor   = style?.stroke || '#00ff41';
+  const computedStyle = {
+    ...style,
+    ...(isActive
+      ? {
+          // Ativo: sólido, glow pulsante via CSS @keyframes edge-glow-pulse
+          opacity:             1,
+          '--edge-glow-color': strokeColor,
+          animation:           'edge-glow-pulse 0.8s ease-in-out infinite',
+        }
+      : {
+          // Repouso: tracejado discreto
+          strokeDasharray: '6 4',
+          opacity:         0.25,
+          animation:       'none',
+          filter:          'none',
+        }
+    ),
+  };
+
   // Subscrições ao store — TODAS antes do early return (Rules of Hooks)
   const sourceNode = useStore(useCallback((s) => s.nodeInternals.get(source), [source]));
   const targetNode = useStore(useCallback((s) => s.nodeInternals.get(target), [target]));
@@ -186,7 +212,7 @@ export default function EdgeWithWaypoints({
     const pathD = `M ${sx} ${sy} C ${sx + DTMF_ARM} ${sy}, ${tx - DTMF_ARM} ${ty}, ${tx} ${ty}`;
 
     return (
-      <BaseEdge id={id} path={pathD} markerEnd={markerEnd} style={style} />
+      <BaseEdge id={id} path={pathD} markerEnd={markerEnd} style={computedStyle} />
     );
   }
 
@@ -223,7 +249,7 @@ export default function EdgeWithWaypoints({
 
   return (
     <>
-      <BaseEdge id={id} path={pathD} markerEnd={markerEnd} style={style} />
+      <BaseEdge id={id} path={pathD} markerEnd={markerEnd} style={computedStyle} />
       {selected && (
         <EdgeLabelRenderer>
           <MidpointDragHandle x={midX} y={midY} zoom={zoom} onDrag={handleDrag} />

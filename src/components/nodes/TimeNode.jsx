@@ -2,6 +2,7 @@ import React, { memo, useCallback } from 'react';
 import { Handle, Position, useReactFlow } from 'reactflow';
 import { cls } from '../../utils/common';
 import { formatTimeRange, formatDayRange, WEEKDAY_ORDER, MONTH_ORDER } from '../../utils/timeUtils';
+import { useActiveSelection } from '../../contexts/ActiveSelectionContext';
 
 const btnStyle = (color) => ({
   flex: 1,
@@ -18,6 +19,8 @@ const btnStyle = (color) => ({
 
 const TimeNode = memo(({ id, data, selected }) => {
   const { setNodes, setEdges } = useReactFlow();
+  const { activeNodeIds } = useActiveSelection();
+  const isConnectedActive = activeNodeIds.has(id);
 
   const handleActivate = useCallback(() => {
     setNodes((ns) =>
@@ -56,11 +59,12 @@ const TimeNode = memo(({ id, data, selected }) => {
 
   return (
     <div
-      className={cls('rcx-node', selected && 'selected')}
+      className={cls('rcx-node', selected && 'selected', isConnectedActive && 'node-connected-active')}
       style={{
         borderColor,
         borderStyle: data._commented ? 'dashed' : 'solid',
         opacity: data._commented ? 0.6 : 1,
+        ...(isConnectedActive && { '--node-active-color': '#ffcc00', '--node-active-glow': 'rgba(255,204,0,0.65)' }),
       }}
     >
       <Handle type="target" position={Position.Top}  id="in"      />

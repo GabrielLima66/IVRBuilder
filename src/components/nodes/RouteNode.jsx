@@ -1,6 +1,7 @@
 import React, { memo, useCallback } from 'react';
 import { Handle, Position, useReactFlow } from 'reactflow';
 import { cls } from '../../utils/common';
+import { useActiveSelection } from '../../contexts/ActiveSelectionContext';
 
 const MODE_COLOR = { contexto: '#00d4ff', fila: '#ff8c00', macro: '#a78bfa' };
 const MODE_LABEL = { contexto: 'CONTEXTO', fila: 'FILA', macro: 'MACRO+FILA' };
@@ -25,6 +26,8 @@ const RouteNode = memo(({ id, data, selected }) => {
   const { setNodes, setEdges } = useReactFlow();
   const mode  = data.routeMode || 'macro';
   const color = MODE_COLOR[mode] || '#ff8c00';
+  const { activeNodeIds } = useActiveSelection();
+  const isConnectedActive = activeNodeIds.has(id);
 
   const handleActivate = useCallback(() => {
     setNodes((ns) =>
@@ -45,12 +48,13 @@ const RouteNode = memo(({ id, data, selected }) => {
 
   return (
     <div
-      className={cls('rcx-node', selected && 'selected')}
+      className={cls('rcx-node', selected && 'selected', isConnectedActive && 'node-connected-active')}
       style={{
         borderColor,
         borderStyle: data._commented ? 'dashed' : 'solid',
         opacity: data._commented ? 0.6 : 1,
         minWidth: 230,
+        ...(isConnectedActive && { '--node-active-color': color, '--node-active-glow': color + '99' }),
       }}
     >
       <Handle type="target" position={Position.Top}    id="in"        style={{ ...TGT, background: color }} />

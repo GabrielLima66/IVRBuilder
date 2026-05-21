@@ -344,6 +344,56 @@ body::before {
   opacity: 1;
 }
 
+/* ── Estados visuais de edges: repouso (idle) e ativo (active) ────────────── */
+
+/*
+ * REPOUSO: tracejado 6/4px, 25% opacidade.
+ *   Aplicado via inline style por EdgeWithWaypoints quando a edge não está ativa.
+ *   Não requer classe CSS — é o estado base controlado por JS.
+ *
+ * ATIVO: sólido, 100% opacidade, brilho pulsante via filter: drop-shadow.
+ *   O animation referencia @keyframes edge-glow-pulse definido abaixo.
+ *   A cor do glow é fornecida pelo CSS custom property --edge-glow-color
+ *   setado inline por EdgeWithWaypoints com a cor específica da edge.
+ */
+@keyframes edge-glow-pulse {
+  0%, 100% {
+    filter: drop-shadow(0 0 5px var(--edge-glow-color, #00ff41));
+    opacity: 1;
+  }
+  50% {
+    filter: drop-shadow(0 0 1px var(--edge-glow-color, #00ff41));
+    opacity: 0.5;
+  }
+}
+
+/*
+ * Nó vizinho ativo (conectado ao nó/edge clicado).
+ * Borda sólida 2px na cor do nó (via --node-active-color); glow pulsante.
+ * Sincronizado com edge-glow-pulse em 800ms.
+ */
+@keyframes node-border-pulse {
+  0%, 100% {
+    box-shadow:
+      0 0 0 1px var(--node-active-color, var(--neon)),
+      0 0 14px var(--node-active-glow, rgba(0,255,65,0.65)),
+      0 2px 8px rgba(0,0,0,0.5);
+  }
+  50% {
+    box-shadow:
+      0 0 0 1px var(--node-active-color, var(--neon)),
+      0 0 3px var(--node-active-glow, rgba(0,255,65,0.2)),
+      0 2px 8px rgba(0,0,0,0.5);
+  }
+}
+
+.node-connected-active {
+  border-color: var(--node-active-color, var(--neon)) !important;
+  border-style: solid !important;
+  border-width: 2px !important;
+  animation: node-border-pulse 0.8s ease-in-out infinite;
+}
+
 /* ContextNode — controles de reordenação (drag handle, ↑↓, campo numérico) ─── */
 .ctx-drag-handle {
   opacity: 0;

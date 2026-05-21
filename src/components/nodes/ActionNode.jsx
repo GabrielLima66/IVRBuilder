@@ -2,6 +2,7 @@ import React, { memo, useCallback } from 'react';
 import { Handle, Position, useReactFlow } from 'reactflow';
 import { ACTION_META } from '../../utils/actionMeta';
 import { cls } from '../../utils/common';
+import { useActiveSelection } from '../../contexts/ActiveSelectionContext';
 
 const btnStyle = (color) => ({
   flex: 1,
@@ -22,6 +23,8 @@ const ActionNode = memo(({ id, data, selected, type }) => {
   const { setNodes, setEdges } = useReactFlow();
   const Icon = meta.icon;
   const rows = meta.summary(data) || [];
+  const { activeNodeIds } = useActiveSelection();
+  const isConnectedActive = activeNodeIds.has(id);
 
   const handleActivate = useCallback(() => {
     setNodes((ns) =>
@@ -46,12 +49,13 @@ const ActionNode = memo(({ id, data, selected, type }) => {
 
   return (
     <div
-      className={cls('rcx-node', selected && 'selected')}
+      className={cls('rcx-node', selected && 'selected', isConnectedActive && 'node-connected-active')}
       style={{
         borderColor,
         borderStyle: data._commented ? 'dashed' : 'solid',
         opacity: data._commented ? 0.6 : 1,
         minWidth: 210,
+        ...(isConnectedActive && { '--node-active-color': meta.color, '--node-active-glow': meta.color + '99' }),
       }}
     >
       {/* ── Handles: 4 lados ── */}

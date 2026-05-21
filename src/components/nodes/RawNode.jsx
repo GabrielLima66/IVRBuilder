@@ -1,6 +1,7 @@
 import React, { memo, useCallback } from 'react';
 import { Handle, Position, useReactFlow } from 'reactflow';
 import { cls } from '../../utils/common';
+import { useActiveSelection } from '../../contexts/ActiveSelectionContext';
 
 const btnStyle = (color) => ({
   flex: 1,
@@ -17,6 +18,8 @@ const btnStyle = (color) => ({
 
 const RawNode = memo(({ id, data, selected }) => {
   const { setNodes, setEdges } = useReactFlow();
+  const { activeNodeIds } = useActiveSelection();
+  const isConnectedActive = activeNodeIds.has(id);
 
   const handleChange = useCallback((e) => {
     setNodes((ns) =>
@@ -41,12 +44,13 @@ const RawNode = memo(({ id, data, selected }) => {
 
   return (
     <div
-      className={cls('rcx-node', selected && 'selected')}
+      className={cls('rcx-node', selected && 'selected', isConnectedActive && 'node-connected-active')}
       style={{
         borderColor: data._commented ? '#ff8c0033' : '#ff8c0099',
         borderStyle: data._commented ? 'dashed' : 'solid',
         opacity: data._commented ? 0.6 : 1,
         minWidth: 220,
+        ...(isConnectedActive && { '--node-active-color': '#ff8c00', '--node-active-glow': 'rgba(255,140,0,0.65)' }),
       }}
     >
       <Handle type="target" position={Position.Top}    id="in"       style={{ background: '#ff8c00' }} />

@@ -7,9 +7,12 @@
 import React, { memo, useCallback } from 'react';
 import { Handle, Position, useReactFlow } from 'reactflow';
 import { cls } from '../../utils/common';
+import { useActiveSelection } from '../../contexts/ActiveSelectionContext';
 
 const CommentedNode = memo(({ id, data, selected }) => {
   const { setNodes } = useReactFlow();
+  const { activeNodeIds } = useActiveSelection();
+  const isConnectedActive = activeNodeIds.has(id);
 
   const handleReactivate = useCallback(() => {
     // Tenta converter o comando original para um nó ativo
@@ -19,12 +22,13 @@ const CommentedNode = memo(({ id, data, selected }) => {
 
   return (
     <div
-      className={cls('rcx-node', selected && 'selected')}
+      className={cls('rcx-node', selected && 'selected', isConnectedActive && 'node-connected-active')}
       style={{
         borderColor: '#ffcc0099',
         borderStyle: 'dashed',
         opacity: 0.7,
         minWidth: 200,
+        ...(isConnectedActive && { '--node-active-color': '#ffcc00', '--node-active-glow': 'rgba(255,204,0,0.65)' }),
       }}
     >
       <Handle type="target" position={Position.Top}    id="in"       style={{ background: '#ffcc00' }} />

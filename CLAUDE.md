@@ -48,7 +48,8 @@ src/
 ├── config/
 │   └── nodeTags.js           mapa de tags semânticas por tipo (alimenta busca da sidebar)
 ├── contexts/
-│   └── EdgeModeContext.js    contexto React: 'free'|'grid', GRID_SIZE=20, snapToGrid()
+│   ├── EdgeModeContext.js    contexto React: 'free'|'grid', GRID_SIZE=20, snapToGrid()
+│   └── ActiveSelectionContext.js  contexto de seleção visual: activeEdgeIds + activeNodeIds
 ├── hooks/
 │   └── useAlignmentGuides.js smart guides Figma-style + snap ao soltar
 ├── screens/
@@ -103,6 +104,16 @@ src/
 17. **`ContextOrderOverlay` detecta hover via `mousePos`** — o Canvas passa `mousePos` ({x,y} relativo ao wrapperRef) ao overlay. O overlay converte posições flow→tela via `useStore(s => s.transform)` para renderizar controles absolutamente posicionados acima do ReactFlow (z-index 50), evitando o problema de stacking com o ContextNode (z-index -1).
 
 18. **`childOrder` é fonte de verdade da sequência** — ao dropar, re-parenting ou deletar um nó filho, o `childOrder` do ContextNode pai deve ser atualizado em conjunto. O compilador lê `childOrder` para emitir `exten => s,1,...` e `exten => s,n,...` na ordem correta.
+
+19. **`ActiveSelectionContext` — estado de seleção visual das edges:**  
+    - Todas as edges ficam em estado de REPOUSO por padrão: tracejadas (`strokeDasharray: '6 4'`), 25% de opacidade.  
+    - Clicar num nó → `computeActiveFromNode()` preenche `activeEdgeIds` (edges diretas) e `activeNodeIds` (nós vizinhos).  
+    - Clicar numa edge → `onEdgeClick` ativa a edge + os dois nós das extremidades.  
+    - Clicar no canvas → limpeza imediata (retorno ao repouso sem transição).  
+    - Propagação é de **1 nível** — não propaga para vizinhos dos vizinhos.  
+    - As animações (`edge-glow-pulse`, `node-border-pulse`) são CSS `@keyframes` (GPU) — não usar `setInterval` em JS.  
+    - `EdgeWithWaypoints` aplica `computedStyle` com `animation` inline referenciando os keyframes do CSS.  
+    - Todos os componentes de nó leem `useActiveSelection()` e aplicam `.node-connected-active` + CSS custom properties `--node-active-color` e `--node-active-glow` na cor de acento do tipo de nó.
 
 ## Asterisk — conceitos mínimos
 

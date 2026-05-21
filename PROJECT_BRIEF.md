@@ -125,7 +125,8 @@ Construtor URA/
     ├── config/
     │   └── nodeTags.js         ← Mapa de tags semânticas por tipo (para busca na Sidebar)
     ├── contexts/
-    │   └── EdgeModeContext.js  ← Context React: 'free'|'grid' + GRID_SIZE=20 + snapToGrid()
+    │   ├── EdgeModeContext.js          ← Context React: 'free'|'grid' + GRID_SIZE=20 + snapToGrid()
+    │   └── ActiveSelectionContext.js   ← Context de seleção visual: activeEdgeIds + activeNodeIds (Set)
     ├── hooks/
     │   └── useAlignmentGuides.js ← Smart guides Figma-style + snap ao soltar
     ├── screens/
@@ -749,7 +750,58 @@ Normalização remove acentos e converte para minúsculo. Durante busca, accordi
 
 Estado colapsado das categorias persiste em `localStorage` com chave `'orpen-sidebar-collapsed'`.
 
-### 9.6 Context Menu (Botão Direito)
+### 9.6 Sistema de Estados Visuais das Edges
+
+**Arquivo:** `src/contexts/ActiveSelectionContext.js`  
+**Arquivo:** `src/components/edges/EdgeWithWaypoints.jsx`
+
+#### Estados
+
+| Estado | Descrição |
+|---|---|
+| **Repouso** | Todas as edges sem seleção: `strokeDasharray: '6 4'`, `opacity: 0.25`. Estado padrão. |
+| **Ativo** | Edge selecionada ou conectada ao nó selecionado: sólida, `opacity: 1`, animação `edge-glow-pulse 0.8s`. |
+
+#### Propagação (1 nível)
+
+- **Clicar num nó** → `computeActiveFromNode(nodeId)` em `App.jsx`:
+  - `activeEdgeIds` = todas as edges com `source === nodeId || target === nodeId`
+  - `activeNodeIds` = todos os nós na outra ponta dessas edges
+- **Clicar numa edge** → `onEdgeClick`: `activeEdgeIds = { edge.id }`, `activeNodeIds = { edge.source, edge.target }`
+- **Clicar no canvas** → `onPaneClick`: limpa ambos os conjuntos imediatamente (sem transição)
+
+#### Animações CSS (GPU-accelerated)
+
+```css
+@keyframes edge-glow-pulse  /* 0%→50%→100%: filter drop-shadow + opacity 1→0.5→1 (800ms) */
+@keyframes node-border-pulse /* 0%→50%→100%: box-shadow pulsante (800ms) */
+.node-connected-active       /* border 2px solid --node-active-color + node-border-pulse */
+```
+
+#### Cores por tipo de nó (--node-active-color)
+
+| Nó | Cor do glow ativo |
+|---|---|
+| ActionNode | `meta.color` (cor do tipo de ação) |
+| TimeNode / CommentedNode | `#ffcc00` |
+| RouteNode | `mode_color` (contexto/fila/macro) |
+| RawNode | `#ff8c00` |
+| ContextNode | `var(--neon)` ou `#00d4ff` (macro) |
+| MenuNode / ConfigNode | `var(--neon)` |
+
+#### EdgeWithWaypoints — computedStyle
+
+```js
+// Idle: dashed + 25%
+{ ...style, strokeDasharray: '6 4', opacity: 0.25, animation: 'none', filter: 'none' }
+
+// Active: solid + glow pulsante
+{ ...style, opacity: 1, '--edge-glow-color': stroke, animation: 'edge-glow-pulse 0.8s ease-in-out infinite' }
+```
+
+Aplicado via `style` prop do `BaseEdge` (suporta CSS custom properties e `animation` inline referenciando `@keyframes`). Válido tanto para edges DTMF quanto floating.
+
+### 9.7 Context Menu (Botão Direito)
 
 **Em edges:** Menu "// CONEXÃO" com:
 - "↺ Redefinir trajeto" — visível apenas para edges `floating` com offset ≠ 0
@@ -759,14 +811,14 @@ Estado colapsado das categorias persiste em `localStorage` com chave `'orpen-sid
 - "// DESATIVAR nó" / "▶ ATIVAR nó" — toggle `_commented` (exceto `config` e `context`)
 - "⌫ Excluir nó" — (exceto `config`)
 
-### 9.7 Auto-save com Debounce
+### 9.8 Auto-save com Debounce
 
 `useEffect([nodes, edges])` com debounce de 2 segundos:
 - Status bar mostra `// salvando...` (amarelo) → `// salvo` (verde, some em 3s)
 - `flushSave()` força save imediato (chamado antes de "VOLTAR" com alterações)
 - Modal "ALTERAÇÕES NÃO SALVAS" ao tentar voltar com `isDirtyRef.current === true`
 
-### 9.8 Exportação
+### 9.9 Exportação
 
 Botão "⤓ EXPORTAR URA (.conf)" (bottom-right absoluto). Modal com preview, botão COPIAR e BAIXAR (filename: `orpen-ura-gerada.conf`). Usa LF como quebra de linha na exportação.
 

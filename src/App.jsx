@@ -25,6 +25,7 @@ import { salvarProjeto, listarProjetos } from './services/projectStorage';
 import { parseConfFile } from './utils/confParser';
 import { useAlignmentGuides } from './hooks/useAlignmentGuides';
 import AlignmentGuides from './components/canvas/AlignmentGuides';
+import ContextOrderOverlay from './components/canvas/ContextOrderOverlay';
 
 // Ambos os tipos usam EdgeWithWaypoints:
 // 'floating' — floating handles + offset elástico + desvio automático de obstáculos
@@ -46,7 +47,30 @@ function Canvas({ initialFlow, projectName, projectCreatedAt, currentProjectId, 
   // Nós e edges iniciais: usa o flow carregado ou inicia com config padrão.
   // Calculados apenas uma vez no mount (o componente é "keyed" por projeto).
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  const initNodes = useMemo(() => initialFlow?.nodes?.length ? initialFlow.nodes : [buildNode('config', { x: 60, y: 80 })], []);
+  const initNodes = useMemo(() => {
+    const raw = initialFlow?.nodes?.length
+      ? initialFlow.nodes
+      : [buildNode('config', { x: 60, y: 80 })];
+
+    // Constrói childOrder para ContextNodes que ainda não o possuem (projetos antigos).
+    // Ordena filhos por posição Y, depois X — preserva ordem visual existente.
+    const ctxIds = new Set(raw.filter((n) => n.type === 'context').map((n) => n.id));
+    const byParent = {};
+    for (const n of raw) {
+      if (n.parentNode && ctxIds.has(n.parentNode)) {
+        (byParent[n.parentNode] = byParent[n.parentNode] || []).push(n);
+      }
+    }
+
+    return raw.map((n) => {
+      if (n.type !== 'context') return n;
+      if (n.data?.childOrder) return n; // já possui childOrder
+      const children = (byParent[n.id] || [])
+        .slice()
+        .sort((a, b) => (a.position.y - b.position.y) || (a.position.x - b.position.x));
+      return { ...n, data: { ...n.data, childOrder: children.map((c) => c.id) } };
+    });
+  }, []);
   // eslint-disable-next-line react-hooks/exhaustive-deps
   const initEdges = useMemo(() => {
     const raw = initialFlow?.edges || [];
@@ -278,8 +302,8 @@ function Canvas({ initialFlow, projectName, projectCreatedAt, currentProjectId, 
     const ctxs = currentNodes.filter((n) => n.type === 'context');
     for (let i = ctxs.length - 1; i >= 0; i--) {
       const c = ctxs[i];
-      const w = (c.style && c.style.width)  || c.width  || 480;
-      const h = (c.style && c.style.height) || c.height || 320;
+      const w = (c.style?.width)  || c.width  || 320;
+      const h = (c.style?.height) || c.height || 54;
       if (
         absPos.x >= c.position.x &&
         absPos.x <= c.position.x + w &&
@@ -314,10 +338,23 @@ function Canvas({ initialFlow, projectName, projectCreatedAt, currentProjectId, 
       if (parent) {
         newNode.parentNode = parent.id;
         newNode.extent     = 'parent';
+        newNode.draggable  = false; // gerenciado pelo ContextNode
         newNode.position   = {
-          x: position.x - parent.position.x,
-          y: position.y - parent.position.y,
+          x: 20,
+          y: 0, // será ajustado pelo ContextNode via useEffect
         };
+
+        // Adiciona ao final do childOrder do pai
+        setNodes((ns) => {
+          const updated = ns.map((n) =>
+            n.id === parent.id
+              ? { ...n, data: { ...n.data, childOrder: [...(n.data.childOrder || []), newNode.id] } }
+              : n
+          );
+          // Filho deve vir DEPOIS do pai no array
+          return [...updated, newNode];
+        });
+        return;
       }
     }
 
@@ -367,32 +404,50 @@ function Canvas({ initialFlow, projectName, projectCreatedAt, currentProjectId, 
     if (targetId === currentParent) return;
 
     setNodes((ns) => {
-      const updated = ns.map((n) => {
+      // 1. Atualiza o nó arrastado (parentNode, extent, draggable, position)
+      let result = ns.map((n) => {
         if (n.id !== draggedNode.id) return n;
         if (targetId) {
           return {
             ...n,
             parentNode: targetId,
             extent:     'parent',
-            position:   { x: absX - target.position.x, y: absY - target.position.y },
+            draggable:  false,
+            position:   { x: 20, y: 0 }, // ContextNode ajusta via useEffect
           };
         }
         const { parentNode, extent, ...rest } = n;
-        return { ...rest, position: { x: absX, y: absY } };
+        return { ...rest, draggable: true, position: { x: absX, y: absY } };
       });
 
-      // Garante que filho aparece DEPOIS do pai no array (exigência do React Flow)
+      // 2. Atualiza childOrder dos contextos envolvidos
+      result = result.map((n) => {
+        if (n.type !== 'context') return n;
+        const order = [...(n.data.childOrder || [])];
+        let changed = false;
+        if (n.id === currentParent) {
+          const i = order.indexOf(draggedNode.id);
+          if (i >= 0) { order.splice(i, 1); changed = true; }
+        }
+        if (n.id === targetId) {
+          if (!order.includes(draggedNode.id)) { order.push(draggedNode.id); changed = true; }
+        }
+        return changed ? { ...n, data: { ...n.data, childOrder: order } } : n;
+      });
+
+      // 3. Garante filho DEPOIS do pai no array (exigência do React Flow)
       if (targetId) {
-        const childIdx  = updated.findIndex((n) => n.id === draggedNode.id);
-        const parentIdx = updated.findIndex((n) => n.id === targetId);
+        const childIdx  = result.findIndex((n) => n.id === draggedNode.id);
+        const parentIdx = result.findIndex((n) => n.id === targetId);
         if (childIdx !== -1 && parentIdx !== -1 && childIdx < parentIdx) {
-          const [moved] = updated.splice(childIdx, 1);
-          updated.push(moved);
+          const [moved] = result.splice(childIdx, 1);
+          result.push(moved);
         }
       }
-      return updated;
+
+      return result;
     });
-  }, [nodes, setNodes, setEdges]); // alignDragStop omitido — é estável (useCallback([setNodes]))
+  }, [nodes, setNodes, setEdges]); // alignDragStop omitido — é estável
 
   // ── Seleção ───────────────────────────────────────────────────────────────
   const onNodeClick  = useCallback((_, n) => { setSelectedId(n.id); setEdgeMenu(null); setNodeMenu(null); }, []);
@@ -437,7 +492,17 @@ function Canvas({ initialFlow, projectName, projectCreatedAt, currentProjectId, 
 
   // ── Deleção ───────────────────────────────────────────────────────────────
   const deleteNode = useCallback((id) => {
-    setNodes((ns) => ns.filter((n) => n.id !== id));
+    setNodes((ns) =>
+      ns
+        .filter((n) => n.id !== id)
+        // Remove o id excluído do childOrder de qualquer ContextNode pai
+        .map((n) => {
+          if (n.type !== 'context') return n;
+          const order = (n.data.childOrder || []).filter((cid) => cid !== id);
+          if (order.length === (n.data.childOrder || []).length) return n;
+          return { ...n, data: { ...n.data, childOrder: order } };
+        })
+    );
     setEdges((es) => es.filter((e) => e.source !== id && e.target !== id));
     setSelectedId(null);
   }, [setNodes, setEdges]);
@@ -463,6 +528,69 @@ function Canvas({ initialFlow, projectName, projectCreatedAt, currentProjectId, 
     onNodeDrag,
     onNodeDragStop: alignDragStop,
   } = useAlignmentGuides(nodes, setNodes);
+
+  // ── Posição do mouse relativa ao wrapperRef (para ContextOrderOverlay) ──────
+  const [mousePos, setMousePos] = useState(null);
+
+  const onWrapperMouseMove = useCallback((e) => {
+    if (!wrapperRef.current) return;
+    const rect = wrapperRef.current.getBoundingClientRect();
+    setMousePos({ x: e.clientX - rect.left, y: e.clientY - rect.top });
+  }, []);
+
+  const onWrapperMouseLeave = useCallback(() => setMousePos(null), []);
+
+  // ── Helpers de reordenação de childOrder ────────────────────────────────────
+  // Atualiza childOrder de um ContextNode e retorna os novos nodes
+  const updateChildOrder = useCallback((ctxId, newOrder) => {
+    setNodes((ns) =>
+      ns.map((n) =>
+        n.id === ctxId ? { ...n, data: { ...n.data, childOrder: newOrder } } : n
+      )
+    );
+  }, [setNodes]);
+
+  const onMoveUp = useCallback((ctxId, nodeId) => {
+    setNodes((ns) => {
+      const ctx = ns.find((n) => n.id === ctxId);
+      if (!ctx) return ns;
+      const order = [...(ctx.data.childOrder || [])];
+      const idx   = order.indexOf(nodeId);
+      if (idx <= 0) return ns;
+      [order[idx - 1], order[idx]] = [order[idx], order[idx - 1]];
+      return ns.map((n) => n.id === ctxId ? { ...n, data: { ...n.data, childOrder: order } } : n);
+    });
+  }, [setNodes]);
+
+  const onMoveDown = useCallback((ctxId, nodeId) => {
+    setNodes((ns) => {
+      const ctx = ns.find((n) => n.id === ctxId);
+      if (!ctx) return ns;
+      const order = [...(ctx.data.childOrder || [])];
+      const idx   = order.indexOf(nodeId);
+      if (idx < 0 || idx >= order.length - 1) return ns;
+      [order[idx], order[idx + 1]] = [order[idx + 1], order[idx]];
+      return ns.map((n) => n.id === ctxId ? { ...n, data: { ...n.data, childOrder: order } } : n);
+    });
+  }, [setNodes]);
+
+  const onMoveTo = useCallback((ctxId, nodeId, targetIndex) => {
+    setNodes((ns) => {
+      const ctx = ns.find((n) => n.id === ctxId);
+      if (!ctx) return ns;
+      const order = [...(ctx.data.childOrder || [])];
+      const idx   = order.indexOf(nodeId);
+      if (idx < 0) return ns;
+      order.splice(idx, 1);
+      const clampedTarget = Math.max(0, Math.min(order.length, targetIndex));
+      order.splice(clampedTarget, 0, nodeId);
+      return ns.map((n) => n.id === ctxId ? { ...n, data: { ...n.data, childOrder: order } } : n);
+    });
+  }, [setNodes]);
+
+  const onDragReorder = useCallback((ctxId, nodeId, targetIndex) => {
+    onMoveTo(ctxId, nodeId, targetIndex);
+  }, [onMoveTo]);
 
   // ── Context menu de clique direito em nó ─────────────────────────────────
   const [nodeMenu, setNodeMenu] = useState(null); // { x, y, nodeId }
@@ -553,6 +681,8 @@ function Canvas({ initialFlow, projectName, projectCreatedAt, currentProjectId, 
         style={{ flex: 1, position: 'relative', height: '100%', minWidth: 0 }}
         onDragOver={onDragOver}
         onDrop={onDrop}
+        onMouseMove={onWrapperMouseMove}
+        onMouseLeave={onWrapperMouseLeave}
       >
         {/* Botão ← VOLTAR (apenas no modo projeto) */}
         {onGoBack && (
@@ -675,6 +805,16 @@ function Canvas({ initialFlow, projectName, projectCreatedAt, currentProjectId, 
 
         {/* Alignment guide lines — rendered over canvas, below UI controls */}
         <AlignmentGuides guides={guides} />
+
+        {/* Reorder controls overlay — rendered above React Flow, z-index 50 */}
+        <ContextOrderOverlay
+          nodes={nodesWithSel}
+          mousePos={mousePos}
+          onMoveUp={onMoveUp}
+          onMoveDown={onMoveDown}
+          onMoveTo={onMoveTo}
+          onDragReorder={onDragReorder}
+        />
 
         {/* Botão de exportação flutuante */}
         <button

@@ -117,6 +117,9 @@ src/
 
 ## Asterisk — conceitos mínimos
 
+> **Versão-alvo: Asterisk 18 LTS.** Toda sintaxe gerada foi validada contra a v18.
+> `Macro()` está deprecated desde v16 mas funciona normalmente no v18 — mantido por decisão do projeto. Migrar para `Gosub()` apenas quando houver upgrade para v20+.
+
 - Contextos Asterisk são blocos `[nome-do-contexto]` no .conf. Nomes: kebab-case.
 - Sequência dentro de um contexto: `exten => s,1,Cmd()` → `exten => s,n,Cmd()` → ...
 - Labels: `exten => s,n(label),Cmd()` — permitem Goto apontando para esse ponto.

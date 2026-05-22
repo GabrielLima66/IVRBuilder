@@ -261,46 +261,82 @@ function generateDialplanFromContexts(nodes, edges, findNode, outEdges) {
     return chain;
   }
 
-  // ── Contexto de entrada para nós STANDALONE (fora de qualquer ContextBox) ─
-  // Nós sem `parentNode` (Config, TimeNode, MenuNode etc. flutuando no canvas)
-  // não pertencem a nenhum contexto e seriam ignorados pelo loop abaixo.
-  // Este bloco detecta a cadeia standalone a partir do Config e gera
-  // [orpen-ivr-{IVR}] com a mesma lógica de sSeq/DTMF dos demais contextos.
+  // ── Bloco do GlobalConfigNode ────────────────────────────────────────────────
+  //
+  // O GlobalConfigNode SEMPRE gera seu próprio bloco [orpen-ivr-{IVR}], separado
+  // de qualquer ContextNode.
+  //
+  // CASO A — config conectado diretamente a um ContextNode:
+  //   Gera [orpen-ivr-{IVR}] com as linhas de configuração (Set/Macro/Noop)
+  //   + Goto automático para o primeiro ContextNode conectado
+  //   + Hangup + include => hangup-ivr
+  //   O ContextNode NÃO recebe as linhas do GlobalConfig (blocos separados).
+  //
+  // CASO B — config standalone (sem conexão direta a ContextNode):
+  //   Caminha sequencialmente por nós standalone (TimeNode, MenuNode etc.)
+  //   e gera [orpen-ivr-{IVR}] com a cadeia completa, igual ao comportamento
+  //   anterior para canvas sem ContextNodes.
   {
     const standaloneConfig = nodes.find((n) => n.type === 'config' && !n.parentNode);
 
     if (standaloneConfig) {
-      // Se o config está conectado diretamente a um ContextNode, as linhas do
-      // GlobalConfig serão injetadas no bloco daquele contexto — não gerar
-      // um bloco avulso [orpen-ivr-{IVR}] separado.
-      const cfgConnectedCtx = ctxNodes.some((ctx) =>
+      // Encontra o primeiro ContextNode conectado diretamente ao GlobalConfig
+      // (ctxNodes já está ordenado por `order`, então `find` retorna o mais prioritário)
+      const cfgConnectedCtxNode = ctxNodes.find((ctx) =>
         edges.some((e) => e.source === standaloneConfig.id && e.target === ctx.id)
       );
 
-      const IVR      = standaloneConfig.data.ivr || '0000';
+      const IVR       = standaloneConfig.data.ivr || '0000';
       const ENTRY_CTX = `orpen-ivr-${IVR}`;
 
-      // Caminha do config seguindo edges sequenciais por nós standalone
-      const scChain  = [];
-      let   scCur    = standaloneConfig;
-      const scVisited = new Set();
+      if (cfgConnectedCtxNode) {
+        // ── CASO A: GlobalConfigNode → ContextNode ───────────────────────────
+        // Gera bloco próprio com config + Goto automático + Hangup + include.
 
-      while (scCur && !scVisited.has(scCur.id)) {
-        scVisited.add(scCur.id);
-        if (scCur.type !== 'context') scChain.push(scCur);
+        emit(`[${ENTRY_CTX}]`);
 
-        const scNextEdge = edges.find((e) => {
-          if (e.source !== scCur.id) return false;
-          if (!isSeqEdge(e, scCur)) return false;
-          const t = findNode(e.target);
-          // Só segue para nós sem parentNode (standalone) e não-contextos
-          return t && !t.parentNode && t.type !== 'context' && !scVisited.has(t.id);
-        });
-        if (!scNextEdge) break;
-        scCur = findNode(scNextEdge.target);
-      }
+        const cfgLines = linesForChild(standaloneConfig).filter(Boolean);
+        let cfgLineIdx = 0;
 
-      if (scChain.length > 0 && !cfgConnectedCtx) {
+        for (const l of cfgLines) {
+          const pri = cfgLineIdx === 0 ? '1' : 'n';
+          emit(`exten => s,${pri},${l}`);
+          cfgLineIdx++;
+        }
+
+        // Goto automático para o primeiro ContextNode conectado
+        const firstCtxName = cfgConnectedCtxNode.data.contextName || 'orpen-ivr-home';
+        const gotoPri = cfgLineIdx === 0 ? '1' : 'n';
+        emit(`exten => s,${gotoPri},Goto(${firstCtxName},s,1)`);
+        emit(`exten => s,n,Hangup`);
+        emit(`include => hangup-ivr`);
+        sep();
+
+      } else {
+        // ── CASO B: GlobalConfigNode standalone ──────────────────────────────
+        // Caminha do config seguindo edges sequenciais por nós standalone.
+
+        // Caminha do config seguindo edges sequenciais por nós standalone
+        const scChain  = [];
+        let   scCur    = standaloneConfig;
+        const scVisited = new Set();
+
+        while (scCur && !scVisited.has(scCur.id)) {
+          scVisited.add(scCur.id);
+          if (scCur.type !== 'context') scChain.push(scCur);
+
+          const scNextEdge = edges.find((e) => {
+            if (e.source !== scCur.id) return false;
+            if (!isSeqEdge(e, scCur)) return false;
+            const t = findNode(e.target);
+            // Só segue para nós sem parentNode (standalone) e não-contextos
+            return t && !t.parentNode && t.type !== 'context' && !scVisited.has(t.id);
+          });
+          if (!scNextEdge) break;
+          scCur = findNode(scNextEdge.target);
+        }
+
+        if (scChain.length > 0) {
         emit(`[${ENTRY_CTX}]`);
 
         // Avisos para TimeNodes sem destino
@@ -394,10 +430,11 @@ function generateDialplanFromContexts(nodes, edges, findNode, outEdges) {
           }
         }
 
-        sep();
-      }
-    }
-  }
+          sep();
+        } // fecha if (scChain.length > 0)
+      } // fecha else (Caso B)
+    } // fecha if (standaloneConfig)
+  } // fecha bloco GlobalConfigNode
 
   // ── Itera contextos ──────────────────────────────────────────────────────
   for (const ctx of ctxNodes) {
@@ -422,11 +459,9 @@ function generateDialplanFromContexts(nodes, edges, findNode, outEdges) {
     const sSeq = [];
     const menus = [];
 
-    // Injeta linhas do GlobalConfigNode quando conectado diretamente a este contexto
-    const gcNode = nodes.find((n) => n.type === 'config' && !n.parentNode);
-    if (gcNode && edges.some((e) => e.source === gcNode.id && e.target === ctx.id)) {
-      linesForChild(gcNode).forEach((l) => { if (l) sSeq.push({ line: l, label: '' }); });
-    }
+    // NOTA: o GlobalConfigNode gera seu próprio bloco [orpen-ivr-{IVR}] separado
+    // (ver bloco "GlobalConfigNode" acima). As linhas de configuração (Set, Macro,
+    // Noop) NÃO são mais injetadas aqui — este bloco é exclusivo do ContextNode.
 
     for (const c of chain) {
       // Etapa 4: validação de nós de ação antes de emitir (pula nós comentados)

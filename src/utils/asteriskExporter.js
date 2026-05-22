@@ -456,15 +456,21 @@ function generateDialplanFromContexts(nodes, edges, findNode, outEdges) {
       }
     }
 
+    // sSeq: sequência de itens a emitir para este contexto.
+    // Cada item é { line, label?, isRaw? } OU { menuFlush: menuNode }.
+    //
+    // O marcador { menuFlush } é inserido logo após o WaitExten de cada MenuNode.
+    // Durante a emissão, ao encontrar esse marcador, o compilador emite TODAS as
+    // extensões DTMF (1-9, i, t) daquele menu IMEDIATAMENTE — garantindo que o
+    // bloco do MenuNode seja atômico e nunca seja interrompido por linhas de outros nós.
     const sSeq = [];
-    const menus = [];
 
     // NOTA: o GlobalConfigNode gera seu próprio bloco [orpen-ivr-{IVR}] separado
     // (ver bloco "GlobalConfigNode" acima). As linhas de configuração (Set, Macro,
     // Noop) NÃO são mais injetadas aqui — este bloco é exclusivo do ContextNode.
 
     for (const c of chain) {
-      // Etapa 4: validação de nós de ação antes de emitir (pula nós comentados)
+      // Validação de nós de ação antes de emitir (pula nós comentados)
       if (!c.data?._commented && ACTION_META[c.type]?.validate) {
         const errs = ACTION_META[c.type].validate(c.data || {});
         if (errs.length > 0) {
@@ -475,14 +481,14 @@ function generateDialplanFromContexts(nodes, edges, findNode, outEdges) {
       }
 
       if (c.type === 'menu') {
-        menus.push(c);
-        // Permite label customizado no menu; padrão 'menu' para compatibilidade
+        // MenuNode → Background + WaitExten + marcador atômico (DTMF emitido inline)
         const menuLabel = (c.data.label || '').trim() || 'menu';
         sSeq.push({
           line: `Background(\${SOUND_PATH}/${c.data.greeting || '1-bem-vindo'})`,
           label: menuLabel,
         });
         sSeq.push({ line: `WaitExten(${c.data.waitExten || 4})` });
+        sSeq.push({ menuFlush: c }); // ← flush DTMF aqui, antes do próximo nó
       } else {
         const lns = linesForChild(c);
         const nodeLbl = ACTION_META[c.type]?.supportsLabel ? (c.data.label || '').trim() : '';
@@ -502,10 +508,10 @@ function generateDialplanFromContexts(nodes, edges, findNode, outEdges) {
       const checkDest = (destStr) => {
         const parts = (destStr || '').trim().split(',');
         if (parts.length < 3) return;
-        const [ctxName, , labelOrPri] = parts;
+        const [destCtxName, , labelOrPri] = parts;
         const trimmed = (labelOrPri || '').trim();
         if (!trimmed || /^\d+$/.test(trimmed)) return; // é prioridade numérica
-        const ctxNode = nodes.find((n) => n.type === 'context' && n.data.contextName === ctxName.trim());
+        const ctxNode = nodes.find((n) => n.type === 'context' && n.data.contextName === destCtxName.trim());
         if (!ctxNode) return; // contexto não mapeado no canvas
         const hasLabel = nodes.some(
           (n) => n.parentNode === ctxNode.id && ACTION_META[n.type]?.supportsLabel && (n.data.label || '').trim() === trimmed
@@ -518,13 +524,81 @@ function generateDialplanFromContexts(nodes, edges, findNode, outEdges) {
       checkDest(c.data.falseDestination);
     }
 
-    if (sSeq.length === 0) {
+    // ── Emissão ──────────────────────────────────────────────────────────────
+    // Verifica se há alguma linha real além dos marcadores menuFlush
+    const hasRealLines = sSeq.some((item) => !item.menuFlush);
+
+    if (!hasRealLines) {
       emit(`exten => s,1,Noop(## ${ctxName} ##)`);
     } else {
       let seqIdx = 0;
+
+      // Emite TODAS as extensões DTMF de um menu imediatamente (bloco atômico).
+      // Chamado pelo marcador { menuFlush } no meio do sSeq.
+      const emitMenuDtmf = (m) => {
+        const menuLabel = (m.data.label || '').trim() || 'menu';
+        const digits    = m.data.digits || [];
+
+        const handleEdge = (digitId) =>
+          edges.find((x) => x.source === m.id && x.sourceHandle === `d-${digitId}`);
+
+        const emitDigit = (digitId, target) => {
+          if (!target) return false;
+          if (target.type === 'context') {
+            emit(`exten => ${digitId},1,Goto(${target.data.contextName},s,1)`);
+            return true;
+          }
+          if (target.type === 'route') {
+            const lns = linesForChild(target);
+            if (!lns.length) return false;
+            emit(`exten => ${digitId},1,${lns[0]}`);
+            for (let i = 1; i < lns.length; i++) emit(`exten => ${digitId},n,${lns[i]}`);
+            return true;
+          }
+          if (target.type === 'menu' && target.data.contextName) {
+            emit(`exten => ${digitId},1,Goto(${target.data.contextName},s,1)`);
+            return true;
+          }
+          if (ACTION_META[target.type]) {
+            const dtmfChain = walkChainLines(target);
+            if (!dtmfChain.length) return false;
+            emit(`exten => ${digitId},1,${dtmfChain[0]}`);
+            for (let i = 1; i < dtmfChain.length; i++) emit(`exten => ${digitId},n,${dtmfChain[i]}`);
+            return true;
+          }
+          return false;
+        };
+
+        for (const dig of digits) {
+          const e = handleEdge(dig.id);
+          if (!e) continue;
+          emitDigit(dig.id, findNode(e.target));
+        }
+
+        const ei = handleEdge('i');
+        if (ei) {
+          emitDigit('i', findNode(ei.target));
+        } else {
+          const inv = (m.data.invalidMacro || 'macro-menu-invalid-orpen-home').replace(/^macro-/, '');
+          emit(`exten => i,1,Macro(${inv})`);
+          emit(`exten => i,n,Goto(${ctxName},s,${menuLabel})`);
+        }
+        const et = handleEdge('t');
+        if (et) {
+          emitDigit('t', findNode(et.target));
+        } else {
+          const tmo = (m.data.timeoutMacro || 'macro-menu-timeout-orpen-home').replace(/^macro-/, '');
+          emit(`exten => t,1,Macro(${tmo})`);
+          emit(`exten => t,n,Goto(${ctxName},s,${menuLabel})`);
+        }
+      };
+
       for (const item of sSeq) {
-        if (item.isRaw) {
-          // Linhas raw (comentadas, include =>, etc.) emitidas sem prefixo exten =>
+        if (item.menuFlush) {
+          // Bloco atômico: emite DTMF do menu imediatamente após o WaitExten
+          emitMenuDtmf(item.menuFlush);
+        } else if (item.isRaw) {
+          // Linhas raw (include =>, comentários, etc.) sem prefixo exten =>
           emit(item.line);
         } else {
           const pri = seqIdx === 0 ? '1' : 'n';
@@ -532,64 +606,6 @@ function generateDialplanFromContexts(nodes, edges, findNode, outEdges) {
           emit(`exten => s,${pri}${lbl},${item.line}`);
           seqIdx++;
         }
-      }
-    }
-
-    // ── Extensões DTMF de cada menu ────────────────────────────────────────
-    for (const m of menus) {
-      const digits = m.data.digits || [];
-
-      const handleEdge = (digitId) =>
-        edges.find((x) => x.source === m.id && x.sourceHandle === `d-${digitId}`);
-
-      const emitDigit = (digitId, target) => {
-        if (!target) return false;
-        if (target.type === 'context') {
-          emit(`exten => ${digitId},1,Goto(${target.data.contextName},s,1)`);
-          return true;
-        }
-        if (target.type === 'route') {
-          const lns = linesForChild(target);
-          if (!lns.length) return false;
-          emit(`exten => ${digitId},1,${lns[0]}`);
-          for (let i = 1; i < lns.length; i++) emit(`exten => ${digitId},n,${lns[i]}`);
-          return true;
-        }
-        if (target.type === 'menu' && target.data.contextName) {
-          emit(`exten => ${digitId},1,Goto(${target.data.contextName},s,1)`);
-          return true;
-        }
-        if (ACTION_META[target.type]) {
-          const chain = walkChainLines(target);
-          if (!chain.length) return false;
-          emit(`exten => ${digitId},1,${chain[0]}`);
-          for (let i = 1; i < chain.length; i++) emit(`exten => ${digitId},n,${chain[i]}`);
-          return true;
-        }
-        return false;
-      };
-
-      for (const dig of digits) {
-        const e = handleEdge(dig.id);
-        if (!e) continue;
-        emitDigit(dig.id, findNode(e.target));
-      }
-
-      const ei = handleEdge('i');
-      if (ei) {
-        emitDigit('i', findNode(ei.target));
-      } else {
-        const inv = (m.data.invalidMacro || 'macro-menu-invalid-orpen-home').replace(/^macro-/, '');
-        emit(`exten => i,1,Macro(${inv})`);
-        emit(`exten => i,n,Goto(${ctxName},s,${menus.length ? 'menu' : '1'})`);
-      }
-      const et = handleEdge('t');
-      if (et) {
-        emitDigit('t', findNode(et.target));
-      } else {
-        const tmo = (m.data.timeoutMacro || 'macro-menu-timeout-orpen-home').replace(/^macro-/, '');
-        emit(`exten => t,1,Macro(${tmo})`);
-        emit(`exten => t,n,Goto(${ctxName},s,${menus.length ? 'menu' : '1'})`);
       }
     }
 

@@ -308,7 +308,7 @@ function generateDialplanFromContexts(nodes, edges, findNode, outEdges) {
         const firstCtxName = cfgConnectedCtxNode.data.contextName || 'orpen-ivr-home';
         const gotoPri = cfgLineIdx === 0 ? '1' : 'n';
         emit(`exten => s,${gotoPri},Goto(${firstCtxName},s,1)`);
-        emit(`exten => s,n,Hangup`);
+        emit(`exten => s,n,Hangup()`);
         emit(`include => hangup-ivr`);
         sep();
 
@@ -694,11 +694,11 @@ function generateDialplanLegacy(nodes, edges, findNode, outEdges) {
   if (rootMenu) {
     emitS(`Goto(${rootMenu.data.contextName || 'orpen-ivr-home'},s,1)`);
     sep();
-    emitS(`Hangup`);
+    emitS(`Hangup()`);
     emit(`include => hangup-ivr`);
     sep();
   } else {
-    emitS(`Hangup`);
+    emitS(`Hangup()`);
     emit(`include => hangup-ivr`);
     sep();
   }
@@ -776,7 +776,7 @@ function generateDialplanLegacy(nodes, edges, findNode, outEdges) {
     emit(`exten => t,1,Macro(${(m.data.timeoutMacro || 'macro-menu-timeout-orpen-home').replace(/^macro-/, '')})`);
     emit(`exten => t,n,Goto(${CTX},s,1)`);
     sep();
-    emitS(`Hangup`);
+    emitS(`Hangup()`);
     emit(`include => hangup-ivr`);
     sep();
   }
@@ -826,7 +826,7 @@ function generateDialplanLegacy(nodes, edges, findNode, outEdges) {
         }
       }
 
-      if (!terminated) emitS(`Hangup`);
+      if (!terminated) emitS(`Hangup()`);
       emit(`include => hangup-ivr`);
       sep();
     }

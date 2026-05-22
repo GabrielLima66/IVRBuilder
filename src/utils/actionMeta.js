@@ -207,7 +207,10 @@ export function actionLine(n) {
   switch (n.type) {
     case 'gosub': {
       const params = resolveParams(d.params, d.args);
-      return `Gosub(${d.context || ''},${d.extension || 's'},${d.priority || '1'}(${params}))`;
+      // Asterisk: Gosub(ctx,ext,pri(args)) — args in parens after priority.
+      // Omit parens entirely when no args (Gosub(ctx,ext,pri) is valid).
+      const argsPart = params ? `(${params})` : '';
+      return `Gosub(${d.context || ''},${d.extension || 's'},${d.priority || '1'}${argsPart})`;
     }
     case 'return':
       return d.value ? `Return(${d.value})` : `Return()`;
@@ -222,7 +225,7 @@ export function actionLine(n) {
       return `Set(${d.assignment || ''})`;
     case 'agi': {
       const params = resolveParams(d.params, d.args);
-      return `Agi(\${AGI_PATH}/${d.script || ''}${params ? ',' + params : ''})`;
+      return `AGI(\${AGI_PATH}/${d.script || ''}${params ? ',' + params : ''})`;
     }
     case 'macro': {
       const params = resolveParams(d.params, d.args);

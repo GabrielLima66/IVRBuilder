@@ -23,7 +23,7 @@ import { EdgeModeContext } from './contexts/EdgeModeContext';
 import { ActiveSelectionContext } from './contexts/ActiveSelectionContext';
 import HomeScreen from './screens/HomeScreen';
 import { salvarProjeto, listarProjetos } from './services/projectStorage';
-import { parseConfFile } from './utils/confParser';
+import { importConf } from './utils/conf/confImporter';
 import { useAlignmentGuides } from './hooks/useAlignmentGuides';
 import AlignmentGuides from './components/canvas/AlignmentGuides';
 import ContextOrderOverlay from './components/canvas/ContextOrderOverlay';
@@ -1185,10 +1185,20 @@ export default function App() {
     const reader = new FileReader();
     reader.onload = (e) => {
       try {
-        const result = parseConfFile(e.target.result);
-        setConfImportData({ ...result, fileName: file.name });
+        const result = importConf(e.target.result);
+        // Expose the data shape that HomeScreen expects:
+        //   nodes, edges (for legacy compat), stats, suggestedName, validation
+        setConfImportData({
+          nodes:         result.flowState.nodes,
+          edges:         result.flowState.edges,
+          stats:         result.stats,
+          suggestedName: result.suggestedName,
+          validation:    result.validation,
+          fileName:      file.name,
+        });
         setImportError(null);
-      } catch {
+      } catch (err) {
+        console.error('[confImporter] erro:', err);
         setImportError('erro ao processar o arquivo .conf');
       }
     };

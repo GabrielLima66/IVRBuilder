@@ -1,0 +1,229 @@
+/**
+ * confBuilder.js — fase 5 do pipeline de importação .conf.
+ * Constrói os arrays React Flow Node[] e Edge[] a partir do ResolvedGraph + LayoutResult.
+ *
+ * Regras de CLAUDE.md respeitadas:
+ *  - DTMF handles (d-*) usam type: 'floating'
+ *  - ctx-in como targetHandle para edges apontando a ContextNodes
+ *  - Filho sempre depois do pai no array nodes
+ *  - draggable: false em filhos de ContextNode
+ *  - zIndex: -1 em ContextNodes
+ */
+
+import { uid } from '../common.js';
+
+// ── Constantes de aparência de edges ─────────────────────────────────────────
+
+const EDGE_GREEN  = { style: { stroke: '#00ff41', strokeWidth: 1.5 }, markerEnd: { type: 'arrowclosed', color: '#00ff41' } };
+const EDGE_YELLOW = { style: { stroke: '#ffcc00', strokeWidth: 1.5 }, markerEnd: { type: 'arrowclosed', color: '#ffcc00' } };
+const EDGE_ORANGE = { style: { stroke: '#ff8c00', strokeWidth: 1.5 }, markerEnd: { type: 'arrowclosed', color: '#ff8c00' } };
+
+/**
+ * Returns edge appearance for a given color key.
+ * @param {'green'|'yellow'|'dtmf'|'orange'} color
+ */
+function edgeAppearance(color) {
+  if (color === 'yellow') return EDGE_YELLOW;
+  if (color === 'orange') return EDGE_ORANGE;
+  return EDGE_GREEN; // 'green' and 'dtmf' both use green
+}
+
+// ── Entry point ───────────────────────────────────────────────────────────────
+
+/**
+ * Builds React Flow nodes and edges from the resolved graph + calculated layout.
+ *
+ * @param {import('./confResolver.js').ResolvedGraph & { unresolvedRefs: string[], stats: Object }} graph
+ * @param {import('./confLayout.js').LayoutResult} layout
+ * @returns {{ nodes: Object[], edges: Object[] }}
+ */
+export function build(graph, layout) {
+  const { globalConfig, contexts, crossRefs } = graph;
+  const { configPosition, contextLayouts }    = layout;
+
+  /** @type {Object[]} */
+  const nodes = [];
+  /** @type {Object[]} */
+  const edges = [];
+
+  // ── GlobalConfigNode ──────────────────────────────────────────────────────
+  const configId = `n_${uid()}`;
+  nodes.push({
+    id:       configId,
+    type:     'config',
+    position: configPosition,
+    data: {
+      ivr:          globalConfig.ivr          || '0000',
+      soundPath:    globalConfig.soundPath     || '',
+      agiPath:      globalConfig.agiPath       || '',
+      language:     globalConfig.language      || 'pt_BR',
+      comment:      globalConfig.comment       || '',
+      numberDialed: globalConfig.numberDialed  || false,
+      logIvr:       globalConfig.logIvr        || false,
+      customerAgi:  false,
+    },
+  });
+
+  // ── ContextNodes + children ──────────────────────────────────────────────
+  // Index: contextName → { ctxNodeId, childNodeIds[] }
+  const ctxIndex = {};
+  let firstCtxId = null;
+
+  for (let ci = 0; ci < contexts.length; ci++) {
+    const ctx           = contexts[ci];
+    const ctxLayout     = contextLayouts[ci];
+    const childNodeIds  = [];
+    /** sequential ids (excludes macro-for-i/t nodes which are off the main chain) */
+    const sequential    = [];
+    /** map from nodeIdx → React Flow node id */
+    const nodeIdByIdx   = {};
+
+    // Push ContextNode first (parent before children per CLAUDE.md rule 6)
+    nodes.push({
+      id:       ctx.id,
+      type:     'context',
+      position: ctxLayout.position,
+      data:     {
+        contextName: ctx.name,
+        childOrder:  [], // will be filled after children are created
+        ...(ctx.isMacro ? { isMacro: true } : {}),
+      },
+      style:    { width: ctxLayout.width, height: ctxLayout.height },
+      zIndex:   -1,
+    });
+
+    if (ci === 0) firstCtxId = ctx.id;
+
+    // Push children
+    for (let ni = 0; ni < ctx.childNodes.length; ni++) {
+      const childSpec = ctx.childNodes[ni];
+      const pos       = ctxLayout.childPositions[ni] || { x: 20, y: 34 + ni * 60 };
+      const nid       = `n_${uid()}`;
+      nodeIdByIdx[ni] = nid;
+
+      const nodeObj = {
+        id:         nid,
+        type:       childSpec.type,
+        position:   { x: pos.x, y: pos.y },
+        data:       childSpec.commented
+          ? { ...childSpec.data, _commented: true, _origLine: childSpec.origLine || '' }
+          : { ...childSpec.data },
+        parentNode: ctx.id,
+        extent:     'parent',
+        draggable:  false,
+      };
+
+      nodes.push(nodeObj);
+      childNodeIds.push(nid);
+
+      // Only include in sequential order if not a macro-for-i/t stray node
+      if (!childSpec._dtmfMacroFor) {
+        sequential.push(nid);
+      }
+    }
+
+    // Update childOrder on the ContextNode we already pushed
+    const ctxNode = nodes.find((n) => n.id === ctx.id);
+    if (ctxNode) ctxNode.data.childOrder = [...sequential];
+
+    // Sequential edges between children inside this context
+    for (let si = 0; si < sequential.length - 1; si++) {
+      // Don't add sequential edge FROM a menu node's menu entry to the next child —
+      // the next child after MenuNode is a macro node for i/t which doesn't have a sequential flow link
+      const srcNode = nodes.find((n) => n.id === sequential[si]);
+      if (srcNode?.type === 'menu') continue;
+
+      edges.push({
+        id:           `e-${sequential[si]}-${sequential[si + 1]}`,
+        source:       sequential[si],
+        sourceHandle: 'out',
+        target:       sequential[si + 1],
+        targetHandle: 'in',
+        type:         'floating',
+        data:         { offsetX: 0, offsetY: 0 },
+        ...EDGE_GREEN,
+      });
+    }
+
+    // Add edges from menu d-i/d-t to their macro child nodes
+    for (let ni = 0; ni < ctx.childNodes.length; ni++) {
+      const childSpec = ctx.childNodes[ni];
+      if (!childSpec._menuNodeMarker) continue;
+
+      const menuNid = nodeIdByIdx[ni];
+
+      // Find the macro nodes immediately after the menu node
+      for (let mi = ni + 1; mi < ctx.childNodes.length; mi++) {
+        const macroSpec = ctx.childNodes[mi];
+        if (!macroSpec._dtmfMacroFor) continue;
+        const macroNid  = nodeIdByIdx[mi];
+        const digit     = macroSpec._dtmfMacroFor; // 'i' or 't'
+
+        edges.push({
+          id:           `e-ref-${uid()}`,
+          source:       menuNid,
+          sourceHandle: `d-${digit}`,
+          target:       macroNid,
+          targetHandle: 'in',
+          type:         'floating',
+          data:         { offsetX: 0, offsetY: 0 },
+          ...EDGE_ORANGE,
+        });
+      }
+    }
+
+    ctxIndex[ctx.name] = { ctxNodeId: ctx.id, nodeIdByIdx };
+  }
+
+  // ── Edge GlobalConfig → first ContextNode ─────────────────────────────────
+  if (firstCtxId) {
+    edges.push({
+      id:           `e-cfg-${firstCtxId}`,
+      source:       configId,
+      sourceHandle: 'out',
+      target:       firstCtxId,
+      targetHandle: 'ctx-in',
+      type:         'floating',
+      data:         { offsetX: 0, offsetY: 0 },
+      ...EDGE_GREEN,
+    });
+  }
+
+  // ── Cross-context edges ───────────────────────────────────────────────────
+  // Track already-created edges to avoid duplicates
+  const edgeKeys = new Set(edges.map((e) => `${e.source}|${e.sourceHandle}|${e.target}`));
+
+  for (const ref of crossRefs) {
+    const ctxName = (ref.targetCtxName || '').trim();
+    if (!ctxName || ctxName.length <= 1 || /^\d+$/.test(ctxName)) continue;
+
+    const srcCtxEntry = ctxIndex[ref.sourceCtxName];
+    if (!srcCtxEntry) continue;
+
+    const srcNid = srcCtxEntry.nodeIdByIdx[Number(ref.sourceNodeIdx)];
+    if (!srcNid) continue;
+
+    const tgtCtxEntry = ctxIndex[ctxName];
+    if (!tgtCtxEntry) continue; // unresolved — skip
+
+    const tgtId = tgtCtxEntry.ctxNodeId;
+    const key   = `${srcNid}|${ref.sourceHandle}|${tgtId}`;
+    if (edgeKeys.has(key)) continue;
+    edgeKeys.add(key);
+
+    const app = edgeAppearance(ref.color);
+    edges.push({
+      id:           `e-ref-${uid()}`,
+      source:       srcNid,
+      sourceHandle: ref.sourceHandle,
+      target:       tgtId,
+      targetHandle: 'ctx-in',
+      type:         'floating',
+      data:         { offsetX: 0, offsetY: 0 },
+      animated:     false,
+      ...app,
+    });
+  }
+
+  return { nodes, edges };
+}

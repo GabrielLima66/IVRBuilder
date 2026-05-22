@@ -98,31 +98,58 @@ function ConfirmDeleteModal({ projectName, onClose, onConfirm }) {
 
 // ── Modal de resumo da importação .conf ───────────────────────────────────────
 
+function FidelityBar({ fidelity }) {
+  const color = fidelity >= 80 ? '#00ff41' : fidelity >= 50 ? '#ffcc00' : '#ff5050';
+  return (
+    <div style={{ margin: '8px 0', lineHeight: 1 }}>
+      <div style={{ height: 6, background: 'var(--line)', borderRadius: 3, overflow: 'hidden' }}>
+        <div style={{ height: '100%', width: `${fidelity}%`, background: color, borderRadius: 3, transition: 'width 0.4s' }} />
+      </div>
+      <div style={{ fontSize: 10, color, marginTop: 4, letterSpacing: 1 }}>
+        {fidelity}% fidelidade
+      </div>
+    </div>
+  );
+}
+
+function SectionHeader({ label }) {
+  return (
+    <div style={{ fontSize: 10, color: 'var(--neon)', letterSpacing: 2, marginBottom: 10, marginTop: 16, borderBottom: '1px solid var(--line)', paddingBottom: 6 }}>
+      ▌ {label}
+    </div>
+  );
+}
+
 function ConfImportModal({ data, onClose, onConfirm }) {
-  const [name, setName]       = useState(data.suggestedName || 'projeto-importado');
-  const isValid               = name.length >= 3 && NAME_RE.test(name);
-  const { stats }             = data;
-  const totalNodes            = Object.values(stats.nodesByType).reduce((a, b) => a + b, 0);
+  const [name, setName] = useState(data.suggestedName || 'projeto-importado');
+  const isValid         = name.length >= 3 && NAME_RE.test(name);
+  const { stats }       = data;
+  const validation      = data.validation || null;
+  const totalNodes      = Object.values(stats.nodesByType || {}).reduce((a, b) => a + b, 0);
 
   return (
-    <Modal title="IMPORTAR .CONF — RESUMO" onClose={onClose} maxWidth={560}>
-      <div style={{ padding: '16px 20px', overflow: 'auto', maxHeight: '70vh' }}>
-        {/* Stats */}
+    <Modal title="IMPORTAR .CONF" onClose={onClose} maxWidth={600}>
+      <div style={{ padding: '16px 20px', overflow: 'auto', maxHeight: '75vh' }}>
+
+        {/* ── SEÇÃO 1: MAPEAMENTO ───────────────────────────────────────────── */}
+        <SectionHeader label="SEÇÃO 1 — MAPEAMENTO" />
+
+        {/* Resumo quantitativo */}
         <div style={{ marginBottom: 14, fontSize: 11, lineHeight: 2, color: 'var(--neon-dim)' }}>
-          <div><span style={{ color: 'var(--neon)' }}>{stats.contexts}</span> contexto(s) importado(s)</div>
+          <div><span style={{ color: 'var(--neon)' }}>{stats.contexts || 0}</span> contexto(s) importado(s)</div>
           <div><span style={{ color: 'var(--neon)' }}>{totalNodes}</span> nó(s) criado(s)</div>
-          {Object.entries(stats.nodesByType).map(([t, n]) => (
+          {Object.entries(stats.nodesByType || {}).map(([t, n]) => (
             <div key={t} style={{ marginLeft: 12, fontSize: 10 }}>
               {t}: <span style={{ color: '#c7ffd5' }}>{n}</span>
             </div>
           ))}
         </div>
 
-        {/* Commented nodes */}
-        {stats.commented.length > 0 && (
+        {/* Nós comentados */}
+        {(stats.commented || []).length > 0 && (
           <div style={{ marginBottom: 12 }}>
             <div style={{ fontSize: 10, color: '#ffcc00', letterSpacing: 1, marginBottom: 6 }}>
-              ▌ LINHAS COMENTADAS ({stats.commented.length})
+              LINHAS COMENTADAS ({stats.commented.length})
             </div>
             {stats.commented.map((l, i) => (
               <div key={i} style={{ fontSize: 9, color: '#ffcc00', opacity: 0.65, padding: '2px 0', wordBreak: 'break-all' }}>; {l}</div>
@@ -130,11 +157,11 @@ function ConfImportModal({ data, onClose, onConfirm }) {
           </div>
         )}
 
-        {/* Raw nodes */}
-        {stats.raw.length > 0 && (
+        {/* Nós raw / não reconhecidos */}
+        {(stats.raw || []).length > 0 && (
           <div style={{ marginBottom: 12 }}>
             <div style={{ fontSize: 10, color: '#ff8c00', letterSpacing: 1, marginBottom: 6 }}>
-              ▌ COMANDOS NÃO RECONHECIDOS ({stats.raw.length})
+              COMANDOS NÃO RECONHECIDOS ({stats.raw.length})
             </div>
             {stats.raw.map((l, i) => (
               <div key={i} style={{ fontSize: 9, color: '#ff8c00', opacity: 0.75, padding: '2px 0', wordBreak: 'break-all' }}>{l}</div>
@@ -143,13 +170,13 @@ function ConfImportModal({ data, onClose, onConfirm }) {
         )}
 
         {/* Referências externas não vinculadas */}
-        {stats.unresolvedRefs?.length > 0 && (
+        {(stats.unresolvedRefs || []).length > 0 && (
           <div style={{ marginBottom: 12 }}>
             <div style={{ fontSize: 10, color: '#00d4ff', letterSpacing: 1, marginBottom: 6 }}>
-              ▌ REFERÊNCIAS EXTERNAS NÃO VINCULADAS ({stats.unresolvedRefs.length})
+              REFERÊNCIAS EXTERNAS NÃO VINCULADAS ({stats.unresolvedRefs.length})
             </div>
             <div style={{ fontSize: 9, color: 'var(--neon-dim)', marginBottom: 6, opacity: 0.7 }}>
-              // contextos referenciados que não existem no arquivo importado — sem edge criada
+              // contextos referenciados que não existem no arquivo importado
             </div>
             {stats.unresolvedRefs.map((ref, i) => (
               <div key={i} style={{ fontSize: 9, color: '#00d4ff', opacity: 0.8, padding: '2px 0', wordBreak: 'break-all' }}>
@@ -159,13 +186,69 @@ function ConfImportModal({ data, onClose, onConfirm }) {
           </div>
         )}
 
-        {/* Nome do projeto */}
-        <div style={{ borderTop: '1px solid var(--line)', paddingTop: 14, marginTop: 8 }}>
+        {/* ── SEÇÃO 2: VALIDAÇÃO ROUND-TRIP ────────────────────────────────── */}
+        {validation && (
+          <>
+            <SectionHeader label="SEÇÃO 2 — VALIDAÇÃO ROUND-TRIP" />
+
+            <div style={{ fontSize: 11, color: 'var(--neon-dim)', lineHeight: 2, marginBottom: 8 }}>
+              <div>
+                <span style={{ color: 'var(--neon)' }}>{validation.preserved}</span>
+                {' / '}
+                <span>{validation.total}</span>
+                {' linhas preservadas'}
+              </div>
+            </div>
+
+            <FidelityBar fidelity={validation.fidelity} />
+
+            {validation.lost && validation.lost.length > 0 && (
+              <div style={{ marginTop: 12, marginBottom: 8 }}>
+                <div style={{ fontSize: 10, color: '#ff5050', letterSpacing: 1, marginBottom: 6 }}>
+                  LINHAS PERDIDAS ({validation.lost.length})
+                </div>
+                <div style={{ maxHeight: 120, overflow: 'auto', background: '#0d0d0d', padding: '6px 8px', borderRadius: 3, border: '1px solid var(--line)' }}>
+                  {validation.lost.map((l, i) => (
+                    <div key={i} style={{ fontSize: 9, color: '#ff5050', opacity: 0.8, padding: '1px 0', wordBreak: 'break-all', fontFamily: 'inherit' }}>
+                      - {l}
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+
+            {validation.added && validation.added.length > 0 && (
+              <div style={{ marginBottom: 8 }}>
+                <div style={{ fontSize: 10, color: '#a78bfa', letterSpacing: 1, marginBottom: 6 }}>
+                  LINHAS ADICIONADAS PELO COMPILADOR ({validation.added.length})
+                </div>
+                <div style={{ maxHeight: 100, overflow: 'auto', background: '#0d0d0d', padding: '6px 8px', borderRadius: 3, border: '1px solid var(--line)' }}>
+                  {validation.added.map((l, i) => (
+                    <div key={i} style={{ fontSize: 9, color: '#a78bfa', opacity: 0.8, padding: '1px 0', wordBreak: 'break-all', fontFamily: 'inherit' }}>
+                      + {l}
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+
+            {validation.error && (
+              <div style={{ fontSize: 9, color: '#ff5050', marginTop: 6, opacity: 0.75 }}>
+                // erro no round-trip: {validation.error}
+              </div>
+            )}
+          </>
+        )}
+
+        {/* ── Nome do projeto ───────────────────────────────────────────────── */}
+        <div style={{ borderTop: '1px solid var(--line)', paddingTop: 14, marginTop: 16 }}>
           <label className="term-label">NOME DO PROJETO</label>
           <input className="term-input" value={name} placeholder="nome-do-projeto"
             style={{ borderColor: !isValid ? '#ff5050' : undefined, marginBottom: 4 }}
             onChange={(e) => setName(e.target.value.toLowerCase())} />
-          {!isValid && name.length > 0 && <div style={{ fontSize: 9, color: '#ff5050' }}>⚠ apenas letras minúsculas, números e hífen (mín. 3)</div>}
+          {!isValid && name.length > 0 && (
+            <div style={{ fontSize: 9, color: '#ff5050' }}>⚠ apenas letras minúsculas, números e hífen (mín. 3)</div>
+          )}
         </div>
 
         <div style={{ display: 'flex', gap: 8, justifyContent: 'flex-end', marginTop: 16 }}>

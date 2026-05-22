@@ -217,6 +217,7 @@ function cmdToNodeData(cmdFull) {
 
     case 'agi': {
       const parts  = params.split(',');
+      // Strip path prefix — script may be ${AGI_PATH}/name or /full/path/name
       const script = (parts[0] || '').split('/').pop();
       return { type: 'agi', data: { script, params: parts.slice(1).filter(Boolean), label: '' } };
     }
@@ -228,13 +229,20 @@ function cmdToNodeData(cmdFull) {
 
     case 'gosub': {
       const parts = params.split(',');
+      // Priority may include args: "1(arg1,arg2)" — extract both
+      const priRaw   = parts[2] || '1';
+      const priMatch = priRaw.match(/^([^(]+)\(([^)]*)\)$/);
+      const priority = priMatch ? priMatch[1].trim() : priRaw.replace(/\(.*\)/, '').trim();
+      const gosubArgs = priMatch
+        ? priMatch[2].split(',').map((s) => s.trim()).filter(Boolean)
+        : [];
       return {
         type: 'gosub',
         data: {
           context:   parts[0] || '',
           extension: parts[1] || 's',
-          priority:  (parts[2] || '1').replace(/\(.*\)/, ''),
-          params:    [],
+          priority,
+          params:    gosubArgs,
         },
       };
     }
@@ -265,8 +273,13 @@ function cmdToNodeData(cmdFull) {
     }
 
     case 'verbose': {
-      const parts = params.split(',');
-      return { type: 'verbose', data: { level: parseInt(parts[0]) || 3, message: parts.slice(1).join(',') } };
+      // Verbose([level,]message) — level is optional integer; detect by trying to parse first token
+      const parts     = params.split(',');
+      const firstNum  = parseInt(parts[0], 10);
+      const hasLevel  = !isNaN(firstNum) && String(firstNum) === parts[0].trim();
+      const level     = hasLevel ? firstNum : 3;
+      const message   = hasLevel ? parts.slice(1).join(',') : params;
+      return { type: 'verbose', data: { level, message } };
     }
 
     case 'execif': {

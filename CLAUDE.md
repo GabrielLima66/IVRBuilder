@@ -95,7 +95,7 @@ src/
 
 13. **ContextNode tem `zIndex: -1`** — deve aparecer atrás dos filhos para não bloquear interação.
 
-14. **`customerAgi` no ConfigNode é LEGADO** — campo existe nos defaults do buildNode mas o exportador o ignora. Para `Agi(customerDataInboundCall...)`, usar nó AGI explícito.
+14. **`customerAgi` no ConfigNode é LEGADO** — campo existe nos defaults do buildNode mas o exportador o ignora. Para `AGI(customerDataInboundCall...)`, usar nó AGI explícito.
 
 15. **`Canvas` recebe `key={project.id}`** — garante remount completo ao trocar de projeto. Não usar o mesmo Canvas para projetos diferentes sem key.
 
@@ -120,14 +120,50 @@ src/
 - Contextos Asterisk são blocos `[nome-do-contexto]` no .conf. Nomes: kebab-case.
 - Sequência dentro de um contexto: `exten => s,1,Cmd()` → `exten => s,n,Cmd()` → ...
 - Labels: `exten => s,n(label),Cmd()` — permitem Goto apontando para esse ponto.
-- `GotoIfTime(horario,dias,mdias,meses?destino,ext,prio)` — testa condição de horário.
 - Variáveis com `__` (duplo underscore) são herdadas por sub-contextos: `__IVR`, `__NUMBER_DIALED`.
-- `Macro(nome,p1,p2)` — executa macro Asterisk (contexto `[macro-nome]`).
-- `Gosub(ctx,ext,pri(args))` — chama sub-rotina e retorna com `Return()`.
-- `Queue(fila,opts)` — encaminha para fila de atendimento.
-- Prefixo de contexto do projeto: `orpen-ivr-*`. Macro de transfer: `orpen-ivr-transfer`.
-- `include => outro-contexto` — inclui outro contexto (exportado via RawNode).
+- `include => outro-contexto` — inclui outro contexto (exportado via RawNode). Nunca como `exten => s,n,include(...)`.
 - Extensão `i` = dígito inválido; `t` = timeout de WaitExten.
+- Prefixo de contexto do projeto: `orpen-ivr-*`. Macro de transfer: `orpen-ivr-transfer`.
+
+### Sintaxe validada das funções Asterisk (fonte: docs.asterisk.org)
+
+| Função | Sintaxe correta | Observações |
+|---|---|---|
+| `Answer()` | `Answer()` | Parênteses obrigatórios |
+| `Hangup()` | `Hangup([causecode])` | Parênteses obrigatórios. Bare `Hangup` é aceito mas não é recomendado. |
+| `Wait()` | `Wait(seconds)` | |
+| `WaitExten()` | `WaitExten(seconds)` | |
+| `Noop()` | `Noop(text)` | |
+| `Background()` | `Background(${SOUND_PATH}/file)` | Sem extensão de arquivo |
+| `Playback()` | `Playback(${SOUND_PATH}/file)` | Sem extensão de arquivo |
+| `Set()` | `Set(VAR=value)` ou `Set(__VAR=value)` | `Set(CHANNEL(language)=pt_BR)` é sintaxe especial válida |
+| `AGI()` | `AGI(${AGI_PATH}/script[,arg1,...])` | **AGI** em maiúsculas — não `Agi` |
+| `Macro()` | `Macro(nome[,p1,p2,...])` | Contexto `[macro-nome]` |
+| `Gosub()` | `Gosub(ctx,ext,pri[(arg1,...)])` | Args em parênteses após a prioridade. Sem args: sem parênteses — `Gosub(ctx,ext,1)` |
+| `Return()` | `Return([value])` | |
+| `Goto()` | `Goto(context,extension,priority)` | Sempre 3 partes |
+| `GotoIf()` | `GotoIf($[expr]?[true_dest]:[false_dest])` | Destino vazio = fall-through |
+| `GotoIfTime()` | `GotoIfTime(times,weekdays,mdays,months[,tz]?[dest_true[,dest_false]])` | Sem destino falso: cai na linha seguinte |
+| `ExecIf()` | `ExecIf($[expr]?App(args))` | |
+| `ExecIfTime()` | `ExecIfTime(times,weekdays,mdays,months[,tz]?App(args))` | |
+| `Dial()` | `Dial(Tech/resource[,timeout[,options]])` | |
+| `Queue()` | `Queue(queuename[,options,...])` | |
+| `Read()` | `Read(variable,filename,maxdigits[,options[,attempts[,timeout]]])` | |
+| `SayDigits()` | `SayDigits(digits)` | |
+| `SayNumber()` | `SayNumber(digits[,gender])` | |
+| `Verbose()` | `Verbose([level,]message)` | Level é opcional; padrão 0 |
+| `MixMonitor()` | `MixMonitor(filename.ext[,options[,command]])` | |
+| `StopMonitor()` | `StopMonitor()` | |
+| `ChanSpy()` | `ChanSpy([chanprefix[,options]])` | chanprefix é prefixo de canal, ex: `SIP` ou `SIP/1234` |
+
+### GotoIfTime — formato dos campos
+```
+times    = HH:MM-HH:MM (ex: 09:00-18:00) ou * para qualquer hora
+weekdays = mon-fri | mon&wed&fri | * — abreviações inglesas de 3 letras
+mdays    = 1-31 | 1-5 | * — dia do mês
+months   = jan-dec | jan&jul | * — abreviações inglesas de 3 letras
+```
+Sequências consecutivas usam `-`; múltiplos não-consecutivos usam `&`.
 
 ## Padrões de código
 

@@ -293,12 +293,12 @@ Visual: borda laranja. Textarea editável (readOnly quando `_commented`). Export
 
 | Tipo | data fields | Exporta | terminal | supportsLabel |
 |---|---|---|---|---|
-| `gosub` | context, extension, priority, params[] | `Gosub(ctx,ext,pri(args))` | — | sim |
+| `gosub` | context, extension, priority, params[] | `Gosub(ctx,ext,pri[(args)])` — sem parênteses quando sem args | — | sim |
 | `return` | value | `Return([value])` | **sim** | — |
 | `hangup` | causeCode | `Hangup([cause])` | **sim** | — |
 | `gotoif` | expression, trueDestination, falseDestination | `GotoIf($[expr]?true:false)` | — | — |
 | `set` | assignment | `Set(VAR=valor)` | — | sim |
-| `agi` | script, params[] | `Agi(${AGI_PATH}/script[,params])` | — | sim |
+| `agi` | script, params[] | `AGI(${AGI_PATH}/script[,params])` — **AGI** em maiúsculas | — | sim |
 | `macro` | name, params[] | `Macro(name[,params])` | — | sim |
 | `execif` | expression, action | `ExecIf($[expr]?action)` | — | — |
 | `execiftime` | hours, days, monthdays, months, action | `ExecIfTime(t,d,md,m?action)` | — | — |
@@ -412,6 +412,42 @@ Geração linear: Config → TimeNodes → rootMenu, depois BFS de menus por DTM
 
 ---
 
+### 5.4 Sintaxe Asterisk validada — referência rápida
+
+Funções validadas contra docs.asterisk.org (auditoría 2026-05):
+
+| Função | Saída do compilador | Observação |
+|---|---|---|
+| `Answer` | `Answer()` | |
+| `Hangup` | `Hangup()` ou `Hangup(causecode)` | Parênteses sempre presentes |
+| `Wait` | `Wait(n)` | |
+| `WaitExten` | `WaitExten(n)` | |
+| `Noop` | `Noop(text)` | |
+| `Set` | `Set(VAR=value)` | `Set(__VAR=value)` para vars herdadas; `Set(CHANNEL(language)=pt_BR)` válido |
+| `AGI` | `AGI(${AGI_PATH}/script[,args])` | **AGI** em maiúsculas (corrigido de `Agi`) |
+| `Macro` | `Macro(nome[,p1,p2,...])` | |
+| `Gosub` | `Gosub(ctx,ext,pri)` (sem args) ou `Gosub(ctx,ext,pri(arg1,...))` (com args) | Args em parênteses após prioridade — nunca após vírgula |
+| `Return` | `Return()` ou `Return(value)` | |
+| `Goto` | `Goto(context,extension,priority)` | Sempre 3-partes |
+| `GotoIf` | `GotoIf($[expr]?[true]:[false])` | Destino vazio = fall-through |
+| `GotoIfTime` | `GotoIfTime(times,weekdays,mdays,months?dest,s,1)` | Sem destino falso explícito — cai na linha seguinte |
+| `ExecIf` | `ExecIf($[expr]?App(args))` | |
+| `ExecIfTime` | `ExecIfTime(times,weekdays,mdays,months?App(args))` | |
+| `Dial` | `Dial(Tech/resource[,timeout[,options]])` | |
+| `Queue` | `Queue(queuename[,options])` | |
+| `Read` | `Read(variable,${SOUND_PATH}/audio,maxdigits,,timeout)` | Slot vazio = options ausente |
+| `Background` | `Background(${SOUND_PATH}/file)` | Sem extensão de arquivo |
+| `Playback` | `Playback(${SOUND_PATH}/file)` | Sem extensão de arquivo |
+| `SayDigits` | `SayDigits(digits)` | |
+| `SayNumber` | `SayNumber(number[,gender])` | |
+| `Verbose` | `Verbose(level,message)` | Level é emitido sempre; sem args = `Verbose(3,msg)` |
+| `MixMonitor` | `MixMonitor(filename.ext)` | |
+| `StopMonitor` | `StopMonitor()` | |
+| `ChanSpy` | `ChanSpy(SIP/target[,options])` | chanprefix pode ser `SIP` (todos) ou `SIP/ramal` (específico) |
+| `include =>` | `include => context-name` | Linha raw — NUNCA `exten => s,n,include(...)` |
+
+---
+
 ## 6. Parser de Importação (.conf)
 
 ### Entry Point
@@ -459,13 +495,13 @@ Varre todos os nós e cria edges visuais para ContextNodes referenciados por nom
 ### Layout Gerado
 
 ```
-Constantes:
+Constantes (confParser.js):
   CTX_MIN_WIDTH  = 520   largura mínima de um ContextNode
-  CTX_PAD_TOP    = 60    espaço topo (abaixo da faixa START)
-  CTX_PAD_BOTTOM = 40
-  CTX_PAD_H      = 40    padding horizontal dos filhos
-  NODE_H         = 100   altura estimada de nó filho
-  NODE_GAP       = 40    espaçamento vertical entre filhos
+  CTX_PAD_TOP    = 34    espaço topo = altura do header (sem barra START)
+  CTX_PAD_BOTTOM = 20    padding inferior
+  CTX_PAD_H      = 20    padding horizontal dos filhos
+  NODE_H         = 60    altura estimada de nó filho
+  NODE_GAP       = 0     sem espaçamento entre filhos (colados verticalmente)
   CTX_COL_GAP    = 120   gap horizontal entre ContextNodes
   CTX_ROW_Y      = 220   Y fixo de todos os ContextNodes
 ```

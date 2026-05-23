@@ -86,6 +86,8 @@ export function build(graph, layout) {
       data:     {
         contextName: ctx.name,
         childOrder:  [], // will be filled after children are created
+        exportOrder: ci + 1, // sequencial baseado na ordem do arquivo importado
+        isDraft:     false,
         ...(ctx.isMacro ? { isMacro: true } : {}),
       },
       style:    { width: ctxLayout.width, height: ctxLayout.height },
@@ -95,6 +97,11 @@ export function build(graph, layout) {
     if (ci === 0) firstCtxId = ctx.id;
 
     // Push children
+    // childWidth: largura calculada para os filhos = ctxWidth - 2×CTX_PAD_H
+    // Definida no style para que o ContextNode.jsx não precise recalcular no
+    // primeiro render (evita salto visual e sobreposição entre contextos).
+    const childW = ctxLayout.childWidth ?? (ctxLayout.width - 40);
+
     for (let ni = 0; ni < ctx.childNodes.length; ni++) {
       const childSpec = ctx.childNodes[ni];
       const pos       = ctxLayout.childPositions[ni] || { x: 20, y: 34 + ni * 60 };
@@ -111,6 +118,8 @@ export function build(graph, layout) {
         parentNode: ctx.id,
         extent:     'parent',
         draggable:  false,
+        // Largura explícita para que o filho preencha o contexto imediatamente
+        style:      { width: childW },
       };
 
       nodes.push(nodeObj);

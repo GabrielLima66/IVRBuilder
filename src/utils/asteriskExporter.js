@@ -14,84 +14,32 @@ function isSeqEdge(e, curNode) {
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// GRAPH TRAVERSAL — BFS a partir do nó Config para detectar contextos ativos
+// SELEÇÃO E ORDENAÇÃO DE CONTEXTOS
+//
+// A exportação não usa mais traversal de grafo (BFS anti-órfão).
+// Todos os ContextNodes são incluídos exceto os marcados com isDraft: true.
+// A ordem de exportação é definida pelo campo exportOrder (crescente).
+// Empates: ordem de aparição no array nodes (criação).
 // ─────────────────────────────────────────────────────────────────────────────
-function findActiveContextIds(nodes, edges) {
-  const config = nodes.find((n) => n.type === 'config');
-
-  // Sem config: inclui todos os contextos de nível superior como fallback
-  if (!config) {
-    return new Set(
-      nodes.filter((n) => n.type === 'context' && !n.parentNode).map((n) => n.id)
-    );
-  }
-
-  const reachable = new Set([config.id]);
-  const queue = [config.id];
-
-  while (queue.length > 0) {
-    const currentId = queue.shift();
-    const current = nodes.find((n) => n.id === currentId);
-
-    // Segue TODAS as edges de saída (sem filtro de handle)
-    for (const edge of edges) {
-      if (edge.source === currentId && !reachable.has(edge.target)) {
-        reachable.add(edge.target);
-        queue.push(edge.target);
-      }
-    }
-
-    // Propaga reachability para o parentNode (ex: config dentro de um contexto)
-    if (current && current.parentNode && !reachable.has(current.parentNode)) {
-      reachable.add(current.parentNode);
-      queue.push(current.parentNode);
-    }
-
-    // Enfileira filhos diretos de ContextNodes visitados: sem isso, RouteNode
-    // e outros filhos internos nunca seriam percorridos pelo BFS (não há edge
-    // explícita ContextNode→filho após importação — só sequential entre filhos)
-    if (current?.type === 'context') {
-      for (const child of nodes) {
-        if (child.parentNode === current.id && !reachable.has(child.id)) {
-          reachable.add(child.id);
-          queue.push(child.id);
-        }
-      }
-    }
-  }
-
-  const activeIds = new Set(
-    nodes
-      .filter((n) => n.type === 'context' && reachable.has(n.id))
-      .map((n) => n.id)
-  );
-
-  // FALLBACK: se o BFS não encontrou nenhum contexto ativo (config standalone,
-  // sem edges para dentro de contextos), inclui todos os contextos de nível
-  // superior. Garante output útil mesmo sem connections explícitas.
-  if (activeIds.size === 0) {
-    const topLevel = nodes.filter((n) => n.type === 'context' && !n.parentNode);
-    if (topLevel.length > 0) {
-      return new Set(topLevel.map((n) => n.id));
-    }
-  }
-
-  return activeIds;
+function getOrderedContexts(nodes) {
+  return nodes
+    .filter((n) => n.type === 'context' && !n.data?.isDraft)
+    .sort((a, b) => {
+      // exportOrder explícito tem prioridade; fallback para Infinity (vai ao final)
+      const ao = (a.data?.exportOrder != null && a.data.exportOrder !== '')
+        ? Number(a.data.exportOrder) : Infinity;
+      const bo = (b.data?.exportOrder != null && b.data.exportOrder !== '')
+        ? Number(b.data.exportOrder) : Infinity;
+      return ao - bo;
+      // Empate: mantém a ordem relativa do array (JS sort é estável em motores modernos)
+    });
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
 // MODO HIERÁRQUICO
 // ─────────────────────────────────────────────────────────────────────────────
 function generateDialplanFromContexts(nodes, edges, findNode, outEdges) {
-  const activeCtxIds = findActiveContextIds(nodes, edges);
-  const ctxNodesRaw = nodes.filter((n) => n.type === 'context' && activeCtxIds.has(n.id));
-
-  // Ordena pelo campo opcional `order` (crescente). Sem `order` → Infinity (vai por último).
-  const ctxNodes = [...ctxNodesRaw].sort((a, b) => {
-    const ao = a.data.order !== undefined && a.data.order !== '' ? Number(a.data.order) : Infinity;
-    const bo = b.data.order !== undefined && b.data.order !== '' ? Number(b.data.order) : Infinity;
-    return ao - bo;
-  });
+  const ctxNodes = getOrderedContexts(nodes);
 
   const lines = [];
   const emit = (l) => lines.push(l);

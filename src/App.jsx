@@ -27,6 +27,7 @@ import { importConf } from './utils/conf/confImporter';
 import { useAlignmentGuides } from './hooks/useAlignmentGuides';
 import AlignmentGuides from './components/canvas/AlignmentGuides';
 import ContextOrderOverlay from './components/canvas/ContextOrderOverlay';
+import ExportOrderPanel from './components/canvas/ExportOrderPanel';
 
 // Ambos os tipos usam EdgeWithWaypoints:
 // 'floating' — floating handles + offset elástico + desvio automático de obstáculos
@@ -108,6 +109,7 @@ function Canvas({ initialFlow, projectName, projectCreatedAt, currentProjectId, 
   }), [activeEdgeIds, activeNodeIds]);
 
   const [showExport,      setShowExport]      = useState(false);
+  const [showOrderPanel,  setShowOrderPanel]  = useState(false);
   const [exportText,      setExportText]      = useState('');
   // Modo de roteamento das edges: 'free' | 'grid'
   const [edgeMode,        setEdgeMode]        = useState('free');
@@ -346,6 +348,14 @@ function Canvas({ initialFlow, projectName, projectCreatedAt, currentProjectId, 
 
     const newNode = buildNode(type, position);
 
+    // Atribui exportOrder automático para novos ContextNodes (maior existente + 1)
+    if (type === 'context') {
+      const maxOrder = nodes
+        .filter((n) => n.type === 'context')
+        .reduce((max, n) => Math.max(max, n.data?.exportOrder ?? 0), 0);
+      newNode.data = { ...newNode.data, exportOrder: maxOrder + 1 };
+    }
+
     if (type !== 'context') {
       const parent = findContextAt(position, nodes);
       if (parent) {
@@ -504,6 +514,13 @@ function Canvas({ initialFlow, projectName, projectCreatedAt, currentProjectId, 
   // ── Atualização de dados e estilo ─────────────────────────────────────────
   const updateNodeData = useCallback((id, data) => {
     setNodes((ns) => ns.map((n) => (n.id === id ? { ...n, data } : n)));
+  }, [setNodes]);
+
+  // Atualiza campos parciais do data de um nó (usado pelo ExportOrderPanel)
+  const patchNodeData = useCallback((id, dataPatch) => {
+    setNodes((ns) =>
+      ns.map((n) => (n.id === id ? { ...n, data: { ...n.data, ...dataPatch } } : n))
+    );
   }, [setNodes]);
 
   const patchNodeStyle = useCallback((id, stylePatch) => {
@@ -785,6 +802,22 @@ function Canvas({ initialFlow, projectName, projectCreatedAt, currentProjectId, 
             p/ excluir
           </span>
           <span style={{ color: 'var(--line)' }}>│</span>
+          {/* Painel de ordem de exportação */}
+          <button
+            onClick={() => setShowOrderPanel((v) => !v)}
+            title="Gerenciar ordem de exportação dos contextos"
+            style={{
+              background: showOrderPanel ? 'rgba(0,255,65,0.08)' : 'transparent',
+              border: `1px solid ${showOrderPanel ? 'var(--neon)' : 'var(--line)'}`,
+              color: showOrderPanel ? 'var(--neon)' : 'var(--neon-dim)',
+              fontFamily: 'inherit', fontSize: 9, letterSpacing: 1,
+              padding: '1px 7px', cursor: 'pointer', borderRadius: 2,
+              transition: 'all 0.15s',
+            }}
+          >
+            ⊞ ORDEM
+          </button>
+          <span style={{ color: 'var(--line)' }}>│</span>
           {/* Toggle de modo de roteamento: LIVRE ↔ GRADE */}
           <button
             onClick={() => setEdgeMode((m) => (m === 'free' ? 'grid' : 'free'))}
@@ -866,6 +899,15 @@ function Canvas({ initialFlow, projectName, projectCreatedAt, currentProjectId, 
           onMoveTo={onMoveTo}
           onDragReorder={onDragReorder}
         />
+
+        {/* Painel de ordem de exportação dos contextos */}
+        {showOrderPanel && (
+          <ExportOrderPanel
+            nodes={nodes}
+            onClose={() => setShowOrderPanel(false)}
+            onUpdateNode={patchNodeData}
+          />
+        )}
 
         {/* Botão de exportação flutuante */}
         <button

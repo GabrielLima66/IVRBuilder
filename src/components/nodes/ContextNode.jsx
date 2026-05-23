@@ -4,61 +4,87 @@ import { FolderTree } from 'lucide-react';
 import { cls } from '../../utils/common';
 import { applyContextRename } from '../../utils/renamePropagator';
 import { useActiveSelection } from '../../contexts/ActiveSelectionContext';
+import { CTX_CHILD_GAP } from '../../utils/contextDimensions';
 
 // Constantes de layout — fonte de verdade compartilhada com ContextOrderOverlay
-export const CTX_HEADER_H  = 34;  // px — altura do cabeçalho (padding 6px*2 + ícone + borda)
+export const CTX_HEADER_H  = 34;  // px — altura do cabeçalho
 export const CTX_PAD_H     = 20;  // px — padding esquerdo dos filhos
 export const CTX_PAD_BOTTOM = 20; // px — padding inferior
 export const CTX_MIN_W     = 320; // px — largura mínima do contexto
+export { CTX_CHILD_GAP };         // re-exportado de contextDimensions
+
+// ── Categorias de nó para separadores visuais ─────────────────────────────────
+const NODE_CATEGORY = {
+  set: 'config', noop: 'config', answer: 'config', macro: 'config', config: 'config',
+  playback: 'audio', background: 'audio', wait: 'audio', waitexten: 'audio',
+  time: 'logic', gotoif: 'logic', gosub: 'logic', return: 'logic',
+  execif: 'logic', execiftime: 'logic', verbose: 'logic',
+  agi: 'integration',
+  queue: 'destination', route: 'destination', dial: 'destination', hangup: 'destination',
+  mixmonitor: 'monitor', stopmonitor: 'monitor', chanspy: 'monitor',
+  read: 'data', saydigits: 'data', saynumber: 'data',
+  menu: 'menu',
+  raw: 'special', commented: 'special',
+};
+const getNodeCategory = (type) => NODE_CATEGORY[type] || 'other';
 
 const ContextNode = memo(({ id, data, selected }) => {
   const { setNodes } = useReactFlow();
 
   const childOrder = useMemo(() => data.childOrder || [], [data.childOrder]);
+  const isDraft    = !!data.isDraft;
 
   const { activeNodeIds } = useActiveSelection();
   const isConnectedActive = activeNodeIds.has(id);
 
   const nameOnFocus   = useRef('');
-  const lastLayoutKey = useRef(null); // evita chamadas redundantes a setNodes
+  const lastLayoutKey = useRef(null);
 
-  // Detecta edge de entrada → badge "SEM CONEXÃO"
-  const hasIncoming = useStore((s) => s.edges.some((e) => e.target === id));
-  const isOrphan    = !hasIncoming && !data.isMacro;
-
-  // Dimensões medidas dos filhos (nodeInternals é atualizado pelo RF após DOM render)
+  // Dimensões e tipos dos filhos
   const childMeasures = useStore((s) => {
     const result = {};
     for (const cid of childOrder) {
       const n = s.nodeInternals.get(cid);
-      if (n) result[cid] = { w: n.width || 220, h: n.height || 60 };
+      if (n) result[cid] = { w: n.width || 220, h: n.height || 60, type: n.type };
     }
     return result;
   });
 
-  // Calcula layout: largura do contexto, altura e posição de cada filho
+  // Layout: largura, altura, posições e separadores de categoria
   const layout = useMemo(() => {
-    let maxW = CTX_MIN_W - 40; // mínimo da área interna
+    let maxW = CTX_MIN_W - 40;
     for (const cid of childOrder) {
       maxW = Math.max(maxW, childMeasures[cid]?.w || 220);
     }
-    const ctxW   = maxW + 40;   // 20px padding cada lado
-    const childW = ctxW - 40;   // largura forçada nos filhos
+    const ctxW   = maxW + 40;
+    const childW = ctxW - 40;
 
     let y = CTX_HEADER_H;
-    const positions = {};
-    for (const cid of childOrder) {
+    const positions  = {};
+    const separators = [];
+
+    for (let i = 0; i < childOrder.length; i++) {
+      const cid = childOrder[i];
+      if (i > 0) {
+        const gapCenterY = y + CTX_CHILD_GAP / 2;
+        const prevType   = childMeasures[childOrder[i - 1]]?.type;
+        const currType   = childMeasures[cid]?.type;
+        const showLine   = !!(prevType && currType &&
+          getNodeCategory(prevType) !== getNodeCategory(currType));
+        separators.push({ y: gapCenterY - 0.5, showLine });
+        y += CTX_CHILD_GAP;
+      }
       positions[cid] = { x: CTX_PAD_H, y };
       y += childMeasures[cid]?.h || 60;
     }
-    const ctxH = y + CTX_PAD_BOTTOM;
 
-    return { ctxW, ctxH, childW, positions };
+    const ctxH = y + CTX_PAD_BOTTOM;
+    return { ctxW, ctxH, childW, positions, separators };
   }, [childOrder, childMeasures]);
 
-  // Aplica posições dos filhos e dimensões do contexto via setNodes
+  // Aplica posições, larguras e opacidade (isDraft) dos filhos via setNodes
   useEffect(() => {
-    const layoutKey = `${layout.ctxW},${layout.ctxH},${
+    const layoutKey = `${layout.ctxW},${layout.ctxH},${isDraft ? '1' : '0'},${
       childOrder.map((cid) => `${cid}:${layout.positions[cid]?.x},${layout.positions[cid]?.y}`).join('|')
     }`;
     if (layoutKey === lastLayoutKey.current) return;
@@ -67,27 +93,27 @@ const ContextNode = memo(({ id, data, selected }) => {
     setNodes((ns) => {
       let changed = false;
       const updated = ns.map((n) => {
-        // Atualiza dimensão do próprio contexto
         if (n.id === id) {
           if (n.style?.width === layout.ctxW && n.style?.height === layout.ctxH) return n;
           changed = true;
           return { ...n, style: { ...n.style, width: layout.ctxW, height: layout.ctxH } };
         }
-        // Atualiza posição e largura de cada filho
         if (n.parentNode === id) {
           const pos = layout.positions[n.id];
           if (!pos) return n;
+          const targetOpacity = isDraft ? 0.45 : 1;
           const samePosW =
             n.position.x === pos.x &&
             n.position.y === pos.y &&
-            (n.style?.width === layout.childW || n.style?.width === undefined && layout.childW === 220);
+            n.style?.width === layout.childW &&
+            (n.style?.opacity ?? 1) === targetOpacity;
           if (samePosW) return n;
           changed = true;
           return {
             ...n,
             position: pos,
-            draggable: false, // filho gerenciado pelo contexto
-            style: { ...n.style, width: layout.childW },
+            draggable: false,
+            style: { ...n.style, width: layout.childW, opacity: targetOpacity },
           };
         }
         return n;
@@ -96,27 +122,22 @@ const ContextNode = memo(({ id, data, selected }) => {
     });
   }); // sem deps — ref guard evita loops
 
-  // Rename handlers
   const onRename = useCallback(
-    (v) => {
-      setNodes((ns) =>
-        ns.map((n) => (n.id === id ? { ...n, data: { ...n.data, contextName: v } } : n))
-      );
-    },
+    (v) => setNodes((ns) =>
+      ns.map((n) => (n.id === id ? { ...n, data: { ...n.data, contextName: v } } : n))
+    ),
     [id, setNodes]
   );
 
   const propagateRename = useCallback(
-    (oldName, newName) => {
-      setNodes((ns) => applyContextRename(ns, oldName, newName));
-    },
+    (oldName, newName) => setNodes((ns) => applyContextRename(ns, oldName, newName)),
     [setNodes]
   );
 
-  const accent    = data.isMacro ? '#00d4ff' : 'var(--neon)';
-  const accentDim = data.isMacro ? '#0099bb' : 'var(--neon-dim)';
+  const accent    = isDraft ? '#666666' : (data.isMacro ? '#00d4ff' : 'var(--neon)');
+  const accentDim = isDraft ? '#555555' : (data.isMacro ? '#0099bb' : 'var(--neon-dim)');
 
-  const accentActive = data.isMacro ? '#00d4ff' : 'var(--neon)';
+  const accentActive     = data.isMacro ? '#00d4ff' : 'var(--neon)';
   const accentActiveGlow = data.isMacro ? 'rgba(0,212,255,0.65)' : 'rgba(0,255,65,0.65)';
 
   return (
@@ -124,49 +145,59 @@ const ContextNode = memo(({ id, data, selected }) => {
       className={cls(
         'ctx-node',
         selected && 'selected',
-        isOrphan && 'ctx-node--orphan',
-        isConnectedActive && 'node-connected-active'
+        isDraft && 'ctx-node--draft',
+        isConnectedActive && !isDraft && 'node-connected-active'
       )}
       style={{
-        ...(data.isMacro ? { borderColor: '#00d4ff' } : {}),
-        ...(isConnectedActive && {
+        ...(isDraft
+          ? { borderColor: '#555', borderStyle: 'dashed', opacity: 0.85 }
+          : data.isMacro
+            ? { borderColor: '#00d4ff' }
+            : {}),
+        ...(isConnectedActive && !isDraft && {
           '--node-active-color': accentActive,
           '--node-active-glow': accentActiveGlow,
         }),
       }}
     >
-      {/* ctx-in: recebe edges externas de outros contextos */}
       <Handle
         type="target"
         position={Position.Top}
         id="ctx-in"
-        style={{
-          background: accent,
-          width: 14, height: 14,
-          top: -7,
-          border: '2px solid #000',
-        }}
+        style={{ background: accent, width: 14, height: 14, top: -7, border: '2px solid #000' }}
       />
 
-      {/* Header: nome do contexto */}
+      {/* Header */}
       <div
         className="ctx-header"
-        style={
-          data.isMacro
+        style={isDraft
+          ? { background: 'rgba(80,80,80,0.2)', borderBottomColor: '#555' }
+          : data.isMacro
             ? { background: 'rgba(0,212,255,0.15)', borderBottomColor: '#00d4ff' }
-            : {}
-        }
+            : {}}
       >
-        <FolderTree size={13} style={data.isMacro ? { color: '#00d4ff' } : {}} />
+        <FolderTree size={13} style={{ color: accent }} />
 
-        {data.isMacro && (
+        {/* Badge MACRO */}
+        {data.isMacro && !isDraft && (
           <span style={{
             fontSize: 8, letterSpacing: 1.5, color: '#00d4ff',
             border: '1px solid #00d4ff44', borderRadius: 2,
-            padding: '0 4px', lineHeight: '14px', flexShrink: 0,
-            opacity: 0.9,
+            padding: '0 4px', lineHeight: '14px', flexShrink: 0, opacity: 0.9,
           }}>
             MACRO
+          </span>
+        )}
+
+        {/* Badge RASCUNHO */}
+        {isDraft && (
+          <span style={{
+            fontSize: 8, letterSpacing: 1.5, color: '#888',
+            border: '1px solid #55555588', borderRadius: 2,
+            padding: '0 4px', lineHeight: '14px', flexShrink: 0,
+            fontFamily: 'inherit',
+          }}>
+            // RASCUNHO
           </span>
         )}
 
@@ -178,29 +209,36 @@ const ContextNode = memo(({ id, data, selected }) => {
           spellCheck={false}
           onFocus={() => { nameOnFocus.current = data.contextName || ''; }}
           onChange={(e) => onRename(e.target.value.replace(/\s+/g, '-'))}
-          onBlur={(e) => {
-            const newName = (e.target.value || '').replace(/\s+/g, '-');
-            propagateRename(nameOnFocus.current, newName);
-          }}
+          onBlur={(e) => propagateRename(nameOnFocus.current, (e.target.value || '').replace(/\s+/g, '-'))}
           onMouseDown={(e) => e.stopPropagation()}
           onClick={(e) => e.stopPropagation()}
-          style={data.isMacro ? { color: '#00d4ff' } : {}}
+          style={{
+            color: isDraft ? '#888' : data.isMacro ? '#00d4ff' : undefined,
+            textDecoration: isDraft ? 'line-through' : 'none',
+          }}
         />
         <span style={{ color: accentDim, fontSize: 11, letterSpacing: 1 }}>]</span>
-
-        {isOrphan && (
-          <span
-            className="ctx-orphan-badge"
-            data-tooltip="Este contexto não está conectado ao fluxo principal e não será exportado"
-          >
-            SEM CONEXÃO
-          </span>
-        )}
       </div>
 
-      {/* Hint quando não há filhos */}
+      {/* Hint quando vazio */}
       {childOrder.length === 0 && (
         <div className="ctx-body-hint">// ARRASTE NÓS AQUI DENTRO //</div>
+      )}
+
+      {/* Separadores de categoria entre nós filhos */}
+      {layout.separators.map((sep, idx) =>
+        sep.showLine ? (
+          <div
+            key={idx}
+            aria-hidden="true"
+            style={{
+              position: 'absolute', left: CTX_PAD_H,
+              top: sep.y, width: `calc(100% - ${CTX_PAD_H * 2}px)`,
+              height: 1, background: isDraft ? '#555' : '#00ff41',
+              opacity: 0.25, pointerEvents: 'none', borderRadius: 0.5,
+            }}
+          />
+        ) : null
       )}
     </div>
   );

@@ -49,7 +49,8 @@ src/
 │   └── nodeTags.js           mapa de tags semânticas por tipo (alimenta busca da sidebar)
 ├── contexts/
 │   ├── EdgeModeContext.js    contexto React: 'free'|'grid', GRID_SIZE=20, snapToGrid()
-│   └── ActiveSelectionContext.js  contexto de seleção visual: activeEdgeIds + activeNodeIds
+│   ├── ActiveSelectionContext.js  contexto de seleção visual: activeEdgeIds + activeNodeIds
+│   └── ThemeContext.js       contexto de tema ativo ('matrix' | 'orpen') + hook useThemeContext()
 ├── hooks/
 │   └── useAlignmentGuides.js smart guides Figma-style + snap ao soltar
 ├── screens/
@@ -63,9 +64,49 @@ src/
     ├── common.js             uid(), cls(), slugify(), DEFAULT_DIGITS
     ├── confParser.js         parseConfFile() — converte .conf Asterisk em nós+edges
     ├── edgeUtils.js          getEdgeParams(), getEdgeParamsDirected(), isSemanticHandle()
+    ├── nodeColors.js         resolveNodeColor(color, theme) + COLOR_REMAP — remapeia cores colidentes por tema
     ├── renamePropagator.js   applyContextRename() — cascata de rename em time/route/gosub
     └── timeUtils.js          formatDayRange(), buildTimeExport()
 ```
+
+## Sistema de Temas
+
+O editor suporta dois temas alterados em runtime via `data-theme` no `<html>`:
+
+| Tema | `--neon` | Identidade |
+|---|---|---|
+| `matrix` (padrão) | `#00ff41` | verde neon sobre preto terminal |
+| `orpen` | `#c084fc` | roxo sobre preto profundo — identidade da marca |
+
+### Aplicação do tema
+
+- **`data-theme`** no elemento `<html>` seleciona o bloco de variáveis CSS correto em `index.css`.
+- **`ThemeContext`** (`src/contexts/ThemeContext.js`) fornece o valor `'matrix' | 'orpen'` para componentes React via `useThemeContext()`.
+- **`color-scheme: dark`** declarado em ambos os temas para que controles nativos do browser (scrollbars, inputs) usem a versão dark.
+- O toggle de tema fica no App; o Canvas envolve filhos com `<ThemeContext.Provider value={theme}>`.
+
+### Cores de acento por tema (`resolveNodeColor`)
+
+Alguns nós de ação têm cores que colidem com `--neon` em determinado tema — ficam invisíveis sobre o chrome:
+
+| Cor base | Matrix → | Orpen → |
+|---|---|---|
+| `#00ff41` (Answer, Wait, Playback, BG, WaitExten) | `#2dd4bf` (teal) | inalterada |
+| `#a78bfa` (Set, AGI, Macro, ExecIf, ExecIfTime) | inalterada | `#f472b6` (pink) |
+
+Fonte: `COLOR_REMAP` em `src/utils/nodeColors.js`.
+
+Sempre que um componente exibir a cor de acento de um nó (ícone na palette, glow ativo, handles), usar:
+```js
+import { resolveNodeColor } from '../../utils/nodeColors';
+import { useThemeContext } from '../../contexts/ThemeContext';
+const theme = useThemeContext();
+const color = resolveNodeColor(item.accent, theme);
+```
+
+### Regra de cores — não usar valores hardcoded
+
+**Nunca** escrever `#00ff41` ou `#c084fc` em JSX/CSS que precise funcionar em ambos os temas. Usar sempre `var(--neon)` para a cor primária. Para cores de acento de nós, passar por `resolveNodeColor()`.
 
 ## Regras críticas — não violar
 
@@ -114,6 +155,17 @@ src/
     - As animações (`edge-glow-pulse`, `node-border-pulse`) são CSS `@keyframes` (GPU) — não usar `setInterval` em JS.  
     - `EdgeWithWaypoints` aplica `computedStyle` com `animation` inline referenciando os keyframes do CSS.  
     - Todos os componentes de nó leem `useActiveSelection()` e aplicam `.node-connected-active` + CSS custom properties `--node-active-color` e `--node-active-glow` na cor de acento do tipo de nó.
+
+20. **Cores — nunca hardcoded no JSX de componentes** — usar `var(--neon)` para a cor primária e `resolveNodeColor(baseColor, theme)` para cores de acento de nós. Valores literais `#00ff41` / `#c084fc` em handles, borders e glows quebram o tema oposto. Exceção: constantes de acento tipadas em `actionMeta.js` e `buildNode.js` (usadas apenas como input de `resolveNodeColor`, nunca renderizadas diretamente).
+
+21. **`prefers-reduced-motion` — não contornar** — `index.css` já inclui `@media (prefers-reduced-motion: reduce)` que desativa todas as animações e transições globalmente com `!important`. Nunca usar `animation` ou `transition` com `!important` inline em JS que anule isso. Animações de `@keyframes` referenciadas via `animation` inline no `style` prop do React *são* afetadas pelo media query.
+
+22. **Acessibilidade mínima obrigatória** — qualquer elemento interativo deve ter:
+    - Botões reais `<button type="button">` (não `<div onClick>`).
+    - `aria-label` descritivo em botões sem texto legível (fechar modal, limpar busca, deletar projeto).
+    - `aria-expanded={bool}` em toggles que colapsam/expandem seções.
+    - `role="alert" aria-live="polite"` em mensagens de erro dinâmicas.
+    - Inputs de formulário com `name` e `autoComplete` adequados.
 
 ## Asterisk — conceitos mínimos
 

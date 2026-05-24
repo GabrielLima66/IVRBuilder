@@ -30,37 +30,95 @@
 
 ## 2. Design System / Identidade Visual
 
-### CSS Custom Properties (`:root` em `src/index.css`)
+### Sistema de Temas
+
+O editor suporta dois temas trocados em runtime via atributo `data-theme` no `<html>`:
+
+| Tema | Seletor CSS | `--neon` | Identidade |
+|---|---|---|---|
+| **Matrix** (padrão) | `:root, [data-theme="matrix"]` | `#00ff41` | verde neon sobre preto terminal |
+| **Orpen** | `[data-theme="orpen"]` | `#c084fc` | roxo sobre preto profundo — identidade da marca |
+
+Ambos os temas declaram `color-scheme: dark` para que controles nativos do browser (scrollbars, inputs de sistema) usem a versão dark.
+
+O tema é provido ao React via `ThemeContext` (`src/contexts/ThemeContext.js`):
+```js
+export const ThemeContext = createContext('matrix');
+export const useThemeContext = () => useContext(ThemeContext);
+```
+O `App` alterna o atributo no `<html>` e envolve o Canvas com `<ThemeContext.Provider value={theme}>`.
+
+### CSS Custom Properties (`src/index.css`)
+
+Todas as propriedades abaixo existem em **ambos os temas** com valores ajustados:
 
 ```css
---neon:    #00ff41   /* verde neon — cor primária */
---neon-dim:#00b32d   /* verde escurecido para labels e bordas */
---bg:      #0d0d0d   /* fundo do canvas */
---panel:   #131313   /* fundo dos painéis laterais */
---panel-2: #1a1a1a   /* fundo de controles RF (minimap, etc.) */
---line:    #1f3a23   /* bordas e separadores */
+/* Cor principal */
+--neon             /* Matrix: #00ff41 | Orpen: #c084fc */
+--neon-dim         /* Matrix: #00b32d | Orpen: #9333ea */
+--neon-2           /* Matrix: #00cc35 | Orpen: #818cf8 */
+
+/* Superfícies */
+--bg               /* Matrix: #0d0d0d | Orpen: #09041a */
+--panel            /* Matrix: #131313 | Orpen: #100825 */
+--panel-2          /* Matrix: #1a1a1a | Orpen: #180e35 */
+--line             /* Matrix: #1f3a23 | Orpen: #2e1b58 */
+--status-bar-bg    /* fundo da status bar com opacidade */
+
+/* Glow (usar em box-shadow / filter) */
+--neon-glow        /* 0.4 alpha */
+--neon-glow-soft   /* 0.2 alpha — focus rings */
+--neon-glow-med    /* 0.5 alpha */
+--neon-glow-faint  /* 0.08 alpha — hover bg sidebar */
+--neon-glow-bg     /* 0.04 alpha — bg normal sidebar */
+--neon-glow-heavy  /* 0.6 alpha */
+--neon-glow-text   /* 0.7 alpha */
+
+/* Semântica */
+--neon-value       /* Matrix: #c7ffd5 | Orpen: #e9d5ff — valores .v nos nós */
+--hover-bg         /* fundo hover de itens de lista */
+--scanline-color   /* cor das scanlines do body::before */
+
+/* ContextNode */
+--ctx-bg           /* fundo do container */
+--ctx-header-bg    /* fundo do header */
+--ctx-bg-inset     /* inset interno */
+--ctx-shadow       /* sombra lateral */
+--ctx-selected-inset
+
+/* Node header gradient */
+--node-header-from
+--node-header-to
+
+/* Gradient de identidade */
+--neon-gradient    /* linear-gradient diagonal da cor principal */
 ```
 
 ### Fontes
 Stack monospace: `'JetBrains Mono', 'Fira Code', 'Courier New', ui-monospace, monospace`
 
 ### Efeitos Visuais
-- **Scanlines:** `body::before` com `repeating-linear-gradient` verde semi-transparente, `z-index:1000`, `pointer-events:none`
-- **Neon glow:** `box-shadow` nos botões hover
+- **Scanlines:** `body::before` com `repeating-linear-gradient` semi-transparente, `z-index:1000`, `pointer-events:none`
+- **Neon glow:** `box-shadow` nos botões hover e `filter: drop-shadow` nas edges ativas
 - **Blink cursor:** classe `.blink` com `animation: blink 1.2s steps(2) infinite`
 - **Orphan pulse:** `.ctx-node--orphan:not(.selected)` — borda laranja pulsante em ContextNodes sem conexão de entrada
+- **Reduced motion:** `@media (prefers-reduced-motion: reduce)` no final de `index.css` — zera `animation-duration`, `animation-iteration-count` e `transition-duration` globalmente com `!important`
 
 ### Cores de Acento por Categoria
 
-| Cor | Nós/contexto |
-|---|---|
-| `#00ff41` | config, menu, context, answer, wait, playback, background, waitexten |
-| `#ffcc00` | time (handle true, edge amarela), read, saydigits, saynumber |
-| `#00d4ff` | gosub, return, gotoif, route-contexto, ContextNode macro |
-| `#a78bfa` | set, agi, macro, execif, execiftime, route-macro |
-| `#ff8c00` | mixmonitor, stopmonitor, chanspy, dial, route-fila |
-| `#ff5050` | hangup, badge "DESATIVADO" |
-| `#888888` | noop, verbose |
+Valores base em `actionMeta.js` e `buildNode.js`. Renderizar sempre via `resolveNodeColor(baseColor, theme)`:
+
+| Cor base | Nós/contexto | Matrix resolve | Orpen resolve |
+|---|---|---|---|
+| `#00ff41` | config, menu, context, answer, wait, playback, background, waitexten | `#2dd4bf` (teal) | `#00ff41` |
+| `#ffcc00` | time, read, saydigits, saynumber | inalterada | inalterada |
+| `#00d4ff` | gosub, return, gotoif, route-contexto, ContextNode macro | inalterada | inalterada |
+| `#a78bfa` | set, agi, macro, execif, execiftime, route-macro | inalterada | `#f472b6` (pink) |
+| `#ff8c00` | mixmonitor, stopmonitor, chanspy, dial, route-fila | inalterada | inalterada |
+| `#ff5050` | hangup, badge "DESATIVADO" | inalterada | inalterada |
+| `#888888` | noop, verbose | inalterada | inalterada |
+
+`resolveNodeColor` está em `src/utils/nodeColors.js`. A lógica interna usa `COLOR_REMAP[theme][baseColor]` com fallback para a cor original.
 
 ### Classes CSS Estruturais dos Nós
 
@@ -126,7 +184,8 @@ Construtor URA/
     │   └── nodeTags.js         ← Mapa de tags semânticas por tipo (para busca na Sidebar)
     ├── contexts/
     │   ├── EdgeModeContext.js          ← Context React: 'free'|'grid' + GRID_SIZE=20 + snapToGrid()
-    │   └── ActiveSelectionContext.js   ← Context de seleção visual: activeEdgeIds + activeNodeIds (Set)
+    │   ├── ActiveSelectionContext.js   ← Context de seleção visual: activeEdgeIds + activeNodeIds (Set)
+    │   └── ThemeContext.js             ← Context de tema: 'matrix'|'orpen' + hook useThemeContext()
     ├── hooks/
     │   └── useAlignmentGuides.js ← Smart guides Figma-style + snap ao soltar
     ├── screens/
@@ -140,6 +199,7 @@ Construtor URA/
         ├── common.js           ← uid(), cls(), slugify(), DEFAULT_DIGITS
         ├── confParser.js       ← parseConfFile(): converte .conf Asterisk em nós+edges React Flow
         ├── edgeUtils.js        ← getEdgeParams(), getEdgeParamsDirected(), isSemanticHandle(), computeObstacleAvoidance()
+        ├── nodeColors.js       ← resolveNodeColor(baseColor, theme): remapeia cores colidentes por tema; COLOR_REMAP dict
         ├── renamePropagator.js ← applyContextRename(): cascata de rename em time/route/gosub
         └── timeUtils.js        ← formatDayRange(), formatTimeRange(), buildTimeExport(), getMaxDay()
 ```
@@ -1002,7 +1062,35 @@ App
 
 ---
 
-## 13. Armadilhas e Decisões Conhecidas
+## 13. Padrões de Acessibilidade
+
+### Elementos interativos
+- **Botões:** sempre `<button type="button">` — nunca `<div onClick>` ou `<span onClick>`. Garante foco por teclado e semântica correta para leitores de tela.
+- `aria-label` obrigatório em botões sem texto legível:
+  - Fechar modal → `aria-label="Fechar"`
+  - Limpar busca → `aria-label="Limpar pesquisa"`
+  - Excluir projeto → `aria-label={\`Excluir projeto ${project.name}\`}`
+  - Expandir/colapsar tudo → `aria-label={allExpanded ? 'Colapsar tudo' : 'Expandir tudo'}`
+- **Toggles de seção:** `aria-expanded={!isCollapsed}` no `<button>` de header da categoria da Sidebar.
+
+### Mensagens de erro dinâmicas
+Erros exibidos após interação (ex: importação de .JSON inválido) devem usar:
+```jsx
+<div role="alert" aria-live="polite">Mensagem de erro</div>
+```
+Isso permite que leitores de tela anunciem o erro sem redirecionar o foco.
+
+### Inputs de formulário
+- `name` attribute em todos os campos de projeto (ex: `name="project-name"`)
+- `autoComplete="off"` em campos que não devem ser preenchidos pelo browser (nomes de projeto, slugs)
+
+### Tema e controles nativos
+- `color-scheme: dark` nos dois temas garante scrollbars, inputs de data/cor e outros controles nativos do browser com aparência dark — sem necessidade de sobrescrever via CSS.
+
+### Movimento reduzido
+`@media (prefers-reduced-motion: reduce)` no final de `index.css` garante que usuários que optaram por reduzir movimento não recebam animações. Não contornar com `animation: nome !important` inline no JS.
+
+## 14. Armadilhas e Decisões Conhecidas
 
 - **`sourceHandleId` vs `sourceHandle` em edge components** — React Flow v11 passa o handle como `sourceHandleId` (e `targetHandleId`) para componentes de edge customizados. Usar `sourceHandle` retorna sempre `undefined`. `EdgeWithWaypoints` usa `sourceHandleId` para a detecção DTMF.
 - **`onEdgeMouseDown` foi REMOVIDO do ReactFlow** — quebrava a conexão de handles DTMF (`d-*`). O drag do midpoint é feito via `EdgeLabelRenderer` + listeners globais no `document`.

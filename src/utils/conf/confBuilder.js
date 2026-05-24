@@ -11,6 +11,7 @@
  */
 
 import { uid } from '../common.js';
+import { generateUniqueContextName } from '../contextUtils.js';
 
 // ── Constantes de aparência de edges ─────────────────────────────────────────
 
@@ -46,6 +47,22 @@ export function build(graph, layout) {
   /** @type {Object[]} */
   const edges = [];
 
+  // ── Deduplicate context names ─────────────────────────────────────────────
+  // Collect and rename any duplicate contextName before building nodes.
+  // Renames are logged for display in the import modal.
+  /** @type {{ from: string, to: string }[]} */
+  const contextNameRenames = [];
+  const seenNames = [];
+  const deduplicatedContexts = contexts.map((ctx) => {
+    const unique = generateUniqueContextName(ctx.name, seenNames);
+    seenNames.push(unique);
+    if (unique !== ctx.name) {
+      contextNameRenames.push({ from: ctx.name, to: unique });
+      return { ...ctx, name: unique };
+    }
+    return ctx;
+  });
+
   // ── GlobalConfigNode ──────────────────────────────────────────────────────
   const configId = `n_${uid()}`;
   nodes.push({
@@ -69,8 +86,8 @@ export function build(graph, layout) {
   const ctxIndex = {};
   let firstCtxId = null;
 
-  for (let ci = 0; ci < contexts.length; ci++) {
-    const ctx           = contexts[ci];
+  for (let ci = 0; ci < deduplicatedContexts.length; ci++) {
+    const ctx           = deduplicatedContexts[ci];
     const ctxLayout     = contextLayouts[ci];
     const childNodeIds  = [];
     /** sequential ids (excludes macro-for-i/t nodes which are off the main chain) */
@@ -234,5 +251,5 @@ export function build(graph, layout) {
     });
   }
 
-  return { nodes, edges };
+  return { nodes, edges, contextNameRenames };
 }

@@ -18,6 +18,7 @@ import PropertiesPanel from './components/layout/PropertiesPanel';
 import { buildNode } from './utils/buildNode';
 import { generateDialplan } from './utils/asteriskExporter';
 import { ACTION_META } from './utils/actionMeta';
+import { generateUniqueContextName } from './utils/contextUtils';
 import { applyContextRename } from './utils/renamePropagator';
 import { isSemanticHandle } from './utils/edgeUtils';
 import { EdgeModeContext } from './contexts/EdgeModeContext';
@@ -355,12 +356,13 @@ function Canvas({ initialFlow, projectName, projectCreatedAt, currentProjectId, 
 
     const newNode = buildNode(type, position);
 
-    // Atribui exportOrder automático para novos ContextNodes (maior existente + 1)
+    // Atribui exportOrder automático e nome único para novos ContextNodes
     if (type === 'context') {
-      const maxOrder = nodes
-        .filter((n) => n.type === 'context')
-        .reduce((max, n) => Math.max(max, n.data?.exportOrder ?? 0), 0);
-      newNode.data = { ...newNode.data, exportOrder: maxOrder + 1 };
+      const ctxNodes = nodes.filter((n) => n.type === 'context');
+      const maxOrder = ctxNodes.reduce((max, n) => Math.max(max, n.data?.exportOrder ?? 0), 0);
+      const existingNames = ctxNodes.map((n) => n.data?.contextName || '');
+      const uniqueName = generateUniqueContextName(newNode.data.contextName, existingNames);
+      newNode.data = { ...newNode.data, exportOrder: maxOrder + 1, contextName: uniqueName };
     }
 
     if (type !== 'context') {

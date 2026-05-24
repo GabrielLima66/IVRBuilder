@@ -169,6 +169,22 @@ function ConfImportModal({ data, onClose, onConfirm }) {
           </div>
         )}
 
+        {(stats.contextNameRenames || []).length > 0 && (
+          <div style={{ marginBottom: 12 }}>
+            <div style={{ fontSize: 10, color: '#ff8c00', letterSpacing: 1, marginBottom: 6 }}>
+              NOMES DUPLICADOS RENOMEADOS ({stats.contextNameRenames.length})
+            </div>
+            <div style={{ fontSize: 9, color: 'var(--neon-dim)', marginBottom: 6, opacity: 0.7 }}>
+              // contextos com nome duplicado foram renomeados automaticamente
+            </div>
+            {stats.contextNameRenames.map((r, i) => (
+              <div key={i} style={{ fontSize: 9, color: '#ff8c00', opacity: 0.85, padding: '2px 0', wordBreak: 'break-all' }}>
+                {r.from} → <span style={{ color: '#fff' }}>{r.to}</span>
+              </div>
+            ))}
+          </div>
+        )}
+
         {(stats.unresolvedRefs || []).length > 0 && (
           <div style={{ marginBottom: 12 }}>
             <div style={{ fontSize: 10, color: '#00d4ff', letterSpacing: 1, marginBottom: 6 }}>

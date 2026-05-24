@@ -1,10 +1,11 @@
-import React, { memo, useCallback, useRef, useEffect, useMemo } from 'react';
+import React, { memo, useState, useCallback, useRef, useEffect, useMemo } from 'react';
 import { Handle, Position, useReactFlow, useStore } from 'reactflow';
 import { FolderTree } from 'lucide-react';
 import { cls } from '../../utils/common';
 import { applyContextRename } from '../../utils/renamePropagator';
 import { useActiveSelection } from '../../contexts/ActiveSelectionContext';
 import { CTX_CHILD_GAP } from '../../utils/contextDimensions';
+import { isContextNameDuplicate } from '../../utils/contextUtils';
 
 // Constantes de layout — fonte de verdade compartilhada com ContextOrderOverlay
 export const CTX_HEADER_H  = 34;  // px — altura do cabeçalho
@@ -29,7 +30,7 @@ const NODE_CATEGORY = {
 const getNodeCategory = (type) => NODE_CATEGORY[type] || 'other';
 
 const ContextNode = memo(({ id, data, selected }) => {
-  const { setNodes } = useReactFlow();
+  const { setNodes, getNodes } = useReactFlow();
 
   const childOrder = useMemo(() => data.childOrder || [], [data.childOrder]);
   const isDraft    = !!data.isDraft;
@@ -39,6 +40,9 @@ const ContextNode = memo(({ id, data, selected }) => {
 
   const nameOnFocus   = useRef('');
   const lastLayoutKey = useRef(null);
+
+  // Duplicate-name detection for the inline rename input
+  const [isDup, setIsDup] = useState(false);
 
   // Dimensões e tipos dos filhos
   const childMeasures = useStore((s) => {
@@ -123,15 +127,23 @@ const ContextNode = memo(({ id, data, selected }) => {
   }); // sem deps — ref guard evita loops
 
   const onRename = useCallback(
-    (v) => setNodes((ns) =>
-      ns.map((n) => (n.id === id ? { ...n, data: { ...n.data, contextName: v } } : n))
-    ),
-    [id, setNodes]
+    (v) => {
+      const allNodes = getNodes();
+      const dup = isContextNameDuplicate(v, allNodes, id);
+      setIsDup(dup);
+      setNodes((ns) =>
+        ns.map((n) => (n.id === id ? { ...n, data: { ...n.data, contextName: v } } : n))
+      );
+    },
+    [id, setNodes, getNodes]
   );
 
   const propagateRename = useCallback(
-    (oldName, newName) => setNodes((ns) => applyContextRename(ns, oldName, newName)),
-    [setNodes]
+    (oldName, newName) => {
+      if (isDup) return; // Block propagation when name is duplicate
+      setNodes((ns) => applyContextRename(ns, oldName, newName));
+    },
+    [setNodes, isDup]
   );
 
   const accent    = isDraft ? '#666666' : (data.isMacro ? '#00d4ff' : 'var(--neon)');
@@ -207,18 +219,44 @@ const ContextNode = memo(({ id, data, selected }) => {
           value={data.contextName || ''}
           placeholder="nome-do-contexto"
           spellCheck={false}
-          onFocus={() => { nameOnFocus.current = data.contextName || ''; }}
+          onFocus={() => {
+            nameOnFocus.current = data.contextName || '';
+            setIsDup(false);
+          }}
           onChange={(e) => onRename(e.target.value.replace(/\s+/g, '-'))}
-          onBlur={(e) => propagateRename(nameOnFocus.current, (e.target.value || '').replace(/\s+/g, '-'))}
+          onBlur={(e) => {
+            propagateRename(nameOnFocus.current, (e.target.value || '').replace(/\s+/g, '-'));
+          }}
           onMouseDown={(e) => e.stopPropagation()}
           onClick={(e) => e.stopPropagation()}
           style={{
-            color: isDraft ? '#888' : data.isMacro ? '#00d4ff' : undefined,
+            color: isDup ? '#ff4444' : isDraft ? '#888' : data.isMacro ? '#00d4ff' : undefined,
             textDecoration: isDraft ? 'line-through' : 'none',
+            outline: isDup ? '1px solid #ff4444' : undefined,
           }}
         />
         <span style={{ color: accentDim, fontSize: 11, letterSpacing: 1 }}>]</span>
       </div>
+
+      {/* Error: duplicate name — rendered OUTSIDE the header so it overlays below it */}
+      {isDup && (
+        <div style={{
+          position: 'absolute',
+          top: 34, // CTX_HEADER_H
+          left: 0,
+          right: 0,
+          fontSize: 9,
+          color: '#ff4444',
+          background: 'rgba(20,0,0,0.85)',
+          letterSpacing: 0.5,
+          padding: '2px 10px',
+          pointerEvents: 'none',
+          zIndex: 10,
+          borderBottom: '1px solid #ff4444',
+        }}>
+          // nome já existe — escolha outro
+        </div>
+      )}
 
       {/* Hint quando vazio */}
       {childOrder.length === 0 && (

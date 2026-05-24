@@ -48,10 +48,19 @@ export function importConf(rawContent) {
   const layout = calculateLayout(graph);
 
   // ── Fase 5: Builder ────────────────────────────────────────────────────────
-  const flowState = build(graph, layout);
+  const { nodes, edges, contextNameRenames = [] } = build(graph, layout);
+  const flowState = { nodes, edges };
 
   // ── Round-trip validation ──────────────────────────────────────────────────
   const validation = roundTrip(flowState, rawContent);
+
+  const baseStats = graph.stats || {
+    contexts: rawContexts.length,
+    nodesByType: {},
+    commented: [],
+    raw: [],
+    unresolvedRefs: [],
+  };
 
   return {
     flowState,
@@ -60,13 +69,7 @@ export function importConf(rawContent) {
     tokens,
     rawContexts,
     suggestedName: graph.suggestedName || 'projeto-importado',
-    stats: graph.stats || {
-      contexts: rawContexts.length,
-      nodesByType: {},
-      commented: [],
-      raw: [],
-      unresolvedRefs: [],
-    },
+    stats: { ...baseStats, contextNameRenames },
   };
 }
 

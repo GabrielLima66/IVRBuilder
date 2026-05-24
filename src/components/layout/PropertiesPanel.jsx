@@ -1,10 +1,11 @@
-﻿import React, { memo, useRef } from 'react';
+﻿import React, { memo, useRef, useState } from 'react';
 import { ACTION_META } from '../../utils/actionMeta';
 import {
   formatDayRange, WEEKDAY_ORDER, MONTH_ORDER, getMaxDay, buildTimeExport,
 } from '../../utils/timeUtils';
 import { useModeContext } from '../../contexts/ModeContext';
 import { NODE_MODE_CONFIG, getFieldLabel, getNodeLabel } from '../../config/nodeModeConfig';
+import { isContextNameDuplicate } from '../../utils/contextUtils';
 
 // ─── Inputs estáveis (fora do componente pai para não recriar a cada render) ─
 
@@ -159,6 +160,7 @@ const MonthPicker = memo(function MonthPicker({ selected, onChange }) {
 export default function PropertiesPanel({ node, updateNodeData, deleteNode, toggleComment, patchNodeStyle, syncTrueContext, propagateContextRename, nodes = [] }) {
   // Armazena o nome do contexto no momento do foco (para detectar rename via painel)
   const ctxNameOnFocus = useRef('');
+  const [ctxNameDup, setCtxNameDup] = useState(false);
   const mode = useModeContext();
   const panelStyle = {
     width: 320, height: '100%',
@@ -240,21 +242,34 @@ export default function PropertiesPanel({ node, updateNodeData, deleteNode, togg
       {node.type === 'context' && (
         <>
           {/* contextName com propagação de rename silenciosa no onBlur */}
-          <div style={{ marginBottom: 10 }}>
+          <div style={{ marginBottom: ctxNameDup ? 4 : 10 }}>
             <label className="term-label">Nome do Contexto Asterisk</label>
             <input
               className="term-input"
               value={d.contextName || ''}
               placeholder="orpen-ivr-exemplo"
-              onFocus={() => { ctxNameOnFocus.current = d.contextName || ''; }}
-              onChange={(e) => set('contextName', e.target.value)}
+              onFocus={() => {
+                ctxNameOnFocus.current = d.contextName || '';
+                setCtxNameDup(false);
+              }}
+              onChange={(e) => {
+                const v = e.target.value;
+                set('contextName', v);
+                setCtxNameDup(isContextNameDuplicate(v, nodes, node.id));
+              }}
               onBlur={(e) => {
                 const newName = e.target.value || '';
-                if (propagateContextRename && ctxNameOnFocus.current !== newName) {
+                if (!ctxNameDup && propagateContextRename && ctxNameOnFocus.current !== newName) {
                   propagateContextRename(ctxNameOnFocus.current, newName);
                 }
               }}
+              style={ctxNameDup ? { borderColor: '#ff4444', color: '#ff4444' } : undefined}
             />
+            {ctxNameDup && (
+              <div style={{ fontSize: 9, color: '#ff4444', letterSpacing: 0.5, marginTop: 3, marginBottom: 6 }}>
+                // nome já existe — escolha outro
+              </div>
+            )}
           </div>
           <Field d={d} set={set} label="Ordem de exportação" k="order" type="number" placeholder="ex: 1, 2, 3..." />
           <div style={{ fontSize: 9, color: 'var(--neon-dim)', marginTop: -6, marginBottom: 10, lineHeight: 1.5 }}>

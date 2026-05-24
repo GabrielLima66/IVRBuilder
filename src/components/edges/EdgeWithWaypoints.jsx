@@ -94,13 +94,13 @@ const MidpointDragHandle = React.memo(function MidpointDragHandle({ x, y, zoom, 
         width:        hov || drag ? 18 : 12,
         height:       hov || drag ? 18 : 12,
         borderRadius: 3,
-        background:   '#0d0d0d',
-        border:       `1.5px solid ${hov || drag ? '#00ff41' : '#00b32d88'}`,
-        boxShadow:    hov || drag ? '0 0 8px #00ff4166' : 'none',
+        background:   'var(--bg)',
+        border:       `1.5px solid ${hov || drag ? 'var(--neon)' : 'var(--neon-dim)'}`,
+        boxShadow:    hov || drag ? '0 0 8px var(--neon-glow)' : 'none',
         display:      'flex', alignItems: 'center', justifyContent: 'center',
         fontSize:     9,
-        color:        hov || drag ? '#00ff41' : '#00b32d88',
-        opacity:      hov || drag ? 1 : 0.7,
+        color:        hov || drag ? 'var(--neon)' : 'var(--neon-dim)',
+        opacity:      hov || drag ? 1 : 0.65,
         transition:   'all .12s',
         userSelect:   'none',
       }}>
@@ -131,9 +131,15 @@ export default function EdgeWithWaypoints({
   const isActive      = activeEdgeIds.has(id);
   // Edge em repouso: tracejada, 25% opacidade.
   // Edge ativa: sólida, 100% opacidade, brilho pulsante.
-  const strokeColor   = style?.stroke || '#00ff41';
+  //
+  // Cores: se o stroke armazenado for o verde padrão (#00ff41) ou ausente,
+  // usa var(--neon) para suportar troca de tema sem re-criar edges.
+  const rawStroke       = style?.stroke;
+  const isDefaultStroke = !rawStroke || rawStroke === '#00ff41';
+  const strokeColor     = isDefaultStroke ? 'var(--neon)' : rawStroke;
   const computedStyle = {
     ...style,
+    stroke: strokeColor,          // garante que o path usa a cor correta do tema
     ...(isActive
       ? {
           // Ativo: sólido, glow pulsante via CSS @keyframes edge-glow-pulse

@@ -89,7 +89,7 @@ const RawNode = memo(({ id, data, selected }) => {
 
         {data._commented && (
           <div style={{ display: 'flex', gap: 5, marginTop: 6 }}>
-            <button onMouseDown={(e) => e.stopPropagation()} onClick={handleActivate} style={btnStyle('#00ff41')}>
+            <button onMouseDown={(e) => e.stopPropagation()} onClick={handleActivate} style={btnStyle('var(--neon)')}>
               ATIVAR
             </button>
             <button onMouseDown={(e) => e.stopPropagation()} onClick={handleExclude} style={btnStyle('#ff5050')}>

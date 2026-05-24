@@ -6,11 +6,14 @@ import React, { useState, useRef, useCallback } from 'react';
 
 // ── Utilitários ───────────────────────────────────────────────────────────────
 
+const DATE_FMT = new Intl.DateTimeFormat('pt-BR', {
+  day: '2-digit', month: '2-digit', year: 'numeric',
+  hour: '2-digit', minute: '2-digit',
+});
+
 function formatDate(iso) {
   if (!iso) return '—';
-  const d   = new Date(iso);
-  const pad = (n) => String(n).padStart(2, '0');
-  return `${pad(d.getDate())}/${pad(d.getMonth() + 1)}/${d.getFullYear()} ${pad(d.getHours())}:${pad(d.getMinutes())}`;
+  return DATE_FMT.format(new Date(iso));
 }
 
 const NAME_RE = /^[a-z0-9-]+$/;
@@ -23,7 +26,7 @@ function Modal({ title, onClose, children, maxWidth = 420 }) {
       <div className="modal" style={{ maxWidth, width: '92vw' }} onClick={(e) => e.stopPropagation()}>
         <div style={{ padding: '10px 14px', borderBottom: '1px solid var(--line)', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
           <div className="neon-text" style={{ letterSpacing: 2, fontSize: 12 }}>▌ {title}</div>
-          <button className="btn-neon btn-danger" style={{ padding: '4px 10px' }} onClick={onClose}>X</button>
+          <button className="btn-neon btn-danger" style={{ padding: '4px 10px' }} onClick={onClose} aria-label="Fechar">X</button>
         </div>
         {children}
       </div>
@@ -47,6 +50,7 @@ function CreateProjectModal({ onClose, onCreate }) {
         <div style={{ marginBottom: 18 }}>
           <label className="term-label">NOME DO PROJETO</label>
           <input className="term-input" value={name} placeholder="ex: orpen-ivr-suporte" autoFocus
+            name="project-name" autoComplete="off"
             style={{ borderColor: errorMsg ? '#ff5050' : undefined }}
             onChange={(e) => setName(e.target.value.toLowerCase())} />
           {errorMsg && <div style={{ fontSize: 9, color: '#ff5050', marginTop: 4 }}>⚠ {errorMsg}</div>}
@@ -131,21 +135,18 @@ function ConfImportModal({ data, onClose, onConfirm }) {
     <Modal title="IMPORTAR .CONF" onClose={onClose} maxWidth={600}>
       <div style={{ padding: '16px 20px', overflow: 'auto', maxHeight: '75vh' }}>
 
-        {/* ── SEÇÃO 1: MAPEAMENTO ───────────────────────────────────────────── */}
         <SectionHeader label="SEÇÃO 1 — MAPEAMENTO" />
 
-        {/* Resumo quantitativo */}
         <div style={{ marginBottom: 14, fontSize: 11, lineHeight: 2, color: 'var(--neon-dim)' }}>
           <div><span style={{ color: 'var(--neon)' }}>{stats.contexts || 0}</span> contexto(s) importado(s)</div>
           <div><span style={{ color: 'var(--neon)' }}>{totalNodes}</span> nó(s) criado(s)</div>
           {Object.entries(stats.nodesByType || {}).map(([t, n]) => (
             <div key={t} style={{ marginLeft: 12, fontSize: 10 }}>
-              {t}: <span style={{ color: '#c7ffd5' }}>{n}</span>
+              {t}: <span style={{ color: 'var(--neon-value)' }}>{n}</span>
             </div>
           ))}
         </div>
 
-        {/* Nós comentados */}
         {(stats.commented || []).length > 0 && (
           <div style={{ marginBottom: 12 }}>
             <div style={{ fontSize: 10, color: '#ffcc00', letterSpacing: 1, marginBottom: 6 }}>
@@ -157,7 +158,6 @@ function ConfImportModal({ data, onClose, onConfirm }) {
           </div>
         )}
 
-        {/* Nós raw / não reconhecidos */}
         {(stats.raw || []).length > 0 && (
           <div style={{ marginBottom: 12 }}>
             <div style={{ fontSize: 10, color: '#ff8c00', letterSpacing: 1, marginBottom: 6 }}>
@@ -169,7 +169,6 @@ function ConfImportModal({ data, onClose, onConfirm }) {
           </div>
         )}
 
-        {/* Referências externas não vinculadas */}
         {(stats.unresolvedRefs || []).length > 0 && (
           <div style={{ marginBottom: 12 }}>
             <div style={{ fontSize: 10, color: '#00d4ff', letterSpacing: 1, marginBottom: 6 }}>
@@ -186,7 +185,6 @@ function ConfImportModal({ data, onClose, onConfirm }) {
           </div>
         )}
 
-        {/* ── SEÇÃO 2: VALIDAÇÃO ROUND-TRIP ────────────────────────────────── */}
         {validation && (
           <>
             <SectionHeader label="SEÇÃO 2 — VALIDAÇÃO ROUND-TRIP" />
@@ -207,7 +205,7 @@ function ConfImportModal({ data, onClose, onConfirm }) {
                 <div style={{ fontSize: 10, color: '#ff5050', letterSpacing: 1, marginBottom: 6 }}>
                   LINHAS PERDIDAS ({validation.lost.length})
                 </div>
-                <div style={{ maxHeight: 120, overflow: 'auto', background: '#0d0d0d', padding: '6px 8px', borderRadius: 3, border: '1px solid var(--line)' }}>
+                <div style={{ maxHeight: 120, overflow: 'auto', background: 'var(--bg)', padding: '6px 8px', borderRadius: 3, border: '1px solid var(--line)' }}>
                   {validation.lost.map((l, i) => (
                     <div key={i} style={{ fontSize: 9, color: '#ff5050', opacity: 0.8, padding: '1px 0', wordBreak: 'break-all', fontFamily: 'inherit' }}>
                       - {l}
@@ -222,7 +220,7 @@ function ConfImportModal({ data, onClose, onConfirm }) {
                 <div style={{ fontSize: 10, color: '#a78bfa', letterSpacing: 1, marginBottom: 6 }}>
                   LINHAS ADICIONADAS PELO COMPILADOR ({validation.added.length})
                 </div>
-                <div style={{ maxHeight: 100, overflow: 'auto', background: '#0d0d0d', padding: '6px 8px', borderRadius: 3, border: '1px solid var(--line)' }}>
+                <div style={{ maxHeight: 100, overflow: 'auto', background: 'var(--bg)', padding: '6px 8px', borderRadius: 3, border: '1px solid var(--line)' }}>
                   {validation.added.map((l, i) => (
                     <div key={i} style={{ fontSize: 9, color: '#a78bfa', opacity: 0.8, padding: '1px 0', wordBreak: 'break-all', fontFamily: 'inherit' }}>
                       + {l}
@@ -240,10 +238,10 @@ function ConfImportModal({ data, onClose, onConfirm }) {
           </>
         )}
 
-        {/* ── Nome do projeto ───────────────────────────────────────────────── */}
         <div style={{ borderTop: '1px solid var(--line)', paddingTop: 14, marginTop: 16 }}>
           <label className="term-label">NOME DO PROJETO</label>
           <input className="term-input" value={name} placeholder="nome-do-projeto"
+            name="project-name" autoComplete="off"
             style={{ borderColor: !isValid ? '#ff5050' : undefined, marginBottom: 4 }}
             onChange={(e) => setName(e.target.value.toLowerCase())} />
           {!isValid && name.length > 0 && (
@@ -270,21 +268,19 @@ function ProjectCard({ project, onOpen, onExport, onDelete }) {
 
   return (
     <div
+      className="project-card"
       style={{
-        background: '#181818',
-        border: `1px solid ${hovered ? 'var(--neon)' : 'var(--neon-dim)'}`,
-        borderRadius: 4, padding: 16,
-        display: 'flex', flexDirection: 'column', gap: 10,
-        transition: 'border-color 0.15s, box-shadow 0.15s',
-        boxShadow: hovered ? '0 0 14px rgba(0,255,65,0.18)' : 'none',
+        boxShadow: hovered ? '0 4px 24px var(--neon-glow-soft), 0 0 0 1px var(--neon)' : 'none',
+        borderColor: hovered ? 'var(--neon)' : 'var(--neon-dim)',
+        transform: hovered ? 'translateY(-2px)' : 'translateY(0)',
       }}
       onMouseEnter={() => setHovered(true)}
       onMouseLeave={() => setHovered(false)}
     >
-      <div style={{ fontSize: 14, color: 'var(--neon)', letterSpacing: 1, wordBreak: 'break-all' }}>
+      <div style={{ fontSize: 14, color: 'var(--neon)', letterSpacing: 1, wordBreak: 'break-all', fontWeight: 500 }}>
         {project.name}
       </div>
-      <div style={{ fontSize: 10, color: 'var(--neon-dim)', lineHeight: 1.8 }}>
+      <div style={{ fontSize: 10, color: 'var(--neon-dim)', lineHeight: 1.9 }}>
         <div>criado em {formatDate(project.dataCriacao)}</div>
         <div>modificado em {formatDate(project.dataModificacao)}</div>
       </div>
@@ -299,6 +295,7 @@ function ProjectCard({ project, onOpen, onExport, onDelete }) {
           EXP .JSON
         </button>
         <button className="btn-neon btn-danger" onClick={() => onDelete(project)}
+          aria-label={`Excluir projeto ${project.name}`}
           style={{ flex: 0, padding: '6px 10px', fontSize: 11 }}>
           ⌫
         </button>
@@ -313,6 +310,7 @@ export default function HomeScreen({
   projects, onCreateProject, onOpenProject,
   onImportProject, onImportConf, onDeleteProject,
   importError, confImportData, onConfImportConfirm, onConfImportCancel,
+  theme = 'matrix', onToggleTheme,
 }) {
   const [showCreateModal, setShowCreateModal] = useState(false);
   const [confirmOpen,     setConfirmOpen]     = useState(null);
@@ -347,18 +345,40 @@ export default function HomeScreen({
       height: '100vh', background: 'var(--bg)', color: 'var(--neon)',
       fontFamily: "'JetBrains Mono','Fira Code','Courier New',ui-monospace,monospace",
       display: 'flex', flexDirection: 'column', overflow: 'auto',
+      transition: 'background-color 0.3s, color 0.3s',
     }}>
-      {/* Header */}
-      <div style={{ padding: '28px 48px 20px', borderBottom: '1px solid var(--line)' }}>
-        <div style={{ fontSize: 26, letterSpacing: 3 }} className="neon-text">
-          ▌Orpen // URA<span className="blink">_</span>
-        </div>
-        <div style={{ fontSize: 11, color: 'var(--neon-dim)', marginTop: 6, letterSpacing: 2 }}>
-          ASTERISK DIALPLAN BUILDER
+
+      {/* ── Header ──────────────────────────────────────────────────────────── */}
+      <div className="home-header" style={{ padding: '28px 48px 20px', borderBottom: '1px solid var(--line)' }}>
+        {/* Linha de gradiente no topo é adicionada pelo CSS .home-header::before */}
+
+        {/* Branding */}
+        <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: 16 }}>
+          <div>
+            <div style={{ fontSize: 26, letterSpacing: 3 }} className="neon-text">
+              ▌Orpen // URA<span className="blink">_</span>
+            </div>
+            <div style={{ fontSize: 11, color: 'var(--neon-dim)', marginTop: 6, letterSpacing: 2, opacity: 0.8 }}>
+              ASTERISK DIALPLAN BUILDER
+            </div>
+          </div>
+
+          {/* Toggle de tema */}
+          {onToggleTheme && (
+            <button
+              onClick={onToggleTheme}
+              className="theme-toggle-btn"
+              title={theme === 'matrix' ? 'Mudar para tema Orpen (roxo)' : 'Mudar para tema Matrix (verde)'}
+              style={{ marginTop: 4, flexShrink: 0 }}
+            >
+              <span className="theme-badge">{theme.toUpperCase()}</span>
+              {theme === 'matrix' ? '◈ ORPEN' : '◈ MATRIX'}
+            </button>
+          )}
         </div>
       </div>
 
-      {/* Toolbar */}
+      {/* ── Toolbar ─────────────────────────────────────────────────────────── */}
       <div style={{ padding: '16px 48px', display: 'flex', alignItems: 'center', gap: 10, borderBottom: '1px solid var(--line)', flexWrap: 'wrap' }}>
         <button className="btn-neon" onClick={() => setShowCreateModal(true)}
           style={{ padding: '9px 20px', fontSize: 12, letterSpacing: 2 }}>
@@ -367,7 +387,10 @@ export default function HomeScreen({
 
         {/* Importar JSON */}
         <button className="btn-neon" onClick={() => jsonRef.current?.click()}
-          style={{ padding: '9px 18px', fontSize: 12, letterSpacing: 1.5, borderColor: 'var(--neon-dim)', color: 'var(--neon-dim)' }}
+          style={{
+            padding: '9px 18px', fontSize: 12, letterSpacing: 1.5,
+            borderColor: 'var(--neon-dim)', color: 'var(--neon-dim)',
+          }}
           onMouseEnter={(e) => { e.currentTarget.style.borderColor = 'var(--neon)'; e.currentTarget.style.color = 'var(--neon)'; }}
           onMouseLeave={(e) => { e.currentTarget.style.borderColor = 'var(--neon-dim)'; e.currentTarget.style.color = 'var(--neon-dim)'; }}>
           IMPORTAR .JSON
@@ -386,15 +409,23 @@ export default function HomeScreen({
           onChange={(e) => { const f = e.target.files?.[0]; if (f) onImportConf(f); e.target.value = ''; }} />
 
         {importError && (
-          <div style={{ fontSize: 11, color: '#ff5050', letterSpacing: 1 }}>// {importError}</div>
+          <div role="alert" aria-live="polite" style={{ fontSize: 11, color: '#ff5050', letterSpacing: 1 }}>// {importError}</div>
         )}
       </div>
 
-      {/* Lista de projetos */}
+      {/* ── Lista de projetos ──────────────────────────────────────────────── */}
       <div style={{ flex: 1, padding: '28px 48px' }}>
         {projects.length === 0 ? (
-          <div style={{ textAlign: 'center', padding: '90px 0', fontSize: 13, color: 'var(--neon)', opacity: 0.3, letterSpacing: 1, lineHeight: 1.8 }}>
-            // nenhum projeto encontrado<br />— crie ou importe sua primeira URA
+          <div style={{ textAlign: 'center', padding: '90px 0' }}>
+            <div style={{ fontSize: 13, color: 'var(--neon)', opacity: 0.25, letterSpacing: 1, lineHeight: 2.2 }}>
+              // nenhum projeto encontrado<br />— crie ou importe sua primeira URA
+            </div>
+            <div style={{ marginTop: 32, display: 'inline-block' }}>
+              <button className="btn-neon" onClick={() => setShowCreateModal(true)}
+                style={{ padding: '10px 28px', fontSize: 12, letterSpacing: 2, opacity: 0.5 }}>
+                + NOVO PROJETO
+              </button>
+            </div>
           </div>
         ) : (
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill,minmax(280px,1fr))', gap: 16 }}>
@@ -409,7 +440,7 @@ export default function HomeScreen({
         )}
       </div>
 
-      {/* Modais */}
+      {/* ── Modais ────────────────────────────────────────────────────────── */}
       {showCreateModal  && <CreateProjectModal    onClose={() => setShowCreateModal(false)} onCreate={handleCreate} />}
       {confirmOpen      && <ConfirmOpenModal       projectName={confirmOpen.name}   onClose={() => setConfirmOpen(null)}   onConfirm={() => { onOpenProject(confirmOpen); setConfirmOpen(null); }} />}
       {confirmDelete    && <ConfirmDeleteModal     projectName={confirmDelete.name} onClose={() => setConfirmDelete(null)} onConfirm={handleConfirmDelete} />}

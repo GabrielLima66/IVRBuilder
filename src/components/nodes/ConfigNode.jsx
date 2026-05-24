@@ -7,7 +7,7 @@ const ConfigNode = memo(({ id, data, selected }) => {
   const { activeNodeIds } = useActiveSelection();
   const isConnectedActive = activeNodeIds.has(id);
   return (
-  <div className={cls('rcx-node', selected && 'selected', isConnectedActive && 'node-connected-active')} style={{ borderColor: '#00ff41' }}>
+  <div className={cls('rcx-node', selected && 'selected', isConnectedActive && 'node-connected-active')} style={{ borderColor: 'var(--neon)' }}>
     <div className="rcx-node-header">
       <span className="neon-text">▶ CONFIG / START</span>
       <span className="badge">IVR {data.ivr || '----'}</span>
@@ -35,9 +35,9 @@ const ConfigNode = memo(({ id, data, selected }) => {
       </div>
     </div>
     {/* ConfigNode é o START: apenas saídas */}
-    <Handle type="source" position={Position.Bottom} id="out"       style={{ background: '#00ff41' }} />
-    <Handle type="source" position={Position.Right}  id="out-right" style={{ background: '#00ff41' }} />
-    <Handle type="source" position={Position.Left}   id="out-left"  style={{ background: '#00ff41' }} />
+    <Handle type="source" position={Position.Bottom} id="out"       style={{ background: 'var(--neon)' }} />
+    <Handle type="source" position={Position.Right}  id="out-right" style={{ background: 'var(--neon)' }} />
+    <Handle type="source" position={Position.Left}   id="out-left"  style={{ background: 'var(--neon)' }} />
   </div>
   );
 });

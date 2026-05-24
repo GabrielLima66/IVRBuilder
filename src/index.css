@@ -2,15 +2,104 @@
 @tailwind components;
 @tailwind utilities;
 
-:root {
+/* ═══════════════════════════════════════════════════════════════════════════
+   TEMA: MATRIX (padrão) — verde neon sobre preto terminal
+   ═══════════════════════════════════════════════════════════════════════════ */
+:root,
+[data-theme="matrix"] {
+  color-scheme: dark;
+
+  /* Cor principal */
   --neon: #00ff41;
   --neon-dim: #00b32d;
+  --neon-2: #00cc35;
+
+  /* Superfícies */
   --bg: #0d0d0d;
   --panel: #131313;
   --panel-2: #1a1a1a;
   --line: #1f3a23;
+  --status-bar-bg: rgba(13, 13, 13, 0.9);
+
+  /* Glow */
+  --neon-glow: rgba(0, 255, 65, 0.4);
+  --neon-glow-soft: rgba(0, 255, 65, 0.2);
+  --neon-glow-med: rgba(0, 255, 65, 0.5);
+  --neon-glow-faint: rgba(0, 255, 65, 0.08);
+  --neon-glow-bg: rgba(0, 255, 65, 0.04);
+  --neon-glow-heavy: rgba(0, 255, 65, 0.6);
+  --neon-glow-text: rgba(0, 255, 65, 0.7);
+
+  /* Semântica */
+  --neon-value: #c7ffd5;
+  --hover-bg: #001a08;
+  --scanline-color: rgba(0, 255, 65, 0.025);
+
+  /* Context node */
+  --ctx-bg: rgba(0, 255, 65, 0.04);
+  --ctx-header-bg: rgba(0, 255, 65, 0.18);
+  --ctx-bg-inset: rgba(0, 255, 65, 0.06);
+  --ctx-shadow: rgba(0, 255, 65, 0.2);
+  --ctx-selected-inset: rgba(0, 255, 65, 0.1);
+
+  /* Node header gradient */
+  --node-header-from: #002510;
+  --node-header-to: #001a08;
+
+  /* Gradient de identidade */
+  --neon-gradient: linear-gradient(135deg, #00ff41 0%, #00b32d 100%);
 }
 
+/* ═══════════════════════════════════════════════════════════════════════════
+   TEMA: ORPEN — roxo sobre preto profundo, identidade da marca
+   ═══════════════════════════════════════════════════════════════════════════ */
+[data-theme="orpen"] {
+  color-scheme: dark;
+
+  /* Cor principal — gradiente do fingerprint do logo */
+  --neon: #c084fc;
+  --neon-dim: #9333ea;
+  --neon-2: #818cf8;
+
+  /* Superfícies */
+  --bg: #09041a;
+  --panel: #100825;
+  --panel-2: #180e35;
+  --line: #2e1b58;
+  --status-bar-bg: rgba(9, 4, 26, 0.92);
+
+  /* Glow */
+  --neon-glow: rgba(192, 132, 252, 0.4);
+  --neon-glow-soft: rgba(192, 132, 252, 0.2);
+  --neon-glow-med: rgba(192, 132, 252, 0.5);
+  --neon-glow-faint: rgba(192, 132, 252, 0.08);
+  --neon-glow-bg: rgba(192, 132, 252, 0.04);
+  --neon-glow-heavy: rgba(192, 132, 252, 0.6);
+  --neon-glow-text: rgba(192, 132, 252, 0.7);
+
+  /* Semântica */
+  --neon-value: #e9d5ff;
+  --hover-bg: #1e0f3d;
+  --scanline-color: rgba(192, 132, 252, 0.012);
+
+  /* Context node */
+  --ctx-bg: rgba(192, 132, 252, 0.04);
+  --ctx-header-bg: rgba(192, 132, 252, 0.15);
+  --ctx-bg-inset: rgba(192, 132, 252, 0.06);
+  --ctx-shadow: rgba(192, 132, 252, 0.2);
+  --ctx-selected-inset: rgba(192, 132, 252, 0.1);
+
+  /* Node header gradient */
+  --node-header-from: #1a0a35;
+  --node-header-to: #110726;
+
+  /* Gradient de identidade — fingerprint do logo */
+  --neon-gradient: linear-gradient(135deg, #c471f5 0%, #9b59d4 50%, #818cf8 100%);
+}
+
+/* ═══════════════════════════════════════════════════════════════════════════
+   BASE
+   ═══════════════════════════════════════════════════════════════════════════ */
 html, body, #root {
   height: 100%;
   margin: 0;
@@ -19,15 +108,17 @@ html, body, #root {
   color: var(--neon);
   font-family: 'JetBrains Mono', 'Fira Code', 'Courier New', ui-monospace, monospace;
   overflow: hidden;
+  transition: background-color 0.3s ease, color 0.3s ease;
 }
 
+/* Scanlines */
 body::before {
   content: "";
   position: fixed; inset: 0;
   background: repeating-linear-gradient(
     0deg,
-    rgba(0,255,65,0.025) 0px,
-    rgba(0,255,65,0.025) 1px,
+    var(--scanline-color) 0px,
+    var(--scanline-color) 1px,
     transparent 1px,
     transparent 3px
   );
@@ -35,9 +126,22 @@ body::before {
   z-index: 1000;
 }
 
-/* React Flow — tema dark */
+/* Orpen: gradiente atmosférico nos cantos */
+[data-theme="orpen"] body::after {
+  content: "";
+  position: fixed; inset: 0;
+  background:
+    radial-gradient(ellipse 55% 35% at 5% 0%, rgba(168, 85, 247, 0.07) 0%, transparent 60%),
+    radial-gradient(ellipse 40% 50% at 95% 100%, rgba(99, 102, 241, 0.05) 0%, transparent 55%);
+  pointer-events: none;
+  z-index: 999;
+}
+
+/* ═══════════════════════════════════════════════════════════════════════════
+   REACT FLOW — tema dark
+   ═══════════════════════════════════════════════════════════════════════════ */
 .react-flow { background: var(--bg); }
-.react-flow__background path { stroke: rgba(0,255,65,0.08) !important; }
+.react-flow__background path { stroke: var(--neon-glow-faint) !important; }
 .react-flow__edge-path { stroke: var(--neon); stroke-width: 1.5; cursor: pointer; }
 .react-flow__edge:hover .react-flow__edge-path { stroke: #fff; stroke-width: 2; }
 .react-flow__edge.selected .react-flow__edge-path {
@@ -45,7 +149,6 @@ body::before {
   stroke-width: 2.5;
   filter: drop-shadow(0 0 6px #ffcc0099);
 }
-/* Área de interação larga para facilitar clique na edge */
 .react-flow__edge-interaction { stroke-width: 24; cursor: pointer; }
 .react-flow__edge-interaction { stroke-width: 20; }
 .react-flow__edge-text { fill: var(--neon); font-family: monospace; font-size: 11px; }
@@ -54,33 +157,41 @@ body::before {
   background: var(--neon);
   border: 2px solid var(--bg);
   width: 10px; height: 10px;
+  transition: background-color 0.2s;
 }
 .react-flow__controls {
   background: var(--panel-2);
   border: 1px solid var(--neon);
-  box-shadow: 0 0 8px rgba(0,255,65,0.4);
+  box-shadow: 0 0 8px var(--neon-glow);
+  transition: border-color 0.3s, box-shadow 0.3s, background-color 0.3s;
 }
 .react-flow__controls-button {
   background: var(--panel-2);
   color: var(--neon);
   border-bottom: 1px solid var(--line);
   fill: var(--neon);
+  transition: background-color 0.15s, fill 0.15s;
 }
-.react-flow__controls-button:hover { background: #002a10; }
+.react-flow__controls-button:hover { background: var(--hover-bg); }
 .react-flow__minimap {
   background: var(--panel-2) !important;
   border: 1px solid var(--neon);
+  transition: border-color 0.3s;
 }
-.react-flow__attribution { background: transparent !important; color: rgba(0,255,65,0.4) !important; }
-.react-flow__attribution a { color: rgba(0,255,65,0.4) !important; }
+.react-flow__attribution { background: transparent !important; color: rgba(var(--neon-dim), 0.4) !important; }
+.react-flow__attribution a { color: var(--neon-dim) !important; opacity: 0.4; }
 
-/* Scrollbar */
+/* ═══════════════════════════════════════════════════════════════════════════
+   SCROLLBAR
+   ═══════════════════════════════════════════════════════════════════════════ */
 ::-webkit-scrollbar { width: 8px; height: 8px; }
 ::-webkit-scrollbar-track { background: var(--bg); }
 ::-webkit-scrollbar-thumb { background: var(--neon-dim); border-radius: 4px; }
 ::-webkit-scrollbar-thumb:hover { background: var(--neon); }
 
-/* Inputs custom */
+/* ═══════════════════════════════════════════════════════════════════════════
+   INPUTS
+   ═══════════════════════════════════════════════════════════════════════════ */
 .term-input, .term-select, .term-textarea {
   background: #000;
   border: 1px solid var(--line);
@@ -91,10 +202,14 @@ body::before {
   border-radius: 2px;
   width: 100%;
   outline: none;
+  transition: border-color 0.15s, box-shadow 0.15s, color 0.2s;
 }
+[data-theme="orpen"] .term-input,
+[data-theme="orpen"] .term-select,
+[data-theme="orpen"] .term-textarea { background: rgba(0,0,0,0.4); }
 .term-input:focus, .term-select:focus, .term-textarea:focus {
   border-color: var(--neon);
-  box-shadow: 0 0 0 1px var(--neon), 0 0 6px rgba(0,255,65,0.5);
+  box-shadow: 0 0 0 1px var(--neon), 0 0 6px var(--neon-glow-med);
 }
 .term-textarea { font-size: 11px; line-height: 1.5; resize: vertical; }
 .term-label {
@@ -104,11 +219,14 @@ body::before {
   color: var(--neon-dim);
   margin-bottom: 3px;
   text-transform: uppercase;
+  transition: color 0.2s;
 }
 
-/* Botões */
+/* ═══════════════════════════════════════════════════════════════════════════
+   BOTÕES
+   ═══════════════════════════════════════════════════════════════════════════ */
 .btn-neon {
-  background: #000;
+  background: transparent;
   border: 1px solid var(--neon);
   color: var(--neon);
   padding: 8px 14px;
@@ -117,18 +235,23 @@ body::before {
   letter-spacing: 1px;
   cursor: pointer;
   text-transform: uppercase;
-  transition: all 0.15s ease;
+  transition: background 0.15s ease, color 0.15s ease, box-shadow 0.15s ease, border-color 0.2s;
   border-radius: 2px;
 }
 .btn-neon:hover {
   background: var(--neon);
   color: #000;
-  box-shadow: 0 0 10px var(--neon), 0 0 20px rgba(0,255,65,0.5);
+  box-shadow: 0 0 10px var(--neon), 0 0 22px var(--neon-glow);
+}
+[data-theme="orpen"] .btn-neon:hover {
+  color: #fff;
 }
 .btn-danger { border-color: #ff3b3b; color: #ff3b3b; }
 .btn-danger:hover { background: #ff3b3b; color: #000; box-shadow: 0 0 10px #ff3b3b; }
 
-/* Nós draggable da sidebar */
+/* ═══════════════════════════════════════════════════════════════════════════
+   PALETTE — sidebar drag items
+   ═══════════════════════════════════════════════════════════════════════════ */
 .palette-item {
   border: 1px dashed var(--line);
   background: var(--panel);
@@ -136,16 +259,19 @@ body::before {
   margin-bottom: 8px;
   cursor: grab;
   border-radius: 3px;
-  transition: all 0.15s ease;
+  transition: border-color 0.15s, background 0.15s, box-shadow 0.15s, transform 0.12s;
 }
 .palette-item:hover {
   border-color: var(--neon);
-  background: #001a08;
-  box-shadow: 0 0 8px rgba(0,255,65,0.3);
+  background: var(--hover-bg);
+  box-shadow: 0 0 8px var(--neon-glow-soft);
+  transform: translateX(2px);
 }
-.palette-item:active { cursor: grabbing; }
+.palette-item:active { cursor: grabbing; transform: scale(0.98); }
 
-/* Nodes do canvas */
+/* ═══════════════════════════════════════════════════════════════════════════
+   NÓS DO CANVAS
+   ═══════════════════════════════════════════════════════════════════════════ */
 .rcx-node {
   background: var(--panel);
   border: 1px solid var(--neon-dim);
@@ -154,21 +280,24 @@ body::before {
   font-size: 12px;
   box-shadow: 0 2px 8px rgba(0,0,0,0.6);
   color: var(--neon);
+  transition: border-color 0.2s, box-shadow 0.2s, background-color 0.3s;
 }
 .rcx-node.selected {
   border-color: #fff;
-  box-shadow: 0 0 0 1px #fff, 0 0 12px rgba(0,255,65,0.6);
+  box-shadow: 0 0 0 1px #fff, 0 0 12px var(--neon-glow-heavy);
 }
 .rcx-node-header {
   padding: 6px 10px;
-  background: linear-gradient(180deg, #002510 0%, #001a08 100%);
+  background: linear-gradient(180deg, var(--node-header-from) 0%, var(--node-header-to) 100%);
   border-bottom: 1px solid var(--neon-dim);
+  border-radius: 3px 3px 0 0;
   font-size: 10px;
   letter-spacing: 1.5px;
   text-transform: uppercase;
   display: flex;
   justify-content: space-between;
   align-items: center;
+  transition: background 0.3s;
 }
 .rcx-node-body {
   padding: 8px 10px;
@@ -181,7 +310,7 @@ body::before {
   font-size: 11px;
 }
 .rcx-node-row .k { color: var(--neon-dim); }
-.rcx-node-row .v { color: #c7ffd5; }
+.rcx-node-row .v { color: var(--neon-value); }
 
 .digit-row {
   display: flex;
@@ -193,7 +322,29 @@ body::before {
   position: relative;
 }
 
-.neon-text { text-shadow: 0 0 6px rgba(0,255,65,0.7); }
+/* ═══════════════════════════════════════════════════════════════════════════
+   UTILITÁRIOS
+   ═══════════════════════════════════════════════════════════════════════════ */
+.neon-text {
+  text-shadow: 0 0 6px var(--neon-glow-text);
+  transition: text-shadow 0.3s;
+}
+/* Orpen: gradiente de texto no título principal */
+[data-theme="orpen"] .neon-text {
+  background: var(--neon-gradient);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+  text-shadow: none;
+}
+
+/* Classe utilitária para texto com gradiente do tema */
+.neon-gradient-text {
+  background: var(--neon-gradient);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+}
 
 .badge {
   display: inline-block;
@@ -203,35 +354,40 @@ body::before {
   font-size: 9px;
   letter-spacing: 1px;
   color: var(--neon);
+  transition: border-color 0.2s, color 0.2s;
 }
 
 .blink { animation: blink 1.2s steps(2, start) infinite; }
 @keyframes blink { to { visibility: hidden; } }
 
-/* Context Node (group/parent) */
+/* ═══════════════════════════════════════════════════════════════════════════
+   CONTEXT NODE
+   ═══════════════════════════════════════════════════════════════════════════ */
 .ctx-node {
-  background: rgba(0, 255, 65, 0.04);
+  background: var(--ctx-bg);
   border: 1.5px dashed var(--neon);
   border-radius: 6px;
-  box-shadow: inset 0 0 30px rgba(0,255,65,0.06), 0 0 8px rgba(0,255,65,0.2);
+  box-shadow: inset 0 0 30px var(--ctx-bg-inset), 0 0 8px var(--ctx-shadow);
   width: 100%; height: 100%;
   box-sizing: border-box;
   display: flex; flex-direction: column;
-  position: relative; /* necessário para as linhas separadoras absolutas */
+  position: relative;
+  transition: border-color 0.2s, box-shadow 0.2s, background-color 0.3s;
 }
 .ctx-node.selected {
   border-color: #fff;
   border-style: solid;
-  box-shadow: inset 0 0 30px rgba(0,255,65,0.1), 0 0 12px rgba(255,255,255,0.4);
+  box-shadow: inset 0 0 30px var(--ctx-selected-inset), 0 0 12px rgba(255,255,255,0.4);
 }
 .ctx-header {
-  background: rgba(0,255,65,0.18);
+  background: var(--ctx-header-bg);
   border-bottom: 1px solid var(--neon);
   padding: 6px 10px;
   display: flex;
   align-items: center;
   gap: 8px;
   cursor: move;
+  transition: background 0.3s, border-color 0.2s;
 }
 .ctx-name-input {
   background: transparent;
@@ -243,7 +399,8 @@ body::before {
   padding: 2px 6px;
   flex: 1;
   outline: none;
-  text-shadow: 0 0 6px rgba(0,255,65,0.7);
+  text-shadow: 0 0 6px var(--neon-glow-text);
+  transition: color 0.2s;
 }
 .ctx-name-input:hover, .ctx-name-input:focus {
   border-color: var(--neon-dim);
@@ -254,46 +411,45 @@ body::before {
   display: flex;
   align-items: center;
   justify-content: center;
-  color: rgba(0,255,65,0.25);
+  color: var(--neon-glow-soft);
   font-size: 10px;
   letter-spacing: 2px;
   pointer-events: none;
+  opacity: 0.6;
 }
 
-/* react-flow resizer handles */
+/* ═══════════════════════════════════════════════════════════════════════════
+   REACT FLOW RESIZER
+   ═══════════════════════════════════════════════════════════════════════════ */
 .react-flow__resize-control.handle {
   background: var(--neon);
   border: 1px solid #000;
   width: 8px; height: 8px;
 }
-.react-flow__resize-control.line {
-  border-color: var(--neon);
-}
+.react-flow__resize-control.line { border-color: var(--neon); }
 
-/* Sidebar search — placeholder em verde neon com opacidade reduzida */
+/* ═══════════════════════════════════════════════════════════════════════════
+   SIDEBAR SEARCH
+   ═══════════════════════════════════════════════════════════════════════════ */
 .sidebar-search::placeholder {
   color: var(--neon);
   opacity: 0.35;
   font-style: italic;
 }
-.sidebar-search:focus::placeholder {
-  opacity: 0.2;
-}
+.sidebar-search:focus::placeholder { opacity: 0.2; }
 
-/* ContextNode sem conexão de entrada — borda laranja pulsante ───────────── */
+/* ═══════════════════════════════════════════════════════════════════════════
+   CONTEXT NODE — ORPHAN (sem conexão de entrada)
+   ═══════════════════════════════════════════════════════════════════════════ */
 @keyframes ctx-orphan-pulse {
   0%, 100% { opacity: 1; }
   50%       { opacity: 0.55; }
 }
-
-/* Só aplica quando NÃO está selecionado (selecionado mantém borda branca) */
 .ctx-node--orphan:not(.selected) {
   border-color: #ff9900;
   border-style: dashed;
   animation: ctx-orphan-pulse 2s ease-in-out infinite;
 }
-
-/* Badge "SEM CONEXÃO" no header */
 .ctx-orphan-badge {
   font-size: 8px;
   color: #ff9900;
@@ -307,8 +463,6 @@ body::before {
   white-space: nowrap;
   flex-shrink: 0;
 }
-
-/* Tooltip ao hover no badge */
 .ctx-orphan-badge::after {
   content: attr(data-tooltip);
   position: absolute;
@@ -330,60 +484,51 @@ body::before {
   box-shadow: 0 4px 12px rgba(0,0,0,0.6);
   letter-spacing: 0.3px;
 }
+.ctx-orphan-badge:hover::after { opacity: 1; }
 
-.ctx-orphan-badge:hover::after {
-  opacity: 1;
-}
-
-/* input[type="time"] — tema dark */
+/* ═══════════════════════════════════════════════════════════════════════════
+   INPUT TIME
+   ═══════════════════════════════════════════════════════════════════════════ */
 .term-input[type="time"]::-webkit-calendar-picker-indicator {
   filter: invert(1) sepia(1) saturate(3) hue-rotate(90deg);
   opacity: 0.5;
   cursor: pointer;
 }
-.term-input[type="time"]::-webkit-calendar-picker-indicator:hover {
-  opacity: 1;
-}
+.term-input[type="time"]::-webkit-calendar-picker-indicator:hover { opacity: 1; }
 
-/* ── Estados visuais de edges: repouso (idle) e ativo (active) ────────────── */
+/* ═══════════════════════════════════════════════════════════════════════════
+   EDGE / NÓ — estados visuais: repouso (idle) e ativo (active)
+   ═══════════════════════════════════════════════════════════════════════════ */
 
 /*
  * REPOUSO: tracejado 6/4px, 25% opacidade.
- *   Aplicado via inline style por EdgeWithWaypoints quando a edge não está ativa.
- *   Não requer classe CSS — é o estado base controlado por JS.
+ *   Aplicado via inline style por EdgeWithWaypoints quando não ativo.
  *
  * ATIVO: sólido, 100% opacidade, brilho pulsante via filter: drop-shadow.
- *   O animation referencia @keyframes edge-glow-pulse definido abaixo.
- *   A cor do glow é fornecida pelo CSS custom property --edge-glow-color
- *   setado inline por EdgeWithWaypoints com a cor específica da edge.
+ *   --edge-glow-color é CSS custom property setada inline por EdgeWithWaypoints.
  */
 @keyframes edge-glow-pulse {
   0%, 100% {
-    filter: drop-shadow(0 0 5px var(--edge-glow-color, #00ff41));
+    filter: drop-shadow(0 0 5px var(--edge-glow-color, var(--neon)));
     opacity: 1;
   }
   50% {
-    filter: drop-shadow(0 0 1px var(--edge-glow-color, #00ff41));
+    filter: drop-shadow(0 0 1px var(--edge-glow-color, var(--neon)));
     opacity: 0.5;
   }
 }
 
-/*
- * Nó vizinho ativo (conectado ao nó/edge clicado).
- * Borda sólida 2px na cor do nó (via --node-active-color); glow pulsante.
- * Sincronizado com edge-glow-pulse em 800ms.
- */
 @keyframes node-border-pulse {
   0%, 100% {
     box-shadow:
       0 0 0 1px var(--node-active-color, var(--neon)),
-      0 0 14px var(--node-active-glow, rgba(0,255,65,0.65)),
+      0 0 14px var(--node-active-glow, var(--neon-glow-heavy)),
       0 2px 8px rgba(0,0,0,0.5);
   }
   50% {
     box-shadow:
       0 0 0 1px var(--node-active-color, var(--neon)),
-      0 0 3px var(--node-active-glow, rgba(0,255,65,0.2)),
+      0 0 3px var(--node-active-glow, var(--neon-glow-soft)),
       0 2px 8px rgba(0,0,0,0.5);
   }
 }
@@ -395,7 +540,9 @@ body::before {
   animation: node-border-pulse 0.8s ease-in-out infinite;
 }
 
-/* ContextNode — controles de reordenação (drag handle, ↑↓, campo numérico) ─── */
+/* ═══════════════════════════════════════════════════════════════════════════
+   CONTEXT NODE — controles de reordenação
+   ═══════════════════════════════════════════════════════════════════════════ */
 .ctx-drag-handle {
   opacity: 0;
   transition: opacity 0.12s;
@@ -403,33 +550,113 @@ body::before {
 .ctx-drag-handle:hover {
   opacity: 1;
   color: var(--neon);
-  background: rgba(0,255,65,0.08) !important;
+  background: var(--neon-glow-faint) !important;
 }
-/* Quando o nó está sendo reordenado, mostra o handle */
-.ctx-reorder-control {
-  opacity: 0;
-  transition: opacity 0.12s;
-}
-/* O overlay detecta hover via mousePos; usa classe JS para forçar visibilidade */
+.ctx-reorder-control { opacity: 0; transition: opacity 0.12s; }
 .ctx-reorder-visible .ctx-reorder-control,
-.ctx-reorder-visible .ctx-drag-handle {
-  opacity: 1;
-}
+.ctx-reorder-visible .ctx-drag-handle { opacity: 1; }
 
-/* Modal */
+/* ═══════════════════════════════════════════════════════════════════════════
+   MODAL
+   ═══════════════════════════════════════════════════════════════════════════ */
 .modal-backdrop {
   position: fixed; inset: 0;
-  background: rgba(0,0,0,0.7);
-  backdrop-filter: blur(2px);
+  background: rgba(0,0,0,0.75);
+  backdrop-filter: blur(3px);
   z-index: 9999;
   display: flex; align-items: center; justify-content: center;
 }
 .modal {
   background: var(--panel);
   border: 1px solid var(--neon);
-  box-shadow: 0 0 30px rgba(0,255,65,0.4);
+  box-shadow: 0 0 40px var(--neon-glow), 0 0 80px var(--neon-glow-soft);
   width: min(820px, 92vw);
   max-height: 86vh;
   display: flex; flex-direction: column;
   border-radius: 4px;
+  transition: border-color 0.3s, box-shadow 0.3s, background-color 0.3s;
+}
+
+/* ═══════════════════════════════════════════════════════════════════════════
+   HOME — linha de acento no topo do header
+   ═══════════════════════════════════════════════════════════════════════════ */
+.home-header {
+  position: relative;
+}
+.home-header::before {
+  content: '';
+  position: absolute;
+  top: 0; left: 0; right: 0;
+  height: 2px;
+  background: var(--neon-gradient);
+  opacity: 0.65;
+  pointer-events: none;
+}
+
+/* ═══════════════════════════════════════════════════════════════════════════
+   PROJECT CARD — para uso em HomeScreen
+   ═══════════════════════════════════════════════════════════════════════════ */
+.project-card {
+  background: var(--panel);
+  border: 1px solid var(--neon-dim);
+  border-radius: 4px;
+  padding: 16px;
+  display: flex; flex-direction: column; gap: 10px;
+  transition: border-color 0.15s, box-shadow 0.15s, transform 0.15s, background-color 0.3s;
+  cursor: default;
+}
+.project-card:hover {
+  border-color: var(--neon);
+  box-shadow: 0 4px 24px var(--neon-glow-soft), 0 0 0 1px var(--neon);
+  transform: translateY(-2px);
+}
+[data-theme="orpen"] .project-card:hover {
+  background: var(--panel-2);
+}
+
+/* ═══════════════════════════════════════════════════════════════════════════
+   TOGGLE DE TEMA — botão flutuante de troca
+   ═══════════════════════════════════════════════════════════════════════════ */
+.theme-toggle-btn {
+  background: transparent;
+  border: 1px solid var(--line);
+  color: var(--neon-dim);
+  font-family: inherit;
+  font-size: 10px;
+  letter-spacing: 1.5px;
+  padding: 5px 12px;
+  cursor: pointer;
+  border-radius: 2px;
+  transition: border-color 0.15s, color 0.15s, background 0.15s;
+  display: flex; align-items: center; gap: 6px;
+  white-space: nowrap;
+}
+.theme-toggle-btn:hover {
+  border-color: var(--neon);
+  color: var(--neon);
+  background: var(--neon-glow-faint);
+}
+/* Pílula de identificação do tema ativo */
+.theme-badge {
+  display: inline-block;
+  padding: 1px 5px;
+  border-radius: 2px;
+  font-size: 8px;
+  letter-spacing: 1px;
+  background: var(--neon-glow-faint);
+  color: var(--neon);
+  border: 1px solid var(--neon-dim);
+}
+
+/* ═══════════════════════════════════════════════════════════════════════════
+   ACESSIBILIDADE — prefers-reduced-motion
+   Desativa animações e transições para usuários que optam por reduzir movimento.
+   ═══════════════════════════════════════════════════════════════════════════ */
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
 }

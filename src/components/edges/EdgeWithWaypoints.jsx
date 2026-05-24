@@ -25,6 +25,7 @@ import {
 } from 'reactflow';
 import { getEdgeParams, getEdgeParamsDirected } from '../../utils/edgeUtils';
 import { useActiveSelection } from '../../contexts/ActiveSelectionContext';
+import { useConfig } from '../../contexts/ConfigContext';
 
 // Comprimento do arm horizontal na saída/chegada das edges DTMF (px no canvas).
 const DTMF_ARM = 80;
@@ -129,6 +130,8 @@ export default function EdgeWithWaypoints({
   // Estado de seleção visual — ANTES do early return (Rules of Hooks)
   const { activeEdgeIds } = useActiveSelection();
   const isActive      = activeEdgeIds.has(id);
+  // Opacidade em repouso lida do ConfigContext — ANTES do early return
+  const { edgeIdleOpacity = 0.25 } = useConfig();
   // Edge em repouso: tracejada, 25% opacidade.
   // Edge ativa: sólida, 100% opacidade, brilho pulsante.
   //
@@ -148,9 +151,9 @@ export default function EdgeWithWaypoints({
           animation:           'edge-glow-pulse 0.8s ease-in-out infinite',
         }
       : {
-          // Repouso: tracejado discreto
+          // Repouso: tracejado discreto (opacidade configurável)
           strokeDasharray: '6 4',
-          opacity:         0.25,
+          opacity:         edgeIdleOpacity,
           animation:       'none',
           filter:          'none',
         }

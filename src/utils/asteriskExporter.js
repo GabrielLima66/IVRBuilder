@@ -38,18 +38,20 @@ function getOrderedContexts(nodes) {
 // ─────────────────────────────────────────────────────────────────────────────
 // MODO HIERÁRQUICO
 // ─────────────────────────────────────────────────────────────────────────────
-function generateDialplanFromContexts(nodes, edges, findNode, outEdges) {
+function generateDialplanFromContexts(nodes, edges, findNode, outEdges, options = {}) {
+  const includeSectionComments = options.includeSectionComments !== false;
   const ctxNodes = getOrderedContexts(nodes);
 
   const lines = [];
-  const emit = (l) => lines.push(l);
-  const sep  = () => lines.push('');
+  const emit    = (l) => lines.push(l);
+  const sep     = () => lines.push('');
+  const emitSep = (l) => { if (includeSectionComments) lines.push(l); };
   const validationWarnings = []; // Coletados para sumário final
 
-  emit(';;' + '='.repeat(75));
-  emit(`;; URA Orpen :: GERADO POR orpen-ura-builder :: ${new Date().toISOString()}`);
-  emit(`;; MODO HIERÁRQUICO :: ${ctxNodes.length} contexto(s) ativos`);
-  emit(';;' + '='.repeat(75));
+  emitSep(';;' + '='.repeat(75));
+  emitSep(`;; URA Orpen :: GERADO POR orpen-ura-builder :: ${new Date().toISOString()}`);
+  emitSep(`;; MODO HIERÁRQUICO :: ${ctxNodes.length} contexto(s) ativos`);
+  emitSep(';;' + '='.repeat(75));
   sep();
 
   // Destino Asterisk de um nó (para Goto inlining)
@@ -831,13 +833,18 @@ function generateDialplanLegacy(nodes, edges, findNode, outEdges) {
 // ─────────────────────────────────────────────────────────────────────────────
 // ENTRY POINT
 // ─────────────────────────────────────────────────────────────────────────────
-export function generateDialplan(nodes, edges) {
+/**
+ * @param {Object[]} nodes
+ * @param {Object[]} edges
+ * @param {{ includeSectionComments?: boolean }} [options]
+ */
+export function generateDialplan(nodes, edges, options = {}) {
   const findNode = (id) => nodes.find((n) => n.id === id);
   const outEdges = (id, handle) =>
     edges.filter((e) => e.source === id && (handle ? e.sourceHandle === handle : true));
 
   if (nodes.some((n) => n.type === 'context')) {
-    return generateDialplanFromContexts(nodes, edges, findNode, outEdges);
+    return generateDialplanFromContexts(nodes, edges, findNode, outEdges, options);
   }
-  return generateDialplanLegacy(nodes, edges, findNode, outEdges);
+  return generateDialplanLegacy(nodes, edges, findNode, outEdges, options);
 }

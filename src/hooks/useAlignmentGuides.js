@@ -132,19 +132,22 @@ function computeGuides(draggedNode, staticBounds) {
  *  - ContextNodes align only with other ContextNodes + GlobalConfigNode (config)
  *  - Snap on drag stop: node jumps to exact aligned position when guide is active
  */
-export function useAlignmentGuides(nodes, setNodes) {
+export function useAlignmentGuides(nodes, setNodes, enabled = true) {
   const [guides, setGuides] = useState([]);
 
   // Refs — let callbacks stay stable while always accessing fresh data
   const nodesRef        = useRef(nodes);
+  const enabledRef      = useRef(enabled);
   const staticBoundsRef = useRef([]);
   const snapRef         = useRef({ x: null, y: null });
   const rafRef          = useRef(null);
 
-  useEffect(() => { nodesRef.current = nodes; }, [nodes]);
+  useEffect(() => { nodesRef.current  = nodes;   }, [nodes]);
+  useEffect(() => { enabledRef.current = enabled; }, [enabled]);
 
   // ── onNodeDragStart — build static bounds cache once per drag ──────────────
   const onNodeDragStart = useCallback((_, draggedNode) => {
+    if (!enabledRef.current) return;
     const currentNodes = nodesRef.current;
     const nodesMap = new Map(currentNodes.map((n) => [n.id, n]));
 
@@ -171,6 +174,7 @@ export function useAlignmentGuides(nodes, setNodes) {
 
   // ── onNodeDrag — recompute guides each frame (throttled via rAF) ───────────
   const onNodeDrag = useCallback((_, draggedNode) => {
+    if (!enabledRef.current) return;
     if (rafRef.current) cancelAnimationFrame(rafRef.current);
     rafRef.current = requestAnimationFrame(() => {
       const { guides: newGuides, snapX, snapY } = computeGuides(
@@ -186,6 +190,7 @@ export function useAlignmentGuides(nodes, setNodes) {
   const onNodeDragStop = useCallback((_, draggedNode) => {
     if (rafRef.current) { cancelAnimationFrame(rafRef.current); rafRef.current = null; }
     setGuides([]);
+    if (!enabledRef.current) return;
 
     const { x: snapAbsLeft, y: snapAbsTop } = snapRef.current;
     snapRef.current = { x: null, y: null };

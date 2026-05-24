@@ -25,6 +25,8 @@ import { EdgeModeContext } from './contexts/EdgeModeContext';
 import { ActiveSelectionContext } from './contexts/ActiveSelectionContext';
 import { ThemeContext } from './contexts/ThemeContext';
 import { ModeContext } from './contexts/ModeContext';
+import { ConfigProvider, useConfig } from './contexts/ConfigContext';
+import ConfigModal from './components/canvas/ConfigModal';
 import HomeScreen from './screens/HomeScreen';
 import { salvarProjeto, listarProjetos } from './services/projectStorage';
 import { importConf } from './utils/conf/confImporter';
@@ -42,7 +44,11 @@ const edgeTypes = { floating: EdgeWithWaypoints, smoothstep: EdgeWithWaypoints }
 // CANVAS — estado global do grafo + lógica de DnD / reparenting
 // Props de projeto (opcionais): permitem integração com HomeScreen.
 // ─────────────────────────────────────────────────────────────────────────────
-function Canvas({ initialFlow, projectName, projectCreatedAt, currentProjectId, onGoBack, onProjectSaved, theme = 'matrix', onToggleTheme, mode = 'pro', onToggleMode }) {
+function Canvas({ initialFlow, projectName, projectCreatedAt, currentProjectId, onGoBack, onProjectSaved, theme = 'matrix', onToggleTheme }) {
+  // Lê configurações do ConfigContext
+  const config = useConfig();
+  const mode   = config.mode;
+
   // Cor principal do tema — usada em edges e mini-mapa
   const neonColor = theme === 'orpen' ? '#c084fc' : '#00ff41';
   const wrapperRef  = useRef(null);
@@ -116,11 +122,10 @@ function Canvas({ initialFlow, projectName, projectCreatedAt, currentProjectId, 
 
   const [showExport,           setShowExport]           = useState(false);
   const [showOrderPanel,       setShowOrderPanel]       = useState(false);
+  const [showConfigModal,      setShowConfigModal]      = useState(false);
   const [exportText,           setExportText]           = useState('');
   const [showFirstExportModal, setShowFirstExportModal] = useState(false);
   const [firstExportDontShow,  setFirstExportDontShow]  = useState(false);
-  // Modo de roteamento das edges: 'free' | 'grid'
-  const [edgeMode,        setEdgeMode]        = useState('free');
   // Context menu de edge (botão direito)
   const [edgeMenu, setEdgeMenu] = useState(null); // { x, y, edgeId }
 
@@ -159,7 +164,7 @@ function Canvas({ initialFlow, projectName, projectCreatedAt, currentProjectId, 
           setTimeout(() => setSaveStatus(null), 3000);
         })
         .catch(() => setSaveStatus(null));
-    }, 2000);
+    }, (config.autosaveDelay || 2) * 1000);
   }, [nodes, edges]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // ── Modal de confirmação para voltar com alterações não salvas ───────────
@@ -361,7 +366,10 @@ function Canvas({ initialFlow, projectName, projectCreatedAt, currentProjectId, 
       const ctxNodes = nodes.filter((n) => n.type === 'context');
       const maxOrder = ctxNodes.reduce((max, n) => Math.max(max, n.data?.exportOrder ?? 0), 0);
       const existingNames = ctxNodes.map((n) => n.data?.contextName || '');
-      const uniqueName = generateUniqueContextName(newNode.data.contextName, existingNames);
+      // Usa o prefixo configurado pelo usuário como base do nome
+      const prefix    = (config.contextPrefix || 'orpen-ivr').replace(/\s+/g, '-');
+      const baseName  = `${prefix}-novo-contexto`;
+      const uniqueName = generateUniqueContextName(baseName, existingNames);
       newNode.data = { ...newNode.data, exportOrder: maxOrder + 1, contextName: uniqueName };
     }
 
@@ -601,7 +609,7 @@ function Canvas({ initialFlow, projectName, projectCreatedAt, currentProjectId, 
     onNodeDragStart,
     onNodeDrag,
     onNodeDragStop: alignDragStop,
-  } = useAlignmentGuides(nodes, setNodes);
+  } = useAlignmentGuides(nodes, setNodes, config.smartGuides);
 
   // ── Posição do mouse relativa ao wrapperRef (para ContextOrderOverlay) ──────
   const [mousePos, setMousePos] = useState(null);
@@ -702,12 +710,12 @@ function Canvas({ initialFlow, projectName, projectCreatedAt, currentProjectId, 
 
   // ── Navegação de volta à Home ─────────────────────────────────────────────
   const handleBack = useCallback(() => {
-    if (onGoBack && isDirtyRef.current) {
+    if (onGoBack && config.confirmBack && isDirtyRef.current) {
       setShowBackConfirm(true);
     } else {
       onGoBack?.();
     }
-  }, [onGoBack]);
+  }, [onGoBack, config.confirmBack]);
 
   const handleSaveAndBack = useCallback(async () => {
     await flushSave();
@@ -717,7 +725,9 @@ function Canvas({ initialFlow, projectName, projectCreatedAt, currentProjectId, 
 
   // ── Exportação ────────────────────────────────────────────────────────────
   const doExport = () => {
-    setExportText(generateDialplan(nodes, edges));
+    setExportText(generateDialplan(nodes, edges, {
+      includeSectionComments: config.includeSectionComments,
+    }));
     // Modo AMIGÁVEL: mostra aviso informativo na primeira exportação
     if (mode === 'amigavel' && !localStorage.getItem('orpen-first-export-shown')) {
       setShowFirstExportModal(true);
@@ -733,8 +743,9 @@ function Canvas({ initialFlow, projectName, projectCreatedAt, currentProjectId, 
   };
 
   const downloadConf = () => {
-    const lf   = exportText.replace(/\r\n/g, '\n');
-    const blob = new Blob([lf], { type: 'text/plain;charset=utf-8' });
+    let content = exportText.replace(/\r\n/g, '\n'); // normaliza primeiro
+    if (config.lineEnding === 'crlf') content = content.replace(/\n/g, '\r\n');
+    const blob = new Blob([content], { type: 'text/plain;charset=utf-8' });
     const url  = URL.createObjectURL(blob);
     const a    = document.createElement('a');
     a.href     = url;
@@ -768,20 +779,23 @@ function Canvas({ initialFlow, projectName, projectCreatedAt, currentProjectId, 
     );
   }, [neonColor]); // eslint-disable-line react-hooks/exhaustive-deps
 
-  // defaultEdgeOptions reativo ao tema
+  // Mapa de estilo de edge configurável → tipo do React Flow
+  const edgeStyleMap = { smooth: 'smoothstep', straight: 'straight', step: 'step' };
+
+  // defaultEdgeOptions reativo ao tema e ao estilo configurado
   const defaultEdgeOpts = useMemo(() => ({
-    type: 'smoothstep',
+    type: edgeStyleMap[config.edgeStyle] || 'smoothstep',
     style: { stroke: neonColor, strokeWidth: 1.5 },
     markerEnd: { type: MarkerType.ArrowClosed, color: neonColor },
     focusable: true,
     selectable: true,
-  }), [neonColor]);
+  }), [neonColor, config.edgeStyle]); // eslint-disable-line react-hooks/exhaustive-deps
 
   return (
     <ModeContext.Provider value={mode}>
     <ThemeContext.Provider value={theme}>
     <ActiveSelectionContext.Provider value={activeSelectionValue}>
-    <EdgeModeContext.Provider value={edgeMode}>
+    <EdgeModeContext.Provider value="grid">
     <div style={{ display: 'flex', height: '100%', width: '100%' }}>
       <Sidebar />
 
@@ -860,25 +874,23 @@ function Canvas({ initialFlow, projectName, projectCreatedAt, currentProjectId, 
             ⊞ ORDEM
           </button>
           <span style={{ color: 'var(--line)' }}>│</span>
-          {/* Toggle de modo de roteamento: LIVRE ↔ GRADE */}
+          {/* Botão de configurações */}
           <button
-            onClick={() => setEdgeMode((m) => (m === 'free' ? 'grid' : 'free'))}
-            title={edgeMode === 'grid' ? 'Modo Grade — clique para Livre' : 'Modo Livre — clique para Grade'}
+            type="button"
+            onClick={() => setShowConfigModal(true)}
+            title="Configurações do projeto"
             style={{
-              background: edgeMode === 'grid' ? 'var(--neon-glow-faint)' : 'transparent',
-              border: `1px solid ${edgeMode === 'grid' ? 'var(--neon)' : 'var(--line)'}`,
-              color: edgeMode === 'grid' ? 'var(--neon)' : 'var(--neon-dim)',
+              background: 'transparent',
+              border: '1px solid var(--line)',
+              color: 'var(--neon-dim)',
               fontFamily: 'inherit', fontSize: 9, letterSpacing: 1,
               padding: '1px 7px', cursor: 'pointer', borderRadius: 2,
               transition: 'all 0.15s',
             }}
             onMouseEnter={(e) => { e.currentTarget.style.borderColor = 'var(--neon)'; e.currentTarget.style.color = 'var(--neon)'; }}
-            onMouseLeave={(e) => {
-              e.currentTarget.style.borderColor = edgeMode === 'grid' ? 'var(--neon)' : 'var(--line)';
-              e.currentTarget.style.color = edgeMode === 'grid' ? 'var(--neon)' : 'var(--neon-dim)';
-            }}
+            onMouseLeave={(e) => { e.currentTarget.style.borderColor = 'var(--line)'; e.currentTarget.style.color = 'var(--neon-dim)'; }}
           >
-            {edgeMode === 'grid' ? '⊞ GRADE' : '◌ LIVRE'}
+            ⚙ CONFIG
           </button>
           {onToggleTheme && (
             <>
@@ -894,49 +906,49 @@ function Canvas({ initialFlow, projectName, projectCreatedAt, currentProjectId, 
             </>
           )}
           {/* ── Toggle PRO / AMIGÁVEL ─────────────────────────────────────── */}
-          {onToggleMode && (
-            <>
-              <span style={{ color: 'var(--line)' }}>│</span>
-              <div style={{ display: 'flex', gap: 0 }}>
-                <button
-                  onClick={() => mode !== 'pro' && onToggleMode()}
-                  title="Modo PRO — interface técnica completa"
-                  style={{
-                    background: mode === 'pro' ? 'var(--neon)' : 'transparent',
-                    border: '1px solid var(--neon)',
-                    borderRight: 'none',
-                    color: mode === 'pro' ? '#000' : 'var(--neon)',
-                    opacity: mode === 'pro' ? 1 : 0.45,
-                    fontFamily: 'inherit', fontSize: 9, letterSpacing: 1,
-                    padding: '1px 7px', cursor: mode === 'pro' ? 'default' : 'pointer',
-                    borderRadius: '2px 0 0 2px',
-                    fontWeight: mode === 'pro' ? 700 : 400,
-                    transition: 'all 0.15s',
-                  }}
-                >
-                  PRO
-                </button>
-                <button
-                  onClick={() => mode !== 'amigavel' && onToggleMode()}
-                  title="Modo AMIGÁVEL — interface humanizada com dicas"
-                  style={{
-                    background: mode === 'amigavel' ? 'var(--neon)' : 'transparent',
-                    border: '1px solid var(--neon)',
-                    color: mode === 'amigavel' ? '#000' : 'var(--neon)',
-                    opacity: mode === 'amigavel' ? 1 : 0.45,
-                    fontFamily: 'inherit', fontSize: 9, letterSpacing: 1,
-                    padding: '1px 7px', cursor: mode === 'amigavel' ? 'default' : 'pointer',
-                    borderRadius: '0 2px 2px 0',
-                    fontWeight: mode === 'amigavel' ? 700 : 400,
-                    transition: 'all 0.15s',
-                    whiteSpace: 'nowrap',
-                  }}
-                >
-                  AMIGÁVEL
-                </button>
-              </div>
-            </>
-          )}
+          <>
+            <span style={{ color: 'var(--line)' }}>│</span>
+            <div style={{ display: 'flex', gap: 0 }}>
+              <button
+                type="button"
+                onClick={() => config.setConfig('mode', 'pro')}
+                title="Modo PRO — interface técnica completa"
+                style={{
+                  background: mode === 'pro' ? 'var(--neon)' : 'transparent',
+                  border: '1px solid var(--neon)',
+                  borderRight: 'none',
+                  color: mode === 'pro' ? '#000' : 'var(--neon)',
+                  opacity: mode === 'pro' ? 1 : 0.45,
+                  fontFamily: 'inherit', fontSize: 9, letterSpacing: 1,
+                  padding: '1px 7px', cursor: mode === 'pro' ? 'default' : 'pointer',
+                  borderRadius: '2px 0 0 2px',
+                  fontWeight: mode === 'pro' ? 700 : 400,
+                  transition: 'all 0.15s',
+                }}
+              >
+                PRO
+              </button>
+              <button
+                type="button"
+                onClick={() => config.setConfig('mode', 'amigavel')}
+                title="Modo AMIGÁVEL — interface humanizada com dicas"
+                style={{
+                  background: mode === 'amigavel' ? 'var(--neon)' : 'transparent',
+                  border: '1px solid var(--neon)',
+                  color: mode === 'amigavel' ? '#000' : 'var(--neon)',
+                  opacity: mode === 'amigavel' ? 1 : 0.45,
+                  fontFamily: 'inherit', fontSize: 9, letterSpacing: 1,
+                  padding: '1px 7px', cursor: mode === 'amigavel' ? 'default' : 'pointer',
+                  borderRadius: '0 2px 2px 0',
+                  fontWeight: mode === 'amigavel' ? 700 : 400,
+                  transition: 'all 0.15s',
+                  whiteSpace: 'nowrap',
+                }}
+              >
+                AMIGÁVEL
+              </button>
+            </div>
+          </>
         </div>
 
         <ReactFlow
@@ -960,11 +972,13 @@ function Canvas({ initialFlow, projectName, projectCreatedAt, currentProjectId, 
           edgesFocusable
           elementsSelectable
           multiSelectionKeyCode={['Meta', 'Control']}
-          connectionLineType="smoothstep"
+          connectionLineType={edgeStyleMap[config.edgeStyle] === 'straight' ? 'straight' : config.edgeStyle === 'step' ? 'step' : 'smoothstep'}
           defaultEdgeOptions={defaultEdgeOpts}
+          snapToGrid={config.snapToGrid}
+          snapGrid={[config.gridSize || 16, config.gridSize || 16]}
           proOptions={{ hideAttribution: false }}
         >
-          <Background gap={20} size={1} />
+          {config.showGrid && <Background gap={config.gridSize || 16} size={1} />}
           <Controls />
           <MiniMap
             nodeColor={(n) => {
@@ -1294,6 +1308,9 @@ function Canvas({ initialFlow, projectName, projectCreatedAt, currentProjectId, 
           </div>
         </div>
       )}
+      {/* Modal de configurações */}
+      {showConfigModal && <ConfigModal onClose={() => setShowConfigModal(false)} />}
+
     </div>
     </EdgeModeContext.Provider>
     </ActiveSelectionContext.Provider>
@@ -1317,25 +1334,7 @@ export default function App() {
   const [theme, setThemeState] = useState(() => initTheme());
   const handleToggleTheme = useCallback(() => setThemeState(themeToggle()), []);
 
-  // ── Modo de interface: PRO | AMIGÁVEL ─────────────────────────────────────
-  const [mode, setMode] = useState(() => localStorage.getItem('orpen-ura-mode') || 'pro');
-  const handleToggleMode = useCallback(() => {
-    setMode((m) => {
-      const next = m === 'pro' ? 'amigavel' : 'pro';
-      localStorage.setItem('orpen-ura-mode', next);
-      return next;
-    });
-  }, []);
-
-  // Aplica/remove classe body.mode-amigavel para CSS hierarchy vars
-  useEffect(() => {
-    if (mode === 'amigavel') {
-      document.body.classList.add('mode-amigavel');
-    } else {
-      document.body.classList.remove('mode-amigavel');
-    }
-    return () => document.body.classList.remove('mode-amigavel');
-  }, [mode]);
+  // Modo de interface agora gerenciado pelo ConfigContext (ConfigProvider)
 
   // Carrega projetos do IndexedDB na inicialização
   useEffect(() => {
@@ -1458,41 +1457,43 @@ export default function App() {
   // ── Renderização ──────────────────────────────────────────────────────────
   if (screen === 'home') {
     return (
-      <HomeScreen
-        projects={projects}
-        onCreateProject={handleCreateProject}
-        onOpenProject={handleOpenProject}
-        onImportProject={handleImportProject}
-        onImportConf={handleImportConf}
-        onDeleteProject={handleDeleteProject}
-        importError={importError}
-        confImportData={confImportData}
-        onConfImportConfirm={handleConfImportConfirm}
-        onConfImportCancel={() => setConfImportData(null)}
-        theme={theme}
-        onToggleTheme={handleToggleTheme}
-      />
+      <ConfigProvider>
+        <HomeScreen
+          projects={projects}
+          onCreateProject={handleCreateProject}
+          onOpenProject={handleOpenProject}
+          onImportProject={handleImportProject}
+          onImportConf={handleImportConf}
+          onDeleteProject={handleDeleteProject}
+          importError={importError}
+          confImportData={confImportData}
+          onConfImportConfirm={handleConfImportConfirm}
+          onConfImportCancel={() => setConfImportData(null)}
+          theme={theme}
+          onToggleTheme={handleToggleTheme}
+        />
+      </ConfigProvider>
     );
   }
 
   return (
-    <div style={{ height: '100vh', width: '100vw', display: 'flex' }}>
-      <ReactFlowProvider>
-        {/* key força remount completo ao trocar de projeto */}
-        <Canvas
-          key={currentProject?.id || 'standalone'}
-          initialFlow={pendingFlow}
-          projectName={currentProject?.name}
-          projectCreatedAt={currentProject?.dataCriacao}
-          currentProjectId={currentProject?.id}
-          onGoBack={handleGoBack}
-          onProjectSaved={handleProjectSaved}
-          theme={theme}
-          onToggleTheme={handleToggleTheme}
-          mode={mode}
-          onToggleMode={handleToggleMode}
-        />
-      </ReactFlowProvider>
-    </div>
+    <ConfigProvider>
+      <div style={{ height: '100vh', width: '100vw', display: 'flex' }}>
+        <ReactFlowProvider>
+          {/* key força remount completo ao trocar de projeto */}
+          <Canvas
+            key={currentProject?.id || 'standalone'}
+            initialFlow={pendingFlow}
+            projectName={currentProject?.name}
+            projectCreatedAt={currentProject?.dataCriacao}
+            currentProjectId={currentProject?.id}
+            onGoBack={handleGoBack}
+            onProjectSaved={handleProjectSaved}
+            theme={theme}
+            onToggleTheme={handleToggleTheme}
+          />
+        </ReactFlowProvider>
+      </div>
+    </ConfigProvider>
   );
 }

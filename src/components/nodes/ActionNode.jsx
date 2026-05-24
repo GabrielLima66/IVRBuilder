@@ -3,6 +3,10 @@ import { Handle, Position, useReactFlow } from 'reactflow';
 import { ACTION_META } from '../../utils/actionMeta';
 import { cls } from '../../utils/common';
 import { useActiveSelection } from '../../contexts/ActiveSelectionContext';
+import { useThemeContext } from '../../contexts/ThemeContext';
+import { resolveNodeColor } from '../../utils/nodeColors';
+import { useModeContext } from '../../contexts/ModeContext';
+import { getNodeLabel } from '../../config/nodeModeConfig';
 
 const btnStyle = (color) => ({
   flex: 1,
@@ -26,6 +30,14 @@ const ActionNode = memo(({ id, data, selected, type }) => {
   const { activeNodeIds } = useActiveSelection();
   const isConnectedActive = activeNodeIds.has(id);
 
+  // ── Cor resolvida para o tema atual ─────────────────────────────────────────
+  // Remapeia cores que colidiriam com o chrome do tema (verde no matrix,
+  // roxo no orpen), garantindo contraste adequado em ambos os temas.
+  const theme   = useThemeContext();
+  const modeCtx = useModeContext();
+  const color   = resolveNodeColor(meta.color, theme);
+  const displayTitle = getNodeLabel(type, modeCtx);
+
   const handleActivate = useCallback(() => {
     setNodes((ns) =>
       ns.map((n) => {
@@ -44,8 +56,8 @@ const ActionNode = memo(({ id, data, selected, type }) => {
   const errors      = meta.validate ? meta.validate(data) : [];
   const isInvalid   = errors.length > 0;
   const borderColor = data._commented
-    ? (meta.color + '44')
-    : (isInvalid ? '#ff5050' : (meta.color + '99'));
+    ? (color + '44')
+    : (isInvalid ? '#ff5050' : (color + '99'));
 
   return (
     <div
@@ -55,30 +67,32 @@ const ActionNode = memo(({ id, data, selected, type }) => {
         borderStyle: data._commented ? 'dashed' : 'solid',
         opacity: data._commented ? 0.6 : 1,
         minWidth: 210,
-        ...(isConnectedActive && { '--node-active-color': meta.color, '--node-active-glow': meta.color + '99' }),
+        ...(isConnectedActive && { '--node-active-color': color, '--node-active-glow': color + '99' }),
       }}
     >
       {/* ── Handles: 4 lados ── */}
-      <Handle type="target" position={Position.Top}    id="in"        style={{ background: meta.color }} />
-      <Handle type="target" position={Position.Left}   id="in-left"   style={{ background: meta.color }} />
+      <Handle type="target" position={Position.Top}    id="in"        style={{ background: color }} />
+      <Handle type="target" position={Position.Left}   id="in-left"   style={{ background: color }} />
       {!meta.terminal && (
         <>
-          <Handle type="source" position={Position.Bottom} id="out"       style={{ background: meta.color }} />
-          <Handle type="source" position={Position.Right}  id="out-right" style={{ background: meta.color }} />
+          <Handle type="source" position={Position.Bottom} id="out"       style={{ background: color }} />
+          <Handle type="source" position={Position.Right}  id="out-right" style={{ background: color }} />
         </>
       )}
 
       <div className="rcx-node-header" style={{
-        background: `linear-gradient(180deg, ${meta.color}22 0%, ${meta.color}08 100%)`,
-        borderColor: meta.color + '88',
-        color: meta.color,
+        background: `linear-gradient(180deg, ${color}22 0%, ${color}08 100%)`,
+        borderColor: color + '88',
+        color,
       }}>
-        <span style={{ display: 'flex', alignItems: 'center', gap: 6, textShadow: `0 0 5px ${meta.color}` }}>
-          <Icon size={12} /> {data._commented ? `// ${meta.title}` : meta.title}
+        <span style={{ display: 'flex', alignItems: 'center', gap: 6, textShadow: `0 0 5px ${color}` }}>
+          <Icon size={12} /> {data._commented ? `// ${displayTitle}` : displayTitle}
         </span>
         {data._commented
           ? <span className="badge" style={{ borderColor: '#ff505088', color: '#ff5050' }}>DESATIVADO</span>
-          : <span className="badge" style={{ borderColor: meta.color, color: meta.color }}>{meta.app}</span>
+          : modeCtx !== 'amigavel' && (
+              <span className="badge" style={{ borderColor: color, color }}>{meta.app}</span>
+            )
         }
       </div>
 
@@ -118,10 +132,12 @@ const ActionNode = memo(({ id, data, selected, type }) => {
 
         {data._commented && (
           <div style={{ display: 'flex', gap: 5, marginTop: 6 }}>
-            <button onMouseDown={(e) => e.stopPropagation()} onClick={handleActivate} style={btnStyle('#00ff41')}>
+            <button onMouseDown={(e) => e.stopPropagation()} onClick={handleActivate}
+              style={btnStyle('var(--neon)')}>
               ATIVAR
             </button>
-            <button onMouseDown={(e) => e.stopPropagation()} onClick={handleExclude} style={btnStyle('#ff5050')}>
+            <button onMouseDown={(e) => e.stopPropagation()} onClick={handleExclude}
+              style={btnStyle('#ff5050')}>
               EXCLUIR
             </button>
           </div>

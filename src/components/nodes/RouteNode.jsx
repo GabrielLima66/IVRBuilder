@@ -2,6 +2,8 @@ import React, { memo, useCallback } from 'react';
 import { Handle, Position, useReactFlow } from 'reactflow';
 import { cls } from '../../utils/common';
 import { useActiveSelection } from '../../contexts/ActiveSelectionContext';
+import { useModeContext } from '../../contexts/ModeContext';
+import { getNodeLabel } from '../../config/nodeModeConfig';
 
 const MODE_COLOR = { contexto: '#00d4ff', fila: '#ff8c00', macro: '#a78bfa' };
 const MODE_LABEL = { contexto: 'CONTEXTO', fila: 'FILA', macro: 'MACRO+FILA' };
@@ -28,6 +30,8 @@ const RouteNode = memo(({ id, data, selected }) => {
   const color = MODE_COLOR[mode] || '#ff8c00';
   const { activeNodeIds } = useActiveSelection();
   const isConnectedActive = activeNodeIds.has(id);
+  const modeCtx     = useModeContext();
+  const displayTitle = getNodeLabel('route', modeCtx);
 
   const handleActivate = useCallback(() => {
     setNodes((ns) =>
@@ -67,11 +71,13 @@ const RouteNode = memo(({ id, data, selected }) => {
         borderColor: color + '88', color,
       }}>
         <span style={{ textShadow: `0 0 5px ${color}` }}>
-          {data._commented ? '// DESTINO / ROTA' : '▶ DESTINO / ROTA'}
+          {data._commented ? `// ${displayTitle}` : `▶ ${displayTitle}`}
         </span>
         {data._commented
           ? <span className="badge" style={{ borderColor: '#ff505088', color: '#ff5050' }}>DESATIVADO</span>
-          : <span className="badge" style={{ borderColor: color, color }}>{MODE_LABEL[mode] || 'MACRO+FILA'}</span>
+          : modeCtx !== 'amigavel' && (
+              <span className="badge" style={{ borderColor: color, color }}>{MODE_LABEL[mode] || 'MACRO+FILA'}</span>
+            )
         }
       </div>
 
@@ -108,7 +114,7 @@ const RouteNode = memo(({ id, data, selected }) => {
 
         {data._commented && (
           <div style={{ display: 'flex', gap: 5, marginTop: 6 }}>
-            <button onMouseDown={(e) => e.stopPropagation()} onClick={handleActivate} style={btnStyle('#00ff41')}>
+            <button onMouseDown={(e) => e.stopPropagation()} onClick={handleActivate} style={btnStyle('var(--neon)')}>
               ATIVAR
             </button>
             <button onMouseDown={(e) => e.stopPropagation()} onClick={handleExclude} style={btnStyle('#ff5050')}>

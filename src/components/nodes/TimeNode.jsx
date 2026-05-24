@@ -3,6 +3,8 @@ import { Handle, Position, useReactFlow } from 'reactflow';
 import { cls } from '../../utils/common';
 import { formatTimeRange, formatDayRange, WEEKDAY_ORDER, MONTH_ORDER } from '../../utils/timeUtils';
 import { useActiveSelection } from '../../contexts/ActiveSelectionContext';
+import { useModeContext } from '../../contexts/ModeContext';
+import { getNodeLabel } from '../../config/nodeModeConfig';
 
 const btnStyle = (color) => ({
   flex: 1,
@@ -21,6 +23,8 @@ const TimeNode = memo(({ id, data, selected }) => {
   const { setNodes, setEdges } = useReactFlow();
   const { activeNodeIds } = useActiveSelection();
   const isConnectedActive = activeNodeIds.has(id);
+  const modeCtx = useModeContext();
+  const displayTitle = getNodeLabel('time', modeCtx);
 
   const handleActivate = useCallback(() => {
     setNodes((ns) =>
@@ -79,11 +83,11 @@ const TimeNode = memo(({ id, data, selected }) => {
 
       <div className="rcx-node-header">
         <span className="neon-text">
-          {data._commented ? '// TIME COND' : '▶ TIME COND'}
+          {data._commented ? `// ${displayTitle}` : `▶ ${displayTitle}`}
         </span>
         {data._commented
           ? <span className="badge" style={{ borderColor: '#ff505088', color: '#ff5050' }}>DESATIVADO</span>
-          : <span className="badge">GotoIfTime</span>
+          : modeCtx !== 'amigavel' && <span className="badge">GotoIfTime</span>
         }
       </div>
 
@@ -123,7 +127,7 @@ const TimeNode = memo(({ id, data, selected }) => {
 
         {data._commented && (
           <div style={{ display: 'flex', gap: 5, marginTop: 6 }}>
-            <button onMouseDown={(e) => e.stopPropagation()} onClick={handleActivate} style={btnStyle('#00ff41')}>
+            <button onMouseDown={(e) => e.stopPropagation()} onClick={handleActivate} style={btnStyle('var(--neon)')}>
               ATIVAR
             </button>
             <button onMouseDown={(e) => e.stopPropagation()} onClick={handleExclude} style={btnStyle('#ff5050')}>

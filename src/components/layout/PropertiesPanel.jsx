@@ -3,6 +3,8 @@ import { ACTION_META } from '../../utils/actionMeta';
 import {
   formatDayRange, WEEKDAY_ORDER, MONTH_ORDER, getMaxDay, buildTimeExport,
 } from '../../utils/timeUtils';
+import { useModeContext } from '../../contexts/ModeContext';
+import { NODE_MODE_CONFIG, getFieldLabel, getNodeLabel } from '../../config/nodeModeConfig';
 
 // ─── Inputs estáveis (fora do componente pai para não recriar a cada render) ─
 
@@ -38,7 +40,7 @@ const Toggle = memo(function Toggle({ d, set, label, k }) {
         type="checkbox"
         checked={!!d[k]}
         onChange={(e) => set(k, e.target.checked)}
-        style={{ accentColor: '#00ff41' }}
+        style={{ accentColor: 'var(--neon)' }}
       />
       <span style={{ fontSize: 11, letterSpacing: 1, color: 'var(--neon)' }}>{label}</span>
     </label>
@@ -157,6 +159,7 @@ const MonthPicker = memo(function MonthPicker({ selected, onChange }) {
 export default function PropertiesPanel({ node, updateNodeData, deleteNode, toggleComment, patchNodeStyle, syncTrueContext, propagateContextRename, nodes = [] }) {
   // Armazena o nome do contexto no momento do foco (para detectar rename via painel)
   const ctxNameOnFocus = useRef('');
+  const mode = useModeContext();
   const panelStyle = {
     width: 320, height: '100%',
     background: 'var(--panel)',
@@ -186,19 +189,52 @@ export default function PropertiesPanel({ node, updateNodeData, deleteNode, togg
   const d = node.data;
   const set = (key, val) => updateNodeData(node.id, { ...d, [key]: val });
 
+  /** Retorna o label amigável do campo se estiver no modo AMIGÁVEL. */
+  const fl = (defaultLabel, fieldKey) => getFieldLabel(node.type, fieldKey, defaultLabel, mode);
+
   return (
     <aside style={panelStyle}>
       <div style={{ fontSize: 11, color: 'var(--neon-dim)', letterSpacing: 1, marginBottom: 6 }}>
         ▌PROPRIEDADES
       </div>
-      <div style={{ fontSize: 13, color: '#fff', letterSpacing: 1, marginBottom: 12, textTransform: 'uppercase' }}>
-        {node.type === 'context' && '◆ Contexto (Container)'}
-        {node.type === 'config'  && '◆ Config / Start'}
-        {node.type === 'menu'    && '◆ Menu DTMF'}
-        {node.type === 'time'    && '◆ Condição de Tempo'}
-        {node.type === 'route'   && '◆ Destino / Roteamento'}
-        {ACTION_META[node.type]  && '◆ ' + ACTION_META[node.type].title}
+      <div style={{ fontSize: 13, color: '#fff', letterSpacing: 1, marginBottom: mode === 'amigavel' ? 8 : 12, textTransform: 'uppercase' }}>
+        {mode === 'amigavel'
+          ? `◆ ${getNodeLabel(node.type, 'amigavel')}`
+          : (
+            <>
+              {node.type === 'context' && '◆ Contexto (Container)'}
+              {node.type === 'config'  && '◆ Config / Start'}
+              {node.type === 'menu'    && '◆ Menu DTMF'}
+              {node.type === 'time'    && '◆ Condição de Tempo'}
+              {node.type === 'route'   && '◆ Destino / Roteamento'}
+              {ACTION_META[node.type]  && '◆ ' + ACTION_META[node.type].title}
+            </>
+          )
+        }
       </div>
+
+      {/* ── Card de ajuda (apenas modo AMIGÁVEL) ─────────────────────────── */}
+      {mode === 'amigavel' && NODE_MODE_CONFIG[node.type] && (() => {
+        const cfg = NODE_MODE_CONFIG[node.type];
+        return (
+          <div style={{
+            border: '1px dashed var(--neon)',
+            borderRadius: 3,
+            padding: '10px 12px',
+            marginBottom: 14,
+            background: 'var(--neon-glow-bg)',
+          }}>
+            <div style={{ fontSize: 10, color: 'var(--neon)', marginBottom: 6, letterSpacing: 0.5, lineHeight: 1.5 }}>
+              {cfg.desc}
+            </div>
+            {cfg.dica && (
+              <div style={{ fontSize: 10, color: 'var(--neon-dim)', fontStyle: 'italic', lineHeight: 1.5, borderTop: '1px dashed var(--line)', paddingTop: 6, marginTop: 4 }}>
+                💡 {cfg.dica}
+              </div>
+            )}
+          </div>
+        );
+      })()}
 
       {/* ── CONTEXT ── */}
       {node.type === 'context' && (
@@ -260,13 +296,13 @@ export default function PropertiesPanel({ node, updateNodeData, deleteNode, togg
       {/* ── CONFIG ── */}
       {node.type === 'config' && (
         <>
-          <Field d={d} set={set} label="__IVR (número do IVR)" k="ivr" placeholder="0000" />
-          <Field d={d} set={set} label="SOUND_PATH" k="soundPath" />
-          <Field d={d} set={set} label="AGI_PATH"   k="agiPath" />
-          <Field d={d} set={set} label="Language (CHANNEL)" k="language" />
-          <Field d={d} set={set} label="Comentário (Noop)"  k="comment" />
-          <Toggle d={d} set={set} label="Set __NUMBER_DIALED" k="numberDialed" />
-          <Toggle d={d} set={set} label="Macro(logIvr, ENTER_IVR)" k="logIvr" />
+          <Field d={d} set={set} label={fl('__IVR (número do IVR)', 'ivr')} k="ivr" placeholder="0000" />
+          <Field d={d} set={set} label={fl('SOUND_PATH', 'soundPath')} k="soundPath" />
+          <Field d={d} set={set} label={fl('AGI_PATH', 'agiPath')} k="agiPath" />
+          <Field d={d} set={set} label={fl('Language (CHANNEL)', 'language')} k="language" />
+          <Field d={d} set={set} label={fl('Comentário (Noop)', 'comment')} k="comment" />
+          <Toggle d={d} set={set} label={fl('Set __NUMBER_DIALED', 'numberDialed')} k="numberDialed" />
+          <Toggle d={d} set={set} label={fl('Macro(logIvr, ENTER_IVR)', 'logIvr')} k="logIvr" />
           <div style={{ fontSize: 9, color: 'var(--neon-dim)', marginTop: 6, border: '1px dashed var(--line)', padding: 8, borderRadius: 3, lineHeight: 1.6 }}>
             Para emitir <code style={{ color: '#fff' }}>Agi(customerDataInboundCall_v4.php,...)</code>,
             adicione um nó <span style={{ color: '#a78bfa' }}>AGI</span> explícito no canvas após este nó.
@@ -277,9 +313,9 @@ export default function PropertiesPanel({ node, updateNodeData, deleteNode, togg
       {/* ── MENU ── */}
       {node.type === 'menu' && (
         <>
-          <Field d={d} set={set} label="Contexto Asterisk"  k="contextName" placeholder="orpen-ivr-home" />
-          <Field d={d} set={set} label="Áudio (Background)" k="greeting"    placeholder="1-bem-vindo" />
-          <Field d={d} set={set} label="WaitExten (seg)"    k="waitExten"   type="number" />
+          <Field d={d} set={set} label={fl('Contexto Asterisk', 'contextName')} k="contextName" placeholder="orpen-ivr-home" />
+          <Field d={d} set={set} label={fl('Áudio (Background)', 'greeting')} k="greeting" placeholder="1-bem-vindo" />
+          <Field d={d} set={set} label={fl('WaitExten (seg)', 'waitExten')} k="waitExten" type="number" />
 
           <div style={{ margin: '14px 0 6px', fontSize: 10, color: 'var(--neon-dim)', letterSpacing: 1 }}>
             ▌DÍGITOS (DTMF)

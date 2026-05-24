@@ -8,6 +8,10 @@ import {
   Pen, GitFork, PhoneOutgoing, Volume2, Hourglass,
 } from 'lucide-react';
 import { NODE_TAGS } from '../../config/nodeTags';
+import { useThemeContext } from '../../contexts/ThemeContext';
+import { resolveNodeColor } from '../../utils/nodeColors';
+import { useModeContext } from '../../contexts/ModeContext';
+import { NODE_MODE_CONFIG, CATEGORY_LABELS_AMIGAVEL } from '../../config/nodeModeConfig';
 
 // Chave no localStorage para persistir o estado colapsado das categorias
 const STORAGE_KEY = 'orpen-sidebar-collapsed';
@@ -100,6 +104,9 @@ const CATEGORIES = [
 ];
 
 export default function Sidebar() {
+  const theme = useThemeContext();
+  const mode  = useModeContext();
+
   // ── Pesquisa ──────────────────────────────────────────────────────────────
   const [query,         setQuery]         = useState('');
   const [searchFocused, setSearchFocused] = useState(false);
@@ -210,7 +217,7 @@ export default function Sidebar() {
             onFocus={(e) => {
               setSearchFocused(true);
               e.target.style.borderColor = 'var(--neon)';
-              e.target.style.boxShadow = '0 0 0 1px var(--neon), 0 0 5px rgba(0,255,65,0.3)';
+              e.target.style.boxShadow = '0 0 0 1px var(--neon), 0 0 5px var(--neon-glow-soft)';
             }}
             onBlur={(e) => {
               setSearchFocused(false);
@@ -221,6 +228,7 @@ export default function Sidebar() {
           {/* Botão × para limpar */}
           {query && (
             <button
+              aria-label="Limpar pesquisa"
               onClick={() => { setQuery(''); searchRef.current?.focus(); }}
               style={{
                 position: 'absolute', right: 6, top: '50%',
@@ -242,6 +250,7 @@ export default function Sidebar() {
         {/* Botão expandir/colapsar tudo */}
         <button
           onClick={toggleAll}
+          aria-label={allExpanded ? 'Colapsar tudo' : 'Expandir tudo'}
           title={allExpanded ? 'Colapsar tudo' : 'Expandir tudo'}
           style={{
             flexShrink: 0,
@@ -313,37 +322,46 @@ export default function Sidebar() {
       {visibleCategories.map((cat) => {
         // Com pesquisa ativa, sempre expande; senão respeita o estado salvo
         const isCollapsed = !isSearching && !!collapsed[cat.label];
+        const catLabel = mode === 'amigavel'
+          ? (CATEGORY_LABELS_AMIGAVEL[cat.label] || cat.label)
+          : cat.label;
 
         return (
           <div key={cat.label} style={{ marginBottom: 10 }}>
             {/* Header clicável da categoria */}
-            <div
+            <button
+              type="button"
+              aria-expanded={!isCollapsed}
               onClick={() => !isSearching && toggleCategory(cat.label)}
               style={{
                 fontSize: 10,
                 color: 'var(--neon)',
-                letterSpacing: 2,
+                letterSpacing: mode === 'amigavel' ? 0.5 : 2,
                 padding: '4px 6px',
                 marginBottom: isCollapsed ? 0 : 6,
+                border: 'none',
                 borderLeft: '2px solid var(--neon)',
-                background: 'rgba(0,255,65,0.06)',
+                background: 'var(--neon-glow-bg)',
                 cursor: isSearching ? 'default' : 'pointer',
                 display: 'flex',
+                width: '100%',
                 justifyContent: 'space-between',
                 alignItems: 'center',
                 userSelect: 'none',
+                fontFamily: 'inherit',
+                textAlign: 'left',
                 transition: 'background 0.1s',
               }}
-              onMouseEnter={(e) => { if (!isSearching) e.currentTarget.style.background = 'rgba(0,255,65,0.11)'; }}
-              onMouseLeave={(e) => { e.currentTarget.style.background = 'rgba(0,255,65,0.06)'; }}
+              onMouseEnter={(e) => { if (!isSearching) e.currentTarget.style.background = 'var(--neon-glow-faint)'; }}
+              onMouseLeave={(e) => { e.currentTarget.style.background = 'var(--neon-glow-bg)'; }}
             >
-              <span>▌ {cat.label}</span>
+              <span>▌ {catLabel}</span>
               {!isSearching && (
                 <span style={{ fontSize: 9, opacity: 0.75, marginLeft: 4 }}>
                   {isCollapsed ? '►' : '▼'}
                 </span>
               )}
-            </div>
+            </button>
 
             {/* Conteúdo colapsável com animação */}
             <div style={{
@@ -353,22 +371,42 @@ export default function Sidebar() {
             }}>
               {cat.items.map((it) => {
                 const Icon = it.Icon;
+                const accent = resolveNodeColor(it.accent, theme);
+                const cfg    = NODE_MODE_CONFIG[it.type];
+                const displayTitle = mode === 'amigavel' && cfg
+                  ? cfg.labelAmigavel
+                  : it.title;
+                const displayDesc = mode === 'amigavel' && cfg
+                  ? cfg.desc
+                  : it.desc;
+
                 return (
                   <div
                     key={it.type}
                     className="palette-item"
                     draggable
                     onDragStart={(e) => onDragStart(e, it.type)}
-                    style={{ borderColor: it.accent + '55', padding: '8px 10px' }}
+                    style={{
+                      borderColor: accent + '55',
+                      padding: mode === 'amigavel' ? '10px 10px' : '8px 10px',
+                    }}
                   >
                     <div style={{
-                      fontSize: 11, color: it.accent, letterSpacing: 1, fontWeight: 'bold',
+                      fontSize: 11, color: accent,
+                      letterSpacing: mode === 'amigavel' ? 0.3 : 1,
+                      fontWeight: 'bold',
                       display: 'flex', alignItems: 'center', gap: 6,
                     }}>
-                      <Icon size={13} /> {it.title}
+                      <Icon size={13} /> {displayTitle}
                     </div>
-                    <div style={{ fontSize: 10, color: '#aaa', marginTop: 3, marginLeft: 19 }}>
-                      {it.desc}
+                    <div style={{
+                      fontSize: mode === 'amigavel' ? 10 : 10,
+                      color: mode === 'amigavel' ? 'var(--neon-dim)' : '#aaa',
+                      marginTop: 3, marginLeft: 19,
+                      lineHeight: mode === 'amigavel' ? 1.5 : 1.3,
+                      opacity: mode === 'amigavel' ? 0.75 : 1,
+                    }}>
+                      {displayDesc}
                     </div>
                   </div>
                 );

@@ -1,4 +1,5 @@
 import React, { useState, useCallback, useRef, useMemo, useEffect, memo } from 'react';
+import { initTheme, toggleTheme as themeToggle } from './utils/theme';
 import ReactFlow, {
   Background,
   Controls,
@@ -21,6 +22,8 @@ import { applyContextRename } from './utils/renamePropagator';
 import { isSemanticHandle } from './utils/edgeUtils';
 import { EdgeModeContext } from './contexts/EdgeModeContext';
 import { ActiveSelectionContext } from './contexts/ActiveSelectionContext';
+import { ThemeContext } from './contexts/ThemeContext';
+import { ModeContext } from './contexts/ModeContext';
 import HomeScreen from './screens/HomeScreen';
 import { salvarProjeto, listarProjetos } from './services/projectStorage';
 import { importConf } from './utils/conf/confImporter';
@@ -38,7 +41,9 @@ const edgeTypes = { floating: EdgeWithWaypoints, smoothstep: EdgeWithWaypoints }
 // CANVAS — estado global do grafo + lógica de DnD / reparenting
 // Props de projeto (opcionais): permitem integração com HomeScreen.
 // ─────────────────────────────────────────────────────────────────────────────
-function Canvas({ initialFlow, projectName, projectCreatedAt, currentProjectId, onGoBack, onProjectSaved }) {
+function Canvas({ initialFlow, projectName, projectCreatedAt, currentProjectId, onGoBack, onProjectSaved, theme = 'matrix', onToggleTheme, mode = 'pro', onToggleMode }) {
+  // Cor principal do tema — usada em edges e mini-mapa
+  const neonColor = theme === 'orpen' ? '#c084fc' : '#00ff41';
   const wrapperRef  = useRef(null);
   const rfInstance  = useReactFlow();
 
@@ -108,9 +113,11 @@ function Canvas({ initialFlow, projectName, projectCreatedAt, currentProjectId, 
     activeNodeIds,
   }), [activeEdgeIds, activeNodeIds]);
 
-  const [showExport,      setShowExport]      = useState(false);
-  const [showOrderPanel,  setShowOrderPanel]  = useState(false);
-  const [exportText,      setExportText]      = useState('');
+  const [showExport,           setShowExport]           = useState(false);
+  const [showOrderPanel,       setShowOrderPanel]       = useState(false);
+  const [exportText,           setExportText]           = useState('');
+  const [showFirstExportModal, setShowFirstExportModal] = useState(false);
+  const [firstExportDontShow,  setFirstExportDontShow]  = useState(false);
   // Modo de roteamento das edges: 'free' | 'grid'
   const [edgeMode,        setEdgeMode]        = useState('free');
   // Context menu de edge (botão direito)
@@ -709,6 +716,17 @@ function Canvas({ initialFlow, projectName, projectCreatedAt, currentProjectId, 
   // ── Exportação ────────────────────────────────────────────────────────────
   const doExport = () => {
     setExportText(generateDialplan(nodes, edges));
+    // Modo AMIGÁVEL: mostra aviso informativo na primeira exportação
+    if (mode === 'amigavel' && !localStorage.getItem('orpen-first-export-shown')) {
+      setShowFirstExportModal(true);
+    } else {
+      setShowExport(true);
+    }
+  };
+
+  const confirmFirstExport = () => {
+    if (firstExportDontShow) localStorage.setItem('orpen-first-export-shown', '1');
+    setShowFirstExportModal(false);
     setShowExport(true);
   };
 
@@ -737,7 +755,29 @@ function Canvas({ initialFlow, projectName, projectCreatedAt, currentProjectId, 
 
   const selectedNode = nodes.find((n) => n.id === selectedId) || null;
 
+  // ── Tema: sincroniza cor do marker das edges quando o tema muda ───────────────
+  useEffect(() => {
+    setEdges((es) =>
+      es.map((e) => {
+        const needsMarker = e.markerEnd?.color && e.markerEnd.color !== neonColor;
+        if (!needsMarker) return e;
+        return { ...e, markerEnd: { ...e.markerEnd, color: neonColor } };
+      })
+    );
+  }, [neonColor]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  // defaultEdgeOptions reativo ao tema
+  const defaultEdgeOpts = useMemo(() => ({
+    type: 'smoothstep',
+    style: { stroke: neonColor, strokeWidth: 1.5 },
+    markerEnd: { type: MarkerType.ArrowClosed, color: neonColor },
+    focusable: true,
+    selectable: true,
+  }), [neonColor]);
+
   return (
+    <ModeContext.Provider value={mode}>
+    <ThemeContext.Provider value={theme}>
     <ActiveSelectionContext.Provider value={activeSelectionValue}>
     <EdgeModeContext.Provider value={edgeMode}>
     <div style={{ display: 'flex', height: '100%', width: '100%' }}>
@@ -780,7 +820,7 @@ function Canvas({ initialFlow, projectName, projectCreatedAt, currentProjectId, 
           <span style={{ color: 'var(--line)' }}>│</span>
           <span>EDGES: <span style={{ color: '#fff' }}>{edges.length}</span></span>
           <span style={{ color: 'var(--line)' }}>│</span>
-          <span>STATUS: <span style={{ color: '#00ff41' }}>● LIVE</span></span>
+          <span>STATUS: <span style={{ color: 'var(--neon)' }}>● LIVE</span></span>
           {saveStatus && (
             <>
               <span style={{ color: 'var(--line)' }}>│</span>
@@ -807,7 +847,7 @@ function Canvas({ initialFlow, projectName, projectCreatedAt, currentProjectId, 
             onClick={() => setShowOrderPanel((v) => !v)}
             title="Gerenciar ordem de exportação dos contextos"
             style={{
-              background: showOrderPanel ? 'rgba(0,255,65,0.08)' : 'transparent',
+              background: showOrderPanel ? 'var(--neon-glow-faint)' : 'transparent',
               border: `1px solid ${showOrderPanel ? 'var(--neon)' : 'var(--line)'}`,
               color: showOrderPanel ? 'var(--neon)' : 'var(--neon-dim)',
               fontFamily: 'inherit', fontSize: 9, letterSpacing: 1,
@@ -823,7 +863,7 @@ function Canvas({ initialFlow, projectName, projectCreatedAt, currentProjectId, 
             onClick={() => setEdgeMode((m) => (m === 'free' ? 'grid' : 'free'))}
             title={edgeMode === 'grid' ? 'Modo Grade — clique para Livre' : 'Modo Livre — clique para Grade'}
             style={{
-              background: edgeMode === 'grid' ? 'rgba(0,255,65,0.08)' : 'transparent',
+              background: edgeMode === 'grid' ? 'var(--neon-glow-faint)' : 'transparent',
               border: `1px solid ${edgeMode === 'grid' ? 'var(--neon)' : 'var(--line)'}`,
               color: edgeMode === 'grid' ? 'var(--neon)' : 'var(--neon-dim)',
               fontFamily: 'inherit', fontSize: 9, letterSpacing: 1,
@@ -838,6 +878,63 @@ function Canvas({ initialFlow, projectName, projectCreatedAt, currentProjectId, 
           >
             {edgeMode === 'grid' ? '⊞ GRADE' : '◌ LIVRE'}
           </button>
+          {onToggleTheme && (
+            <>
+              <span style={{ color: 'var(--line)' }}>│</span>
+              <button
+                onClick={onToggleTheme}
+                title={theme === 'matrix' ? 'Mudar para tema Orpen (roxo)' : 'Mudar para tema Matrix (verde)'}
+                className="theme-toggle-btn"
+                style={{ fontSize: 9, padding: '1px 7px', letterSpacing: 1 }}
+              >
+                {theme === 'matrix' ? '◈ ORPEN' : '◈ MATRIX'}
+              </button>
+            </>
+          )}
+          {/* ── Toggle PRO / AMIGÁVEL ─────────────────────────────────────── */}
+          {onToggleMode && (
+            <>
+              <span style={{ color: 'var(--line)' }}>│</span>
+              <div style={{ display: 'flex', gap: 0 }}>
+                <button
+                  onClick={() => mode !== 'pro' && onToggleMode()}
+                  title="Modo PRO — interface técnica completa"
+                  style={{
+                    background: mode === 'pro' ? 'var(--neon)' : 'transparent',
+                    border: '1px solid var(--neon)',
+                    borderRight: 'none',
+                    color: mode === 'pro' ? '#000' : 'var(--neon)',
+                    opacity: mode === 'pro' ? 1 : 0.45,
+                    fontFamily: 'inherit', fontSize: 9, letterSpacing: 1,
+                    padding: '1px 7px', cursor: mode === 'pro' ? 'default' : 'pointer',
+                    borderRadius: '2px 0 0 2px',
+                    fontWeight: mode === 'pro' ? 700 : 400,
+                    transition: 'all 0.15s',
+                  }}
+                >
+                  PRO
+                </button>
+                <button
+                  onClick={() => mode !== 'amigavel' && onToggleMode()}
+                  title="Modo AMIGÁVEL — interface humanizada com dicas"
+                  style={{
+                    background: mode === 'amigavel' ? 'var(--neon)' : 'transparent',
+                    border: '1px solid var(--neon)',
+                    color: mode === 'amigavel' ? '#000' : 'var(--neon)',
+                    opacity: mode === 'amigavel' ? 1 : 0.45,
+                    fontFamily: 'inherit', fontSize: 9, letterSpacing: 1,
+                    padding: '1px 7px', cursor: mode === 'amigavel' ? 'default' : 'pointer',
+                    borderRadius: '0 2px 2px 0',
+                    fontWeight: mode === 'amigavel' ? 700 : 400,
+                    transition: 'all 0.15s',
+                    whiteSpace: 'nowrap',
+                  }}
+                >
+                  AMIGÁVEL
+                </button>
+              </div>
+            </>
+          )}
         </div>
 
         <ReactFlow
@@ -862,21 +959,15 @@ function Canvas({ initialFlow, projectName, projectCreatedAt, currentProjectId, 
           elementsSelectable
           multiSelectionKeyCode={['Meta', 'Control']}
           connectionLineType="smoothstep"
-          defaultEdgeOptions={{
-            type: 'smoothstep',
-            style: { stroke: '#00ff41', strokeWidth: 1.5 },
-            markerEnd: { type: MarkerType.ArrowClosed, color: '#00ff41' },
-            focusable: true,
-            selectable: true,
-          }}
+          defaultEdgeOptions={defaultEdgeOpts}
           proOptions={{ hideAttribution: false }}
         >
           <Background gap={20} size={1} />
           <Controls />
           <MiniMap
             nodeColor={(n) => {
-              if (n.type === 'config')  return '#00ff41';
-              if (n.type === 'menu')    return '#00b32d';
+              if (n.type === 'config')  return neonColor;
+              if (n.type === 'menu')    return neonColor;
               if (n.type === 'time')    return '#ffcc00';
               if (n.type === 'holiday') return '#ff5050';
               if (n.type === 'queue')   return '#ff8c00';
@@ -909,6 +1000,35 @@ function Canvas({ initialFlow, projectName, projectCreatedAt, currentProjectId, 
           />
         )}
 
+        {/* ── Hint de canvas vazio (modo AMIGÁVEL) ─────────────────────── */}
+        {mode === 'amigavel' && nodes.filter((n) => n.type !== 'config').length === 0 && (
+          <div style={{
+            position: 'absolute',
+            top: '50%', left: '50%',
+            transform: 'translate(-50%, -50%)',
+            zIndex: 4,
+            pointerEvents: 'none',
+            border: '1px dashed var(--neon)',
+            borderRadius: 4,
+            padding: '24px 32px',
+            background: 'rgba(0,0,0,0.72)',
+            maxWidth: 360,
+            color: 'var(--neon)',
+            fontSize: 11,
+            letterSpacing: 0.5,
+            lineHeight: 2,
+            opacity: 0.75,
+          }}>
+            <div style={{ fontSize: 10, letterSpacing: 2, marginBottom: 10, color: 'var(--neon-dim)', borderBottom: '1px dashed var(--line)', paddingBottom: 8 }}>
+              // COMO COMEÇAR
+            </div>
+            <div>1. Arraste um <strong style={{ color: 'var(--neon)' }}>Bloco de Contexto</strong> da barra lateral para o canvas</div>
+            <div>2. Dentro do bloco, arraste os elementos do fluxo de atendimento</div>
+            <div>3. Conecte os blocos entre si para definir o caminho da chamada</div>
+            <div>4. Clique em <strong style={{ color: 'var(--neon)' }}>Exportar URA</strong> quando o fluxo estiver pronto</div>
+          </div>
+        )}
+
         {/* Botão de exportação flutuante */}
         <button
           className="btn-neon"
@@ -916,7 +1036,7 @@ function Canvas({ initialFlow, projectName, projectCreatedAt, currentProjectId, 
           style={{
             position: 'absolute', bottom: 18, right: 18, zIndex: 5,
             padding: '12px 22px', fontSize: 13, letterSpacing: 2,
-            boxShadow: '0 0 10px var(--neon), 0 0 20px rgba(0,255,65,0.4)',
+            boxShadow: '0 0 10px var(--neon), 0 0 22px var(--neon-glow)',
           }}
         >
           ⤓ EXPORTAR URA (.conf)
@@ -964,7 +1084,7 @@ function Canvas({ initialFlow, projectName, projectCreatedAt, currentProjectId, 
               background: 'var(--panel)',
               border: '1px solid var(--neon-dim)',
               borderRadius: 3, overflow: 'hidden',
-              boxShadow: '0 0 14px rgba(0,255,65,0.25), 0 4px 12px rgba(0,0,0,0.6)',
+              boxShadow: '0 0 14px var(--neon-glow-soft), 0 4px 12px rgba(0,0,0,0.6)',
               minWidth: 185,
             }}>
               <div style={{
@@ -980,7 +1100,7 @@ function Canvas({ initialFlow, projectName, projectCreatedAt, currentProjectId, 
               {isFloating && hasOffset && (
                 <button
                   style={{ ...menuBtnStyle, color: 'var(--neon)' }}
-                  onMouseEnter={(e) => { e.currentTarget.style.background = '#00ff4112'; }}
+                  onMouseEnter={(e) => { e.currentTarget.style.background = 'var(--neon-glow-bg)'; }}
                   onMouseLeave={(e) => { e.currentTarget.style.background = 'transparent'; }}
                   onClick={() => resetEdgeOffset(edgeMenu.edgeId)}
                 >
@@ -1030,7 +1150,7 @@ function Canvas({ initialFlow, projectName, projectCreatedAt, currentProjectId, 
               background: 'var(--panel)',
               border: '1px solid var(--neon-dim)',
               borderRadius: 3, overflow: 'hidden',
-              boxShadow: '0 0 14px rgba(0,255,65,0.25), 0 4px 12px rgba(0,0,0,0.6)',
+              boxShadow: '0 0 14px var(--neon-glow-soft), 0 4px 12px rgba(0,0,0,0.6)',
               minWidth: 175,
             }}>
               <div style={{
@@ -1098,6 +1218,41 @@ function Canvas({ initialFlow, projectName, projectCreatedAt, currentProjectId, 
         </div>
       )}
 
+      {/* ── Modal: primeiro export (modo AMIGÁVEL) ─────────────────────────── */}
+      {showFirstExportModal && (
+        <div className="modal-backdrop" onClick={() => setShowFirstExportModal(false)}>
+          <div className="modal" style={{ maxWidth: 420, width: '90vw' }} onClick={(e) => e.stopPropagation()}>
+            <div style={{ padding: '10px 14px', borderBottom: '1px solid var(--line)', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+              <div className="neon-text" style={{ letterSpacing: 2, fontSize: 12 }}>▌ ARQUIVO GERADO</div>
+              <button className="btn-neon btn-danger" style={{ padding: '4px 10px' }} onClick={() => setShowFirstExportModal(false)} aria-label="Fechar">X</button>
+            </div>
+            <div style={{ padding: 20 }}>
+              <p style={{ fontSize: 12, color: 'var(--neon-dim)', marginBottom: 12, lineHeight: 1.8 }}>
+                O arquivo <span style={{ color: '#fff' }}>.conf</span> gerado está pronto para uso no servidor Asterisk.
+              </p>
+              <p style={{ fontSize: 12, color: 'var(--neon-dim)', marginBottom: 12, lineHeight: 1.8 }}>
+                Entregue este arquivo para o técnico responsável pela instalação.
+              </p>
+              <p style={{ fontSize: 12, color: '#ffcc00', marginBottom: 20, lineHeight: 1.8 }}>
+                ⚠ Não edite o arquivo manualmente sem conhecimento técnico.
+              </p>
+              <label style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 20, cursor: 'pointer', fontSize: 11, color: 'var(--neon-dim)' }}>
+                <input
+                  type="checkbox"
+                  checked={firstExportDontShow}
+                  onChange={(e) => setFirstExportDontShow(e.target.checked)}
+                  style={{ accentColor: 'var(--neon)' }}
+                />
+                Não mostrar novamente
+              </label>
+              <button className="btn-neon" onClick={confirmFirstExport} style={{ width: '100%', padding: '10px 12px', fontSize: 11, letterSpacing: 1 }}>
+                ENTENDI, BAIXAR ARQUIVO
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* Modal de exportação */}
       {showExport && (
         <div className="modal-backdrop" onClick={() => setShowExport(false)}>
@@ -1118,8 +1273,8 @@ function Canvas({ initialFlow, projectName, projectCreatedAt, currentProjectId, 
             <pre style={{
               flex: 1, overflow: 'auto', margin: 0,
               padding: '14px',
-              background: '#000',
-              color: '#a7ffba',
+              background: 'var(--bg)',
+              color: 'var(--neon-value)',
               fontSize: 11,
               lineHeight: 1.55,
               whiteSpace: 'pre',
@@ -1140,6 +1295,8 @@ function Canvas({ initialFlow, projectName, projectCreatedAt, currentProjectId, 
     </div>
     </EdgeModeContext.Provider>
     </ActiveSelectionContext.Provider>
+    </ThemeContext.Provider>
+    </ModeContext.Provider>
   );
 }
 
@@ -1153,6 +1310,20 @@ export default function App() {
   const [pendingFlow,    setPendingFlow]    = useState(null);
   const [importError,    setImportError]    = useState(null);
   const [confImportData, setConfImportData] = useState(null); // { nodes, edges, stats, suggestedName }
+
+  // ── Tema global ───────────────────────────────────────────────────────────
+  const [theme, setThemeState] = useState(() => initTheme());
+  const handleToggleTheme = useCallback(() => setThemeState(themeToggle()), []);
+
+  // ── Modo de interface: PRO | AMIGÁVEL ─────────────────────────────────────
+  const [mode, setMode] = useState(() => localStorage.getItem('orpen-ura-mode') || 'pro');
+  const handleToggleMode = useCallback(() => {
+    setMode((m) => {
+      const next = m === 'pro' ? 'amigavel' : 'pro';
+      localStorage.setItem('orpen-ura-mode', next);
+      return next;
+    });
+  }, []);
 
   // Carrega projetos do IndexedDB na inicialização
   useEffect(() => {
@@ -1286,6 +1457,8 @@ export default function App() {
         confImportData={confImportData}
         onConfImportConfirm={handleConfImportConfirm}
         onConfImportCancel={() => setConfImportData(null)}
+        theme={theme}
+        onToggleTheme={handleToggleTheme}
       />
     );
   }
@@ -1302,6 +1475,10 @@ export default function App() {
           currentProjectId={currentProject?.id}
           onGoBack={handleGoBack}
           onProjectSaved={handleProjectSaved}
+          theme={theme}
+          onToggleTheme={handleToggleTheme}
+          mode={mode}
+          onToggleMode={handleToggleMode}
         />
       </ReactFlowProvider>
     </div>

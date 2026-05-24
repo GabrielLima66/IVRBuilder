@@ -2,12 +2,16 @@ import React, { memo, useEffect } from 'react';
 import { Handle, Position, useUpdateNodeInternals } from 'reactflow';
 import { cls } from '../../utils/common';
 import { useActiveSelection } from '../../contexts/ActiveSelectionContext';
+import { useModeContext } from '../../contexts/ModeContext';
+import { getNodeLabel } from '../../config/nodeModeConfig';
 
 const MenuNode = memo(({ id, data, selected }) => {
   const digits = data.digits || [];
   const updateNodeInternals = useUpdateNodeInternals();
   const { activeNodeIds } = useActiveSelection();
   const isConnectedActive = activeNodeIds.has(id);
+  const modeCtx      = useModeContext();
+  const displayTitle = getNodeLabel('menu', modeCtx);
 
   useEffect(() => {
     updateNodeInternals(id);
@@ -23,8 +27,8 @@ const MenuNode = memo(({ id, data, selected }) => {
       <Handle type="target" position={Position.Left} id="in-left" />
 
       <div className="rcx-node-header">
-        <span className="neon-text">▶ IVR MENU</span>
-        <span className="badge">(menu)</span>
+        <span className="neon-text">▶ {displayTitle}</span>
+        {modeCtx !== 'amigavel' && <span className="badge">(menu)</span>}
       </div>
       <div className="rcx-node-body">
         <div className="rcx-node-row"><span className="k">audio</span><span className="v">{data.greeting || '1-bem-vindo'}</span></div>

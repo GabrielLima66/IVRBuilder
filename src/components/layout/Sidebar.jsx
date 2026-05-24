@@ -400,11 +400,10 @@ export default function Sidebar() {
                       <Icon size={13} /> {displayTitle}
                     </div>
                     <div style={{
-                      fontSize: mode === 'amigavel' ? 10 : 10,
-                      color: mode === 'amigavel' ? 'var(--neon-dim)' : '#aaa',
+                      fontSize: 10,
+                      color: 'var(--sidebar-desc-color)',
                       marginTop: 3, marginLeft: 19,
                       lineHeight: mode === 'amigavel' ? 1.5 : 1.3,
-                      opacity: mode === 'amigavel' ? 0.75 : 1,
                     }}>
                       {displayDesc}
                     </div>

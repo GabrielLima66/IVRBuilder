@@ -1325,6 +1325,16 @@ export default function App() {
     });
   }, []);
 
+  // Aplica/remove classe body.mode-amigavel para CSS hierarchy vars
+  useEffect(() => {
+    if (mode === 'amigavel') {
+      document.body.classList.add('mode-amigavel');
+    } else {
+      document.body.classList.remove('mode-amigavel');
+    }
+    return () => document.body.classList.remove('mode-amigavel');
+  }, [mode]);
+
   // Carrega projetos do IndexedDB na inicialização
   useEffect(() => {
     listarProjetos().then(setProjects).catch(() => {});

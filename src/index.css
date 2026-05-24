@@ -98,6 +98,54 @@
 }
 
 /* ═══════════════════════════════════════════════════════════════════════════
+   MODO AMIGÁVEL — hierarquia visual de cores
+   Defaults mapeiam para as variáveis de tema existentes (PRO inalterado).
+   body.mode-amigavel sobrescreve para criar diferenciação de hierarquia.
+   ═══════════════════════════════════════════════════════════════════════════ */
+
+/* Defaults PRO — usam as variáveis de tema atuais (sem mudança visual) */
+:root,
+[data-theme="matrix"],
+[data-theme="orpen"] {
+  --field-label:            var(--neon-dim);   /* label de campo no corpo do nó */
+  --field-value:            var(--neon-value); /* valor de campo no corpo do nó */
+  --node-hint-color:        var(--neon-dim);   /* dica/hint abaixo de campos */
+  --node-description-color: var(--neon);       /* descrição no card de ajuda */
+  --sidebar-desc-color:     #aaa;              /* descrição de item na sidebar (PRO) */
+  --panel-hint-color:       var(--neon-dim);   /* dica no painel de propriedades */
+}
+
+/* AMIGÁVEL — Matrix (verde): hierarquia de 3 tons */
+body.mode-amigavel {
+  --field-label:            #7dbd8f;  /* verde dessaturado — label do campo */
+  --field-value:            #e0e0e0;  /* branco suave — valor digitado */
+  --node-hint-color:        #4a7a5a;  /* verde escuro — texto de dica */
+  --node-description-color: #a0c4a8;  /* verde claro acinzentado — desc do nó */
+  --sidebar-desc-color:     #7dbd8f;  /* verde médio — desc item sidebar */
+  --panel-hint-color:       #4a7a5a;  /* verde escuro — dica no painel */
+}
+
+/* AMIGÁVEL — Orpen (roxo): equivalentes na paleta lavanda */
+html[data-theme="orpen"] body.mode-amigavel {
+  --field-label:            #b99ee0;  /* lavanda dessaturada */
+  --field-value:            #e0e0e0;  /* branco suave (igual em ambos) */
+  --node-hint-color:        #7a5a8a;  /* roxo escuro */
+  --node-description-color: #c4a8d8;  /* lavanda claro acinzentado */
+  --sidebar-desc-color:     #b99ee0;  /* lavanda médio */
+  --panel-hint-color:       #7a5a8a;  /* roxo escuro */
+}
+
+/* Inputs no modo AMIGÁVEL — valor em branco suave, label em verde/lavanda médio */
+body.mode-amigavel .term-input,
+body.mode-amigavel .term-select,
+body.mode-amigavel .term-textarea {
+  color: var(--field-value);
+}
+body.mode-amigavel .term-label {
+  color: var(--field-label);
+}
+
+/* ═══════════════════════════════════════════════════════════════════════════
    BASE
    ═══════════════════════════════════════════════════════════════════════════ */
 html, body, #root {
@@ -309,8 +357,8 @@ body::before {
   padding: 2px 0;
   font-size: 11px;
 }
-.rcx-node-row .k { color: var(--neon-dim); }
-.rcx-node-row .v { color: var(--neon-value); }
+.rcx-node-row .k { color: var(--field-label); }
+.rcx-node-row .v { color: var(--field-value); }
 
 .digit-row {
   display: flex;

@@ -224,11 +224,11 @@ export default function PropertiesPanel({ node, updateNodeData, deleteNode, togg
             marginBottom: 14,
             background: 'var(--neon-glow-bg)',
           }}>
-            <div style={{ fontSize: 10, color: 'var(--neon)', marginBottom: 6, letterSpacing: 0.5, lineHeight: 1.5 }}>
+            <div style={{ fontSize: 10, color: 'var(--node-description-color)', marginBottom: 6, letterSpacing: 0.5, lineHeight: 1.5 }}>
               {cfg.desc}
             </div>
             {cfg.dica && (
-              <div style={{ fontSize: 10, color: 'var(--neon-dim)', fontStyle: 'italic', lineHeight: 1.5, borderTop: '1px dashed var(--line)', paddingTop: 6, marginTop: 4 }}>
+              <div style={{ fontSize: 10, color: 'var(--panel-hint-color)', fontStyle: 'italic', lineHeight: 1.5, borderTop: '1px dashed var(--line)', paddingTop: 6, marginTop: 4 }}>
                 💡 {cfg.dica}
               </div>
             )}

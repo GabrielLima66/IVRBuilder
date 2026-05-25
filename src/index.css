@@ -104,6 +104,67 @@
 }
 
 /* ═══════════════════════════════════════════════════════════════════════════
+   TEMA: DARK MODE — VS Code-inspired, azul-gelo sobre cinza escuro
+   Sem scanlines. Accent: #4fc1ff (azul VS Code).
+   ═══════════════════════════════════════════════════════════════════════════ */
+[data-theme="dark"] {
+  color-scheme: dark;
+
+  /* Cor principal */
+  --neon: #4fc1ff;
+  --neon-dim: #2a9cc8;
+  --neon-2: #82d0f5;
+
+  /* Superfícies */
+  --bg: #1e1e1e;
+  --panel: #252526;
+  --panel-2: #2d2d30;
+  --line: #3e3e42;
+  --status-bar-bg: rgba(30, 30, 30, 0.92);
+
+  /* Glow */
+  --neon-glow: rgba(79, 193, 255, 0.4);
+  --neon-glow-soft: rgba(79, 193, 255, 0.2);
+  --neon-glow-med: rgba(79, 193, 255, 0.5);
+  --neon-glow-faint: rgba(79, 193, 255, 0.08);
+  --neon-glow-bg: rgba(79, 193, 255, 0.04);
+  --neon-glow-heavy: rgba(79, 193, 255, 0.6);
+  --neon-glow-text: rgba(79, 193, 255, 0.7);
+
+  /* Semântica */
+  --neon-value: #dce7ef;
+  --hover-bg: #2a3a48;
+  --scanline-color: transparent;
+
+  /* Context node */
+  --ctx-bg: rgba(79, 193, 255, 0.03);
+  --ctx-header-bg: rgba(79, 193, 255, 0.10);
+  --ctx-bg-inset: rgba(79, 193, 255, 0.06);
+  --ctx-shadow: rgba(79, 193, 255, 0.15);
+  --ctx-selected-inset: rgba(79, 193, 255, 0.08);
+
+  /* Node header gradient */
+  --node-header-from: #253748;
+  --node-header-to: #1c2b39;
+
+  /* Gradient de identidade */
+  --neon-gradient: linear-gradient(135deg, #4fc1ff 0%, #2a9cc8 100%);
+
+  /* Canvas */
+  --canvas-guide: rgba(79, 193, 255, 0.7);
+}
+
+/* MODO AMIGÁVEL — Dark: paleta azul dessaturada */
+html[data-theme="dark"] body.mode-amigavel {
+  --field-label:            #6faed4;
+  --field-value:            #d4d4d4;
+  --node-hint-color:        #3d7a96;
+  --node-description-color: #93c5e6;
+  --sidebar-desc-color:     #6faed4;
+  --panel-hint-color:       #3d7a96;
+}
+
+/* ═══════════════════════════════════════════════════════════════════════════
    MODO AMIGÁVEL — hierarquia visual de cores
    Defaults mapeiam para as variáveis de tema existentes (PRO inalterado).
    body.mode-amigavel sobrescreve para criar diferenciação de hierarquia.
@@ -112,7 +173,8 @@
 /* Defaults PRO — usam as variáveis de tema atuais (sem mudança visual) */
 :root,
 [data-theme="matrix"],
-[data-theme="orpen"] {
+[data-theme="orpen"],
+[data-theme="dark"] {
   --field-label:            var(--neon-dim);   /* label de campo no corpo do nó */
   --field-value:            var(--neon-value); /* valor de campo no corpo do nó */
   --node-hint-color:        var(--neon-dim);   /* dica/hint abaixo de campos */

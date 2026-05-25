@@ -4,17 +4,29 @@
  * Persiste automaticamente no localStorage (chave: 'orpen-ura-config').
  * Qualquer componente pode ler via useConfig() e alterar via setConfig(key, value).
  * Alterações são refletidas imediatamente sem necessidade de "Salvar".
+ *
+ * Mapeamento de colorTheme → data-theme no <html>:
+ *   'terminal' → 'matrix'  (verde neon clássico)
+ *   'matrix'   → 'orpen'   (efeito chuva / visual Orpen)
+ *   'dark'     → 'dark'    (paleta VS Code)
  */
 
 import React, { createContext, useContext, useState, useCallback, useEffect } from 'react';
 
 const STORAGE_KEY = 'orpen-ura-config';
 
+/** Mapeia colorTheme do ConfigContext para o atributo data-theme do DOM */
+export const COLOR_THEME_TO_DATA_THEME = {
+  terminal: 'matrix',
+  matrix:   'orpen',
+  dark:     'dark',
+};
+
 /** Valores padrão de todas as configurações */
 export const CONFIG_DEFAULTS = {
   // Interface
   mode:                   'pro',        // 'pro' | 'amigavel'
-  colorTheme:             'terminal',   // 'terminal' | 'dark'
+  colorTheme:             'terminal',   // 'terminal' | 'matrix' | 'dark'
 
   // Canvas
   snapToGrid:             true,         // bool — snap automático para grade
@@ -40,15 +52,35 @@ export const CONFIG_DEFAULTS = {
   confirmBack:            true,         // bool — confirmar antes de sair com alterações
 };
 
-/** Carrega config do localStorage, com fallback para defaults e migração legada */
+/**
+ * Carrega config do localStorage, com fallback para defaults e migração legada.
+ * Migração: se `orpen-theme` legado = 'orpen', mapeia para colorTheme = 'matrix'.
+ */
 function loadConfig() {
   try {
     const stored = localStorage.getItem(STORAGE_KEY);
-    if (stored) return { ...CONFIG_DEFAULTS, ...JSON.parse(stored) };
+    if (stored) {
+      const parsed = JSON.parse(stored);
+      // Migração: colorTheme valia 'terminal'|'dark'; 'matrix' é nova opção.
+      // Se o usuário tinha orpen-theme='orpen' E colorTheme='terminal' (default),
+      // migra para 'matrix' para preservar a aparência que já usava.
+      if (
+        (!parsed.colorTheme || parsed.colorTheme === 'terminal') &&
+        localStorage.getItem('orpen-theme') === 'orpen'
+      ) {
+        parsed.colorTheme = 'matrix';
+      }
+      return { ...CONFIG_DEFAULTS, ...parsed };
+    }
   } catch {}
-  // Migração: lê modo legado se houver
-  const legacyMode = localStorage.getItem('orpen-ura-mode');
-  return { ...CONFIG_DEFAULTS, ...(legacyMode ? { mode: legacyMode } : {}) };
+  // Primeiro uso: detecta tema legado do orpen-theme
+  const legacyTheme = localStorage.getItem('orpen-theme');
+  const legacyMode  = localStorage.getItem('orpen-ura-mode');
+  return {
+    ...CONFIG_DEFAULTS,
+    ...(legacyTheme === 'orpen' ? { colorTheme: 'matrix' } : {}),
+    ...(legacyMode ? { mode: legacyMode } : {}),
+  };
 }
 
 export const ConfigContext = createContext({ ...CONFIG_DEFAULTS, setConfig: () => {} });
@@ -56,7 +88,8 @@ export const useConfig = () => useContext(ConfigContext);
 
 /**
  * Provedor de configurações — deve envolver toda a aplicação.
- * Sincroniza automaticamente a classe body.mode-amigavel com a configuração de modo.
+ * Sincroniza automaticamente a classe body.mode-amigavel com a configuração de modo
+ * e o data-theme do <html> com colorTheme.
  */
 export function ConfigProvider({ children }) {
   const [config, setConfigState] = useState(loadConfig);
@@ -80,18 +113,11 @@ export function ConfigProvider({ children }) {
     return () => document.body.classList.remove('mode-amigavel');
   }, [config.mode]);
 
-  // Sincroniza o data-theme para o tema Dark Mode
-  // 'terminal' → preserva o tema matrix/orpen do seletor do header (orpen-theme)
-  // 'dark'     → força data-theme="dark" independente do toggle matrix/orpen
+  // Sincroniza data-theme no <html> com base em colorTheme
+  // ConfigContext é a única fonte de verdade — theme.js/orpen-theme localStorage é legado
   useEffect(() => {
-    const html = document.documentElement;
-    if (config.colorTheme === 'dark') {
-      html.setAttribute('data-theme', 'dark');
-    } else {
-      // Restaura o tema terminal selecionado (matrix ou orpen)
-      const storedTheme = localStorage.getItem('orpen-theme') || 'matrix';
-      html.setAttribute('data-theme', storedTheme);
-    }
+    const dataTheme = COLOR_THEME_TO_DATA_THEME[config.colorTheme] || 'matrix';
+    document.documentElement.setAttribute('data-theme', dataTheme);
   }, [config.colorTheme]);
 
   return (

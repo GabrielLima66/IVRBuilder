@@ -170,54 +170,55 @@ const TextRow = memo(function TextRow({ configKey, label, placeholder, hint }) {
   );
 });
 
-/** Seletor de tema: Terminal (matrix/orpen) ↔ Dark Mode */
+/** Seletor de tema: Terminal · Matrix · Dark Mode */
 const ColorThemeRow = memo(function ColorThemeRow() {
   const { colorTheme, setConfig } = useConfig();
+
+  // Cores de destaque por tema — usadas como borda e texto do botão ativo
+  const THEME_ACCENT = { terminal: '#00ff41', matrix: '#c084fc', dark: '#4fc1ff' };
+
+  const THEMES = [
+    { key: 'terminal', label: 'TERMINAL', radius: '2px 0 0 2px', borderRight: 'none' },
+    { key: 'matrix',   label: 'MATRIX',   radius: '0',           borderRight: 'none' },
+    { key: 'dark',     label: 'DARK MODE', radius: '0 2px 2px 0', borderRight: undefined },
+  ];
+
   return (
     <div style={{ marginBottom: 14 }}>
       <div style={{ fontSize: 11, color: 'var(--neon-dim)', letterSpacing: 0.5, marginBottom: 8 }}>
         Tema de cores
       </div>
       <div style={{ display: 'flex', gap: 0, width: 'fit-content' }}>
-        <button
-          type="button"
-          onClick={() => setConfig('colorTheme', 'terminal')}
-          style={{
-            background: colorTheme !== 'dark' ? 'var(--neon)' : 'transparent',
-            border: '1px solid var(--neon)',
-            borderRight: 'none',
-            color: colorTheme !== 'dark' ? '#000' : 'var(--neon)',
-            opacity: colorTheme !== 'dark' ? 1 : 0.5,
-            fontFamily: 'inherit', fontSize: 10, letterSpacing: 1.5,
-            padding: '4px 14px', cursor: colorTheme !== 'dark' ? 'default' : 'pointer',
-            borderRadius: '2px 0 0 2px',
-            fontWeight: colorTheme !== 'dark' ? 700 : 400,
-            transition: 'all 0.15s',
-          }}
-        >
-          TERMINAL
-        </button>
-        <button
-          type="button"
-          onClick={() => setConfig('colorTheme', 'dark')}
-          style={{
-            background: colorTheme === 'dark' ? 'var(--neon)' : 'transparent',
-            border: '1px solid var(--neon)',
-            color: colorTheme === 'dark' ? '#000' : 'var(--neon)',
-            opacity: colorTheme === 'dark' ? 1 : 0.5,
-            fontFamily: 'inherit', fontSize: 10, letterSpacing: 1.5,
-            padding: '4px 14px', cursor: colorTheme === 'dark' ? 'default' : 'pointer',
-            borderRadius: '0 2px 2px 0',
-            fontWeight: colorTheme === 'dark' ? 700 : 400,
-            transition: 'all 0.15s',
-            whiteSpace: 'nowrap',
-          }}
-        >
-          DARK MODE
-        </button>
+        {THEMES.map(({ key, label, radius, borderRight }) => {
+          const isActive = colorTheme === key;
+          const accent   = THEME_ACCENT[key];
+          return (
+            <button
+              key={key}
+              type="button"
+              onClick={() => setConfig('colorTheme', key)}
+              style={{
+                background:   isActive ? accent : 'transparent',
+                border:       `1px solid ${isActive ? accent : 'var(--line)'}`,
+                borderRight:  borderRight !== undefined ? borderRight : `1px solid ${isActive ? accent : 'var(--line)'}`,
+                color:        isActive ? '#000' : 'var(--neon-dim)',
+                opacity:      isActive ? 1 : 0.65,
+                fontFamily:   'inherit', fontSize: 10, letterSpacing: 1.5,
+                padding:      '4px 14px',
+                cursor:       isActive ? 'default' : 'pointer',
+                borderRadius: radius,
+                fontWeight:   isActive ? 700 : 400,
+                transition:   'all 0.15s',
+                whiteSpace:   'nowrap',
+              }}
+            >
+              {label}
+            </button>
+          );
+        })}
       </div>
       <div style={{ fontSize: 9, color: '#555', marginTop: 5, lineHeight: 1.5 }}>
-        Terminal = Matrix/Orpen (toggle no header). Dark Mode = paleta VS Code.
+        Terminal = verde neon clássico · Matrix = efeito chuva · Dark Mode = paleta VS Code
       </div>
     </div>
   );

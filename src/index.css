@@ -217,6 +217,35 @@ body.mode-amigavel .term-label {
 }
 
 /* ═══════════════════════════════════════════════════════════════════════════
+   HIERARQUIA DE CORES — PRO mode, substituições por tema
+   ─────────────────────────────────────────────────────────────────────────
+   REGRA OBRIGATÓRIA para todos os temas (atual e futuros):
+     1. Título do nó (header)  : cor de destaque do tema — maior peso visual
+     2. Label do campo         : cor média dessaturada do tema — peso secundário
+     3. Valor do campo         : #e0e0e0 (branco suave fixo) — máxima legibilidade
+     4. Dica/hint              : cor escura do tema — menor peso visual
+     5. Badge de tipo          : texto escuro sobre fundo na cor de destaque
+   ─────────────────────────────────────────────────────────────────────────
+   Seletores html[data-theme="..."] têm especificidade [0,1,1] e sobrescrevem
+   os defaults compartilhados [data-theme="..."] [0,1,0] em PRO mode.
+   Os overrides de AMIGÁVEL html[data-theme="..."] body.mode-amigavel [0,2,1]
+   ainda vencem, preservando as hierarquias de amigavel inalteradas.
+   ═══════════════════════════════════════════════════════════════════════════ */
+
+/* PRO — tema Orpen (roxo/violeta): labels em violeta dessaturado, valores em branco suave */
+html[data-theme="orpen"] {
+  --field-label:      #9d4edd;   /* violeta dessaturado — label dos campos */
+  --field-value:      #e0e0e0;   /* branco suave — valor dos campos (máx contraste) */
+  --node-hint-color:  #6a3d9e;   /* violeta escuro — dicas abaixo dos campos */
+  --panel-hint-color: #6a3d9e;   /* violeta escuro — dica no painel de propriedades */
+}
+
+/* PRO — tema Dark (VS Code): valores em branco suave */
+html[data-theme="dark"] {
+  --field-value:      #e0e0e0;   /* branco suave — valor dos campos (máx contraste) */
+}
+
+/* ═══════════════════════════════════════════════════════════════════════════
    BASE
    ═══════════════════════════════════════════════════════════════════════════ */
 html, body, #root {

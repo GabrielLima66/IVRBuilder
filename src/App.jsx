@@ -49,8 +49,13 @@ function Canvas({ initialFlow, projectName, projectCreatedAt, currentProjectId, 
   const config = useConfig();
   const mode   = config.mode;
 
-  // Cor principal do tema — usada em edges e mini-mapa
-  const neonColor = theme === 'orpen' ? '#c084fc' : '#00ff41';
+  // Tema efetivo: Dark Mode sobrepõe matrix/orpen quando ativo via ConfigContext
+  const effectiveTheme = config.colorTheme === 'dark' ? 'dark' : theme;
+
+  // Cor principal do tema — usada em edges e mini-mapa (JS; não pode usar CSS var em SVG)
+  const neonColor = effectiveTheme === 'orpen' ? '#c084fc'
+                  : effectiveTheme === 'dark'  ? '#4fc1ff'
+                  : '#00ff41';
   const wrapperRef  = useRef(null);
   const rfInstance  = useReactFlow();
 
@@ -816,7 +821,7 @@ function Canvas({ initialFlow, projectName, projectCreatedAt, currentProjectId, 
 
   return (
     <ModeContext.Provider value={mode}>
-    <ThemeContext.Provider value={theme}>
+    <ThemeContext.Provider value={effectiveTheme}>
     <ActiveSelectionContext.Provider value={activeSelectionValue}>
     <EdgeModeContext.Provider value="grid">
     <div style={{ display: 'flex', height: '100%', width: '100%' }}>

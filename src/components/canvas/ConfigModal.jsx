@@ -170,6 +170,59 @@ const TextRow = memo(function TextRow({ configKey, label, placeholder, hint }) {
   );
 });
 
+/** Seletor de tema: Terminal (matrix/orpen) ↔ Dark Mode */
+const ColorThemeRow = memo(function ColorThemeRow() {
+  const { colorTheme, setConfig } = useConfig();
+  return (
+    <div style={{ marginBottom: 14 }}>
+      <div style={{ fontSize: 11, color: 'var(--neon-dim)', letterSpacing: 0.5, marginBottom: 8 }}>
+        Tema de cores
+      </div>
+      <div style={{ display: 'flex', gap: 0, width: 'fit-content' }}>
+        <button
+          type="button"
+          onClick={() => setConfig('colorTheme', 'terminal')}
+          style={{
+            background: colorTheme !== 'dark' ? 'var(--neon)' : 'transparent',
+            border: '1px solid var(--neon)',
+            borderRight: 'none',
+            color: colorTheme !== 'dark' ? '#000' : 'var(--neon)',
+            opacity: colorTheme !== 'dark' ? 1 : 0.5,
+            fontFamily: 'inherit', fontSize: 10, letterSpacing: 1.5,
+            padding: '4px 14px', cursor: colorTheme !== 'dark' ? 'default' : 'pointer',
+            borderRadius: '2px 0 0 2px',
+            fontWeight: colorTheme !== 'dark' ? 700 : 400,
+            transition: 'all 0.15s',
+          }}
+        >
+          TERMINAL
+        </button>
+        <button
+          type="button"
+          onClick={() => setConfig('colorTheme', 'dark')}
+          style={{
+            background: colorTheme === 'dark' ? 'var(--neon)' : 'transparent',
+            border: '1px solid var(--neon)',
+            color: colorTheme === 'dark' ? '#000' : 'var(--neon)',
+            opacity: colorTheme === 'dark' ? 1 : 0.5,
+            fontFamily: 'inherit', fontSize: 10, letterSpacing: 1.5,
+            padding: '4px 14px', cursor: colorTheme === 'dark' ? 'default' : 'pointer',
+            borderRadius: '0 2px 2px 0',
+            fontWeight: colorTheme === 'dark' ? 700 : 400,
+            transition: 'all 0.15s',
+            whiteSpace: 'nowrap',
+          }}
+        >
+          DARK MODE
+        </button>
+      </div>
+      <div style={{ fontSize: 9, color: '#555', marginTop: 5, lineHeight: 1.5 }}>
+        Terminal = Matrix/Orpen (toggle no header). Dark Mode = paleta VS Code.
+      </div>
+    </div>
+  );
+});
+
 /** Toggle PRO / AMIGÁVEL sincronizado com o header */
 const ModeToggleRow = memo(function ModeToggleRow() {
   const { mode, setConfig } = useConfig();
@@ -277,19 +330,7 @@ export default function ConfigModal({ onClose }) {
           {/* ── INTERFACE ── */}
           <SectionHeader label="INTERFACE" />
           <ModeToggleRow />
-          <div style={{ marginBottom: 14 }}>
-            <div style={{ fontSize: 11, color: 'var(--neon-dim)', letterSpacing: 0.5, marginBottom: 5 }}>
-              Tema
-            </div>
-            <div style={{
-              fontSize: 11, color: '#555',
-              border: '1px solid var(--line)',
-              borderRadius: 2, padding: '6px 10px',
-              background: '#0a0a0a',
-            }}>
-              Terminal (padrão) — mais temas em breve
-            </div>
-          </div>
+          <ColorThemeRow />
 
           {/* ── CANVAS ── */}
           <SectionHeader label="CANVAS" />

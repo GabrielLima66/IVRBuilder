@@ -21,6 +21,12 @@ const COLOR_REMAP = {
     // eram #a78bfa (similar ao neon roxo #c084fc) → hot pink (#f472b6)
     '#a78bfa': '#f472b6',
   },
+  dark: {
+    // Nós de sistema/áudio: #00ff41 colidia com fundo escuro → azul-teal VS Code
+    '#00ff41': '#4fc1ff',
+    // Nós de integração: #a78bfa (lavanda) → rosa-mauve para contraste no cinza
+    '#a78bfa': '#c586c0',
+  },
 };
 
 /**

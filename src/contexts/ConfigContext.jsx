@@ -14,6 +14,7 @@ const STORAGE_KEY = 'orpen-ura-config';
 export const CONFIG_DEFAULTS = {
   // Interface
   mode:                   'pro',        // 'pro' | 'amigavel'
+  colorTheme:             'terminal',   // 'terminal' | 'dark'
 
   // Canvas
   snapToGrid:             true,         // bool — snap automático para grade
@@ -78,6 +79,20 @@ export function ConfigProvider({ children }) {
     }
     return () => document.body.classList.remove('mode-amigavel');
   }, [config.mode]);
+
+  // Sincroniza o data-theme para o tema Dark Mode
+  // 'terminal' → preserva o tema matrix/orpen do seletor do header (orpen-theme)
+  // 'dark'     → força data-theme="dark" independente do toggle matrix/orpen
+  useEffect(() => {
+    const html = document.documentElement;
+    if (config.colorTheme === 'dark') {
+      html.setAttribute('data-theme', 'dark');
+    } else {
+      // Restaura o tema terminal selecionado (matrix ou orpen)
+      const storedTheme = localStorage.getItem('orpen-theme') || 'matrix';
+      html.setAttribute('data-theme', storedTheme);
+    }
+  }, [config.colorTheme]);
 
   return (
     <ConfigContext.Provider value={{ ...config, setConfig }}>

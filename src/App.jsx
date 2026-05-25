@@ -1,5 +1,4 @@
 import React, { useState, useCallback, useRef, useMemo, useEffect, memo } from 'react';
-import { initTheme, toggleTheme as themeToggle } from './utils/theme';
 import ReactFlow, {
   Background,
   Controls,
@@ -44,13 +43,18 @@ const edgeTypes = { floating: EdgeWithWaypoints, smoothstep: EdgeWithWaypoints }
 // CANVAS — estado global do grafo + lógica de DnD / reparenting
 // Props de projeto (opcionais): permitem integração com HomeScreen.
 // ─────────────────────────────────────────────────────────────────────────────
-function Canvas({ initialFlow, projectName, projectCreatedAt, currentProjectId, onGoBack, onProjectSaved, theme = 'matrix', onToggleTheme }) {
+function Canvas({ initialFlow, projectName, projectCreatedAt, currentProjectId, onGoBack, onProjectSaved }) {
   // Lê configurações do ConfigContext
   const config = useConfig();
   const mode   = config.mode;
 
-  // Tema efetivo: Dark Mode sobrepõe matrix/orpen quando ativo via ConfigContext
-  const effectiveTheme = config.colorTheme === 'dark' ? 'dark' : theme;
+  // Tema efetivo — derivado do ConfigContext; sem prop theme externo
+  // 'terminal' → data-theme="matrix" (verde)
+  // 'matrix'   → data-theme="orpen"  (roxo)
+  // 'dark'     → data-theme="dark"   (VS Code azul)
+  const effectiveTheme = config.colorTheme === 'dark'   ? 'dark'
+                       : config.colorTheme === 'matrix' ? 'orpen'
+                       : 'matrix';
 
   // Cor principal do tema — usada em edges e mini-mapa (JS; não pode usar CSS var em SVG)
   const neonColor = effectiveTheme === 'orpen' ? '#c084fc'
@@ -853,7 +857,7 @@ function Canvas({ initialFlow, projectName, projectCreatedAt, currentProjectId, 
         <div style={{
           position: 'absolute', top: 10, left: onGoBack ? 110 : 10, zIndex: 5,
           display: 'flex', gap: 8, alignItems: 'center',
-          background: 'rgba(13,13,13,0.85)',
+          background: 'var(--status-bar-bg)',
           padding: '6px 12px',
           border: '1px solid var(--line)',
           borderRadius: 3,
@@ -865,18 +869,6 @@ function Canvas({ initialFlow, projectName, projectCreatedAt, currentProjectId, 
           <span>EDGES: <span style={{ color: '#fff' }}>{edges.length}</span></span>
           <span style={{ color: 'var(--line)' }}>│</span>
           <span>STATUS: <span style={{ color: 'var(--neon)' }}>● LIVE</span></span>
-          {saveStatus && (
-            <>
-              <span style={{ color: 'var(--line)' }}>│</span>
-              <span style={{
-                color: saveStatus === 'saving' ? '#ffcc00' : 'var(--neon)',
-                opacity: saveStatus === 'saving' ? 0.75 : 1,
-                letterSpacing: 0.5,
-              }}>
-                {saveStatus === 'saving' ? '// salvando...' : '// salvo'}
-              </span>
-            </>
-          )}
           <span style={{ color: 'var(--line)' }}>│</span>
           <span style={{ color: '#888' }}>
             SELECT +{' '}
@@ -920,19 +912,6 @@ function Canvas({ initialFlow, projectName, projectCreatedAt, currentProjectId, 
           >
             ⚙ CONFIG
           </button>
-          {onToggleTheme && (
-            <>
-              <span style={{ color: 'var(--line)' }}>│</span>
-              <button
-                onClick={onToggleTheme}
-                title={theme === 'matrix' ? 'Mudar para tema Orpen (roxo)' : 'Mudar para tema Matrix (verde)'}
-                className="theme-toggle-btn"
-                style={{ fontSize: 9, padding: '1px 7px', letterSpacing: 1 }}
-              >
-                {theme === 'matrix' ? '◈ ORPEN' : '◈ MATRIX'}
-              </button>
-            </>
-          )}
           {/* ── Toggle PRO / AMIGÁVEL ─────────────────────────────────────── */}
           <>
             <span style={{ color: 'var(--line)' }}>│</span>
@@ -1359,11 +1338,8 @@ export default function App() {
   const [importError,    setImportError]    = useState(null);
   const [confImportData, setConfImportData] = useState(null); // { nodes, edges, stats, suggestedName }
 
-  // ── Tema global ───────────────────────────────────────────────────────────
-  const [theme, setThemeState] = useState(() => initTheme());
-  const handleToggleTheme = useCallback(() => setThemeState(themeToggle()), []);
-
   // Modo de interface agora gerenciado pelo ConfigContext (ConfigProvider)
+  // Tema gerenciado pelo ConfigContext via colorTheme ('terminal'|'matrix'|'dark')
 
   // Carrega projetos do IndexedDB na inicialização
   useEffect(() => {
@@ -1498,8 +1474,6 @@ export default function App() {
           confImportData={confImportData}
           onConfImportConfirm={handleConfImportConfirm}
           onConfImportCancel={() => setConfImportData(null)}
-          theme={theme}
-          onToggleTheme={handleToggleTheme}
         />
       </ConfigProvider>
     );
@@ -1518,8 +1492,6 @@ export default function App() {
             currentProjectId={currentProject?.id}
             onGoBack={handleGoBack}
             onProjectSaved={handleProjectSaved}
-            theme={theme}
-            onToggleTheme={handleToggleTheme}
           />
         </ReactFlowProvider>
       </div>

@@ -326,7 +326,6 @@ export default function HomeScreen({
   projects, onCreateProject, onOpenProject,
   onImportProject, onImportConf, onDeleteProject,
   importError, confImportData, onConfImportConfirm, onConfImportCancel,
-  theme = 'matrix', onToggleTheme,
 }) {
   const [showCreateModal, setShowCreateModal] = useState(false);
   const [confirmOpen,     setConfirmOpen]     = useState(null);
@@ -379,18 +378,6 @@ export default function HomeScreen({
             </div>
           </div>
 
-          {/* Toggle de tema */}
-          {onToggleTheme && (
-            <button
-              onClick={onToggleTheme}
-              className="theme-toggle-btn"
-              title={theme === 'matrix' ? 'Mudar para tema Orpen (roxo)' : 'Mudar para tema Matrix (verde)'}
-              style={{ marginTop: 4, flexShrink: 0 }}
-            >
-              <span className="theme-badge">{theme.toUpperCase()}</span>
-              {theme === 'matrix' ? '◈ ORPEN' : '◈ MATRIX'}
-            </button>
-          )}
         </div>
       </div>
 

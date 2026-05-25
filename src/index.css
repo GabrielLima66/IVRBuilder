@@ -535,6 +535,31 @@ body::before {
 .ctx-orphan-badge:hover::after { opacity: 1; }
 
 /* ═══════════════════════════════════════════════════════════════════════════
+   CONTEXT NODE — NAV HIGHLIGHT (destaque ao navegar pela lista lateral)
+   ═══════════════════════════════════════════════════════════════════════════ */
+@keyframes ctx-nav-pulse {
+  0%   {
+    box-shadow: 0 0 0 2px var(--neon), 0 0 10px var(--neon-glow);
+    border-color: var(--neon);
+    border-style: solid;
+  }
+  40%  {
+    box-shadow: 0 0 0 5px var(--neon-glow), 0 0 28px var(--neon-glow-med);
+    border-color: var(--neon);
+    border-style: solid;
+  }
+  100% {
+    box-shadow: none;
+  }
+}
+
+.ctx-node.ctx-node--nav-highlight {
+  border-style: solid;
+  border-color: var(--neon);
+  animation: ctx-nav-pulse 1.5s ease-out forwards;
+}
+
+/* ═══════════════════════════════════════════════════════════════════════════
    INPUT TIME
    ═══════════════════════════════════════════════════════════════════════════ */
 .term-input[type="time"]::-webkit-calendar-picker-indicator {

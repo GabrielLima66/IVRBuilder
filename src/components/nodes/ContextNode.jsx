@@ -152,13 +152,17 @@ const ContextNode = memo(({ id, data, selected }) => {
   const accentActive     = data.isMacro ? '#00d4ff' : 'var(--neon)';
   const accentActiveGlow = data.isMacro ? 'rgba(0,212,255,0.65)' : 'rgba(0,255,65,0.65)';
 
+  // Destaque de navegação: injetado transitoriamente via nodesWithSel (não persiste)
+  const isNavHighlight = !!data._navHighlight;
+
   return (
     <div
       className={cls(
         'ctx-node',
         selected && 'selected',
         isDraft && 'ctx-node--draft',
-        isConnectedActive && !isDraft && 'node-connected-active'
+        isConnectedActive && !isDraft && 'node-connected-active',
+        isNavHighlight && 'ctx-node--nav-highlight'
       )}
       style={{
         ...(isDraft

@@ -603,6 +603,20 @@ function Canvas({ initialFlow, projectName, projectCreatedAt, currentProjectId, 
     );
   }, [setNodes]);
 
+  // ── Destaque de navegação de contextos ───────────────────────────────────
+  // Acionado pelo ContextNavPanel ao clicar num item da lista.
+  // Injeta _navHighlight=true no data do nó alvo via nodesWithSel (não persiste).
+  const [highlightedCtxId,  setHighlightedCtxId]  = useState(null);
+  const highlightTimerRef = useRef(null);
+
+  const onContextNavigate = useCallback((id) => {
+    if (highlightTimerRef.current) clearTimeout(highlightTimerRef.current);
+    setHighlightedCtxId(id);
+    highlightTimerRef.current = setTimeout(() => {
+      setHighlightedCtxId(null);
+    }, 1500);
+  }, []);
+
   // ── Alignment guides + snap ───────────────────────────────────────────────
   const {
     guides,
@@ -760,10 +774,19 @@ function Canvas({ initialFlow, projectName, projectCreatedAt, currentProjectId, 
     try { await navigator.clipboard.writeText(exportText); } catch (_) { /* ignore */ }
   };
 
-  // Injeta selected visualmente sem armazenar em estado extra do React Flow
+  // Injeta selected visualmente sem armazenar em estado extra do React Flow.
+  // _navHighlight: flag transitória para a animação de destaque de navegação —
+  // não persiste nos nodes reais nem dispara autosave.
   const nodesWithSel = useMemo(
-    () => nodes.map((n) => ({ ...n, selected: n.id === selectedId })),
-    [nodes, selectedId]
+    () => nodes.map((n) => {
+      const navHl = highlightedCtxId && n.id === highlightedCtxId;
+      return {
+        ...n,
+        selected: n.id === selectedId,
+        ...(navHl ? { data: { ...n.data, _navHighlight: true } } : {}),
+      };
+    }),
+    [nodes, selectedId, highlightedCtxId]
   );
 
   const selectedNode = nodes.find((n) => n.id === selectedId) || null;
@@ -1069,6 +1092,7 @@ function Canvas({ initialFlow, projectName, projectCreatedAt, currentProjectId, 
         patchNodeStyle={patchNodeStyle}
         syncTrueContext={syncTrueContext}
         propagateContextRename={propagateContextRename}
+        onContextNavigate={onContextNavigate}
       />
 
       {/* ── Context menu de edge (botão direito) ─────────────────────────── */}

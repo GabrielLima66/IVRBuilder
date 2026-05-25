@@ -6,6 +6,7 @@ import {
 import { useModeContext } from '../../contexts/ModeContext';
 import { NODE_MODE_CONFIG, getFieldLabel, getNodeLabel } from '../../config/nodeModeConfig';
 import { isContextNameDuplicate } from '../../utils/contextUtils';
+import ContextNavPanel from './ContextNavPanel';
 
 // ─── Inputs estáveis (fora do componente pai para não recriar a cada render) ─
 
@@ -157,7 +158,7 @@ const MonthPicker = memo(function MonthPicker({ selected, onChange }) {
 
 // ─── Painel principal ─────────────────────────────────────────────────────────
 
-export default function PropertiesPanel({ node, updateNodeData, deleteNode, toggleComment, patchNodeStyle, syncTrueContext, propagateContextRename, nodes = [] }) {
+export default function PropertiesPanel({ node, updateNodeData, deleteNode, toggleComment, patchNodeStyle, syncTrueContext, propagateContextRename, nodes = [], onContextNavigate }) {
   // Armazena o nome do contexto no momento do foco (para detectar rename via painel)
   const ctxNameOnFocus = useRef('');
   const [ctxNameDup, setCtxNameDup] = useState(false);
@@ -173,17 +174,8 @@ export default function PropertiesPanel({ node, updateNodeData, deleteNode, togg
 
   if (!node) {
     return (
-      <aside style={panelStyle}>
-        <div style={{ fontSize: 11, color: 'var(--neon-dim)', letterSpacing: 1, marginBottom: 14 }}>
-          ▌PROPRIEDADES
-        </div>
-        <div style={{
-          border: '1px dashed var(--line)', padding: 18,
-          fontSize: 11, color: '#888', textAlign: 'center', borderRadius: 3,
-        }}>
-          <div style={{ color: 'var(--neon-dim)', marginBottom: 6 }}>// SEM SELEÇÃO</div>
-          Clique em um nó para<br />editar suas propriedades
-        </div>
+      <aside style={{ ...panelStyle, padding: '14px 12px 12px' }}>
+        <ContextNavPanel nodes={nodes} onNavigate={onContextNavigate} />
       </aside>
     );
   }

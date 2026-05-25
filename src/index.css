@@ -790,6 +790,22 @@ body::before {
 }
 
 /* ═══════════════════════════════════════════════════════════════════════════
+   INDICADOR DE SALVAMENTO FLUTUANTE
+   ═══════════════════════════════════════════════════════════════════════════ */
+
+/* Fade-out suave para o estado "// salvo" */
+@keyframes save-status-fade {
+  0%   { opacity: 0.35; }
+  60%  { opacity: 0.35; }
+  100% { opacity: 0;    }
+}
+
+.save-status-fade {
+  animation: save-status-fade 3s ease forwards;
+  pointer-events: none;
+}
+
+/* ═══════════════════════════════════════════════════════════════════════════
    ACESSIBILIDADE — prefers-reduced-motion
    Desativa animações e transições para usuários que optam por reduzir movimento.
    ═══════════════════════════════════════════════════════════════════════════ */

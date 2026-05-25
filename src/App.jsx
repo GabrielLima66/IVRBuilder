@@ -142,7 +142,7 @@ function Canvas({ initialFlow, projectName, projectCreatedAt, currentProjectId, 
   const isDirtyRef   = useRef(false);
   const skipDirtyRef = useRef(true);
   const saveTimerRef = useRef(null);
-  const [saveStatus, setSaveStatus] = useState(null); // null | 'saving' | 'saved'
+  const [saveStatus, setSaveStatus] = useState(null); // null | 'saving' | 'saved' | 'error'
 
   useEffect(() => {
     if (skipDirtyRef.current) { skipDirtyRef.current = false; return; }
@@ -172,7 +172,7 @@ function Canvas({ initialFlow, projectName, projectCreatedAt, currentProjectId, 
           setSaveStatus('saved');
           setTimeout(() => setSaveStatus(null), 3000);
         })
-        .catch(() => setSaveStatus(null));
+        .catch(() => setSaveStatus('error'));
     }, (config.autosaveDelay || 2) * 1000);
   }, [nodes, edges]); // eslint-disable-line react-hooks/exhaustive-deps
 
@@ -1000,6 +1000,36 @@ function Canvas({ initialFlow, projectName, projectCreatedAt, currentProjectId, 
             maskColor="rgba(0,0,0,0.6)"
           />
         </ReactFlow>
+
+        {/* ── Indicador de salvamento flutuante ────────────────────────────
+             Posicionado no canto inferior esquerdo do wrapper do canvas.
+             Sem borda nem fundo — apenas texto monospace sobre o canvas.
+             Estados: saving → neon 60%, saved → fade 0.35→0 em 3s, error → vermelho 80%. */}
+        {saveStatus && (
+          <div
+            key={saveStatus}
+            className={saveStatus === 'saved' ? 'save-status-fade' : undefined}
+            style={{
+              position: 'absolute',
+              bottom: 16,
+              left: 200,
+              zIndex: 45,
+              fontFamily: 'monospace',
+              fontSize: 10,
+              letterSpacing: 1,
+              pointerEvents: 'none',
+              userSelect: 'none',
+              color: saveStatus === 'error' ? '#ff5050' : neonColor,
+              opacity: saveStatus === 'saving' ? 0.6
+                     : saveStatus === 'error'  ? 0.8
+                     : undefined, // 'saved': animação save-status-fade controla opacity
+            }}
+          >
+            {saveStatus === 'saving' && '// salvando...'}
+            {saveStatus === 'saved'  && '// salvo'}
+            {saveStatus === 'error'  && '// erro ao salvar'}
+          </div>
+        )}
 
         {/* Alignment guide lines — rendered over canvas, below UI controls */}
         <AlignmentGuides guides={guides} />

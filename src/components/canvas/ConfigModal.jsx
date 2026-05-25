@@ -170,17 +170,17 @@ const TextRow = memo(function TextRow({ configKey, label, placeholder, hint }) {
   );
 });
 
-/** Seletor de tema: Terminal · Matrix · Dark Mode */
+/** Seletor de tema: Hacking · Orpen · Dark */
 const ColorThemeRow = memo(function ColorThemeRow() {
   const { colorTheme, setConfig } = useConfig();
 
   // Cores de destaque por tema — usadas como borda e texto do botão ativo
-  const THEME_ACCENT = { terminal: '#00ff41', matrix: '#c084fc', dark: '#4fc1ff' };
+  const THEME_ACCENT = { hacking: '#00ff41', orpen: '#c084fc', dark: '#4fc1ff' };
 
   const THEMES = [
-    { key: 'terminal', label: 'TERMINAL', radius: '2px 0 0 2px', borderRight: 'none' },
-    { key: 'matrix',   label: 'MATRIX',   radius: '0',           borderRight: 'none' },
-    { key: 'dark',     label: 'DARK MODE', radius: '0 2px 2px 0', borderRight: undefined },
+    { key: 'hacking', label: 'HACKING', radius: '2px 0 0 2px', borderRight: 'none' },
+    { key: 'orpen',   label: 'ORPEN',   radius: '0',           borderRight: 'none' },
+    { key: 'dark',    label: 'DARK',    radius: '0 2px 2px 0', borderRight: undefined },
   ];
 
   return (
@@ -218,7 +218,7 @@ const ColorThemeRow = memo(function ColorThemeRow() {
         })}
       </div>
       <div style={{ fontSize: 9, color: '#555', marginTop: 5, lineHeight: 1.5 }}>
-        Terminal = verde neon clássico · Matrix = efeito chuva · Dark Mode = paleta VS Code
+        Hacking = verde neon clássico · Orpen = roxo/violeta · Dark = paleta VS Code
       </div>
     </div>
   );

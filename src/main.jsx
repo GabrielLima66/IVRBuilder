@@ -9,19 +9,26 @@ import App from './App';
  * Aplica o data-theme correto ANTES do primeiro render React para evitar flash.
  * Lê colorTheme do ConfigContext (orpen-ura-config) com fallback para orpen-theme legado.
  *
- * Mapeamento: terminal→matrix | matrix→orpen | dark→dark
+ * Mapeamento (nomes atuais):  hacking→matrix | orpen→orpen | dark→dark
+ * Mapeamento (nomes legados): terminal→matrix | matrix→orpen | dark-mode→dark
  */
 function applyInitialTheme() {
   try {
     const config     = JSON.parse(localStorage.getItem('orpen-ura-config') || '{}');
     const colorTheme = config.colorTheme || null;
 
-    if (colorTheme === 'dark') {
-      document.documentElement.setAttribute('data-theme', 'dark');
-    } else if (colorTheme === 'matrix') {
-      document.documentElement.setAttribute('data-theme', 'orpen');
-    } else if (colorTheme === 'terminal') {
-      document.documentElement.setAttribute('data-theme', 'matrix');
+    // Mapa unificado — suporta nomes atuais e legados (migração transparente)
+    const DATA_THEME = {
+      hacking:    'matrix',   // nome atual
+      orpen:      'orpen',    // nome atual
+      dark:       'dark',     // nome atual
+      terminal:   'matrix',   // legado → renomeado para 'hacking'
+      matrix:     'orpen',    // legado → renomeado para 'orpen'
+      'dark-mode':'dark',     // legado → renomeado para 'dark'
+    };
+
+    if (colorTheme && DATA_THEME[colorTheme]) {
+      document.documentElement.setAttribute('data-theme', DATA_THEME[colorTheme]);
     } else {
       // Sem colorTheme salvo: usa legado orpen-theme (matrix ou orpen)
       const legacy = localStorage.getItem('orpen-theme') || 'matrix';

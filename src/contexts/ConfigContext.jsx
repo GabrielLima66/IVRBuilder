@@ -6,9 +6,9 @@
  * Alterações são refletidas imediatamente sem necessidade de "Salvar".
  *
  * Mapeamento de colorTheme → data-theme no <html>:
- *   'terminal' → 'matrix'  (verde neon clássico)
- *   'matrix'   → 'orpen'   (efeito chuva / visual Orpen)
- *   'dark'     → 'dark'    (paleta VS Code)
+ *   'hacking' → 'matrix'  (verde neon clássico)
+ *   'orpen'   → 'orpen'   (roxo/violeta — identidade da marca)
+ *   'dark'    → 'dark'    (paleta VS Code)
  */
 
 import React, { createContext, useContext, useState, useCallback, useEffect } from 'react';
@@ -17,16 +17,16 @@ const STORAGE_KEY = 'orpen-ura-config';
 
 /** Mapeia colorTheme do ConfigContext para o atributo data-theme do DOM */
 export const COLOR_THEME_TO_DATA_THEME = {
-  terminal: 'matrix',
-  matrix:   'orpen',
-  dark:     'dark',
+  hacking: 'matrix',
+  orpen:   'orpen',
+  dark:    'dark',
 };
 
 /** Valores padrão de todas as configurações */
 export const CONFIG_DEFAULTS = {
   // Interface
   mode:                   'pro',        // 'pro' | 'amigavel'
-  colorTheme:             'terminal',   // 'terminal' | 'matrix' | 'dark'
+  colorTheme:             'hacking',    // 'hacking' | 'orpen' | 'dark'
 
   // Canvas
   snapToGrid:             true,         // bool — snap automático para grade
@@ -54,31 +54,41 @@ export const CONFIG_DEFAULTS = {
 
 /**
  * Carrega config do localStorage, com fallback para defaults e migração legada.
- * Migração: se `orpen-theme` legado = 'orpen', mapeia para colorTheme = 'matrix'.
+ *
+ * Migrações aplicadas:
+ *   - 'terminal' → 'hacking'   (renomeação de tema)
+ *   - 'matrix'   → 'orpen'     (renomeação de tema)
+ *   - 'dark-mode'→ 'dark'      (renomeação de tema)
+ *   - orpen-theme legado = 'orpen' → colorTheme = 'orpen'
  */
 function loadConfig() {
   try {
     const stored = localStorage.getItem(STORAGE_KEY);
     if (stored) {
       const parsed = JSON.parse(stored);
-      // Migração: colorTheme valia 'terminal'|'dark'; 'matrix' é nova opção.
-      // Se o usuário tinha orpen-theme='orpen' E colorTheme='terminal' (default),
-      // migra para 'matrix' para preservar a aparência que já usava.
-      if (
-        (!parsed.colorTheme || parsed.colorTheme === 'terminal') &&
-        localStorage.getItem('orpen-theme') === 'orpen'
-      ) {
-        parsed.colorTheme = 'matrix';
+
+      // Migração de nomes de tema antigos para os novos:
+      const THEME_RENAME = { terminal: 'hacking', matrix: 'orpen', 'dark-mode': 'dark' };
+      if (parsed.colorTheme && THEME_RENAME[parsed.colorTheme]) {
+        parsed.colorTheme = THEME_RENAME[parsed.colorTheme];
       }
+
+      // Migração legada: usuário sem colorTheme salvo que usava orpen-theme='orpen'
+      // → preserva o tema Orpen (roxo)
+      if (!parsed.colorTheme && localStorage.getItem('orpen-theme') === 'orpen') {
+        parsed.colorTheme = 'orpen';
+      }
+
       return { ...CONFIG_DEFAULTS, ...parsed };
     }
   } catch {}
+
   // Primeiro uso: detecta tema legado do orpen-theme
   const legacyTheme = localStorage.getItem('orpen-theme');
   const legacyMode  = localStorage.getItem('orpen-ura-mode');
   return {
     ...CONFIG_DEFAULTS,
-    ...(legacyTheme === 'orpen' ? { colorTheme: 'matrix' } : {}),
+    ...(legacyTheme === 'orpen' ? { colorTheme: 'orpen' } : {}),
     ...(legacyMode ? { mode: legacyMode } : {}),
   };
 }

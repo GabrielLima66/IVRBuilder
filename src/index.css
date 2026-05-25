@@ -3,7 +3,8 @@
 @tailwind utilities;
 
 /* ═══════════════════════════════════════════════════════════════════════════
-   TEMA: MATRIX (padrão) — verde neon sobre preto terminal
+   TEMA: HACKING (padrão) — verde neon sobre preto terminal
+   colorTheme="hacking" → data-theme="matrix"
    ═══════════════════════════════════════════════════════════════════════════ */
 :root,
 [data-theme="matrix"] {
@@ -54,7 +55,8 @@
 }
 
 /* ═══════════════════════════════════════════════════════════════════════════
-   TEMA: ORPEN — roxo sobre preto profundo, identidade da marca
+   TEMA: ORPEN — roxo/violeta sobre preto profundo, identidade da marca
+   colorTheme="orpen" → data-theme="orpen"
    ═══════════════════════════════════════════════════════════════════════════ */
 [data-theme="orpen"] {
   color-scheme: dark;
@@ -104,7 +106,8 @@
 }
 
 /* ═══════════════════════════════════════════════════════════════════════════
-   TEMA: DARK MODE — VS Code-inspired, azul-gelo sobre cinza escuro
+   TEMA: DARK — VS Code-inspired, azul-gelo sobre cinza escuro
+   colorTheme="dark" → data-theme="dark"
    Sem scanlines. Accent: #4fc1ff (azul VS Code).
    ═══════════════════════════════════════════════════════════════════════════ */
 [data-theme="dark"] {
@@ -183,7 +186,7 @@ html[data-theme="dark"] body.mode-amigavel {
   --panel-hint-color:       var(--neon-dim);   /* dica no painel de propriedades */
 }
 
-/* AMIGÁVEL — Matrix (verde): hierarquia de 3 tons */
+/* AMIGÁVEL — Hacking (verde): hierarquia de 3 tons */
 body.mode-amigavel {
   --field-label:            #7dbd8f;  /* verde dessaturado — label do campo */
   --field-value:            #e0e0e0;  /* branco suave — valor digitado */
@@ -193,7 +196,7 @@ body.mode-amigavel {
   --panel-hint-color:       #4a7a5a;  /* verde escuro — dica no painel */
 }
 
-/* AMIGÁVEL — Orpen (roxo): equivalentes na paleta lavanda */
+/* AMIGÁVEL — Orpen (roxo/violeta): equivalentes na paleta lavanda */
 html[data-theme="orpen"] body.mode-amigavel {
   --field-label:            #b99ee0;  /* lavanda dessaturada */
   --field-value:            #e0e0e0;  /* branco suave (igual em ambos) */

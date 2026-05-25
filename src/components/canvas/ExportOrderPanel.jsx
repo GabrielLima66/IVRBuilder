@@ -7,13 +7,9 @@
  */
 import React, { useState, useRef, useCallback, useMemo } from 'react';
 
-// ── Constantes visuais ────────────────────────────────────────────────────────
+// ── Constantes de layout ──────────────────────────────────────────────────────
 const PANEL_W     = 320;
 const ITEM_H      = 48; // px — altura de cada item da lista
-const NEON        = '#00ff41';
-const NEON_DIM    = '#00b32d';
-const PANEL_BG    = '#0e0e0e';
-const BORDER      = '#1f3a23';
 const DRAFT_COLOR = '#666';
 
 // ── Utilitário: reordena e normaliza exportOrder de 1..N ─────────────────────
@@ -164,29 +160,29 @@ export default function ExportOrderPanel({ nodes, onClose, onUpdateNode }) {
       style={{
         position: 'absolute', top: 0, right: 0, bottom: 0, zIndex: 60,
         width: PANEL_W,
-        background: PANEL_BG,
-        borderLeft: `1px solid ${BORDER}`,
+        background: 'var(--panel)',
+        borderLeft: '1px solid var(--line)',
         display: 'flex', flexDirection: 'column',
         fontFamily: "'JetBrains Mono', 'Fira Code', monospace",
         fontSize: 11,
-        color: NEON,
-        boxShadow: `-4px 0 24px rgba(0,255,65,0.08)`,
+        color: 'var(--neon)',
+        boxShadow: '-4px 0 24px var(--neon-glow-faint)',
         userSelect: 'none',
       }}
     >
       {/* ── Header ─────────────────────────────────────────────────────────── */}
       <div style={{
         padding: '12px 16px 10px',
-        borderBottom: `1px solid ${BORDER}`,
+        borderBottom: '1px solid var(--line)',
         display: 'flex', alignItems: 'center', justifyContent: 'space-between',
-        background: 'rgba(0,255,65,0.04)',
+        background: 'var(--neon-glow-bg)',
       }}>
         <span style={{ letterSpacing: 2, fontSize: 10 }}>⊞ ORDEM DE EXPORTAÇÃO</span>
         <button
           onClick={onClose}
           style={{
-            background: 'transparent', border: `1px solid ${BORDER}`,
-            color: NEON_DIM, cursor: 'pointer', fontSize: 11,
+            background: 'transparent', border: '1px solid var(--line)',
+            color: 'var(--neon-dim)', cursor: 'pointer', fontSize: 11,
             padding: '2px 8px', borderRadius: 2, fontFamily: 'inherit',
           }}
         >
@@ -197,20 +193,20 @@ export default function ExportOrderPanel({ nodes, onClose, onUpdateNode }) {
       {/* ── GlobalConfigNode (fixo, sempre primeiro) ──────────────────────── */}
       <div style={{
         padding: '8px 16px',
-        borderBottom: `1px solid ${BORDER}`,
+        borderBottom: '1px solid var(--line)',
         display: 'flex', alignItems: 'center', gap: 8,
         opacity: 0.5,
       }}>
-        <span style={{ color: NEON, fontSize: 10, minWidth: 18, textAlign: 'right' }}>⚑</span>
-        <span style={{ flex: 1, color: NEON, fontSize: 10, letterSpacing: 0.5 }}>
-          CONFIG / START <span style={{ color: NEON_DIM }}>(sempre primeiro)</span>
+        <span style={{ color: 'var(--neon)', fontSize: 10, minWidth: 18, textAlign: 'right' }}>⚑</span>
+        <span style={{ flex: 1, color: 'var(--neon)', fontSize: 10, letterSpacing: 0.5 }}>
+          CONFIG / START <span style={{ color: 'var(--neon-dim)' }}>(sempre primeiro)</span>
         </span>
       </div>
 
       {/* ── Lista de contextos ──────────────────────────────────────────────── */}
       <div style={{ flex: 1, overflowY: 'auto', padding: '4px 0' }}>
         {list.length === 0 && (
-          <div style={{ padding: '24px 16px', color: NEON_DIM, fontSize: 10, textAlign: 'center' }}>
+          <div style={{ padding: '24px 16px', color: 'var(--neon-dim)', fontSize: 10, textAlign: 'center' }}>
             // nenhum contexto no canvas
           </div>
         )}
@@ -227,11 +223,11 @@ export default function ExportOrderPanel({ nodes, onClose, onUpdateNode }) {
                 padding: '0 12px 0 8px',
                 height: ITEM_H,
                 background: isDropTarget
-                  ? 'rgba(0,255,65,0.06)'
+                  ? 'var(--ctx-bg-inset)'
                   : isBeingDragged
-                    ? 'rgba(0,255,65,0.03)'
+                    ? 'var(--neon-glow-bg)'
                     : 'transparent',
-                borderTop: isDropTarget ? `1px solid ${NEON}` : '1px solid transparent',
+                borderTop: isDropTarget ? '1px solid var(--neon)' : '1px solid transparent',
                 opacity: isBeingDragged ? 0.4 : item.isDraft ? 0.5 : 1,
                 transition: 'background 0.1s',
                 boxSizing: 'border-box',
@@ -241,7 +237,7 @@ export default function ExportOrderPanel({ nodes, onClose, onUpdateNode }) {
               <div
                 onMouseDown={(e) => handleDragStart(e, idx)}
                 style={{
-                  cursor: 'grab', color: NEON_DIM, fontSize: 14,
+                  cursor: 'grab', color: 'var(--neon-dim)', fontSize: 14,
                   padding: '4px 2px', lineHeight: 1,
                   flexShrink: 0,
                 }}
@@ -265,8 +261,8 @@ export default function ExportOrderPanel({ nodes, onClose, onUpdateNode }) {
                     if (e.key === 'Escape') setEditingId(null);
                   }}
                   style={{
-                    width: 32, background: '#111', border: `1px solid ${NEON}`,
-                    color: NEON, fontFamily: 'inherit', fontSize: 11,
+                    width: 32, background: 'var(--panel)', border: '1px solid var(--neon)',
+                    color: 'var(--neon)', fontFamily: 'inherit', fontSize: 11,
                     textAlign: 'center', borderRadius: 2, padding: '1px 2px',
                     outline: 'none',
                   }}
@@ -276,7 +272,7 @@ export default function ExportOrderPanel({ nodes, onClose, onUpdateNode }) {
                   onClick={() => startEdit(item)}
                   title="Clique para editar posição"
                   style={{
-                    minWidth: 28, textAlign: 'right', color: NEON_DIM,
+                    minWidth: 28, textAlign: 'right', color: 'var(--neon-dim)',
                     cursor: 'text', padding: '2px 4px',
                     border: '1px solid transparent',
                     borderRadius: 2,
@@ -290,7 +286,7 @@ export default function ExportOrderPanel({ nodes, onClose, onUpdateNode }) {
               {/* Nome do contexto */}
               <span style={{
                 flex: 1, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
-                color: item.isDraft ? DRAFT_COLOR : NEON,
+                color: item.isDraft ? DRAFT_COLOR : 'var(--neon)',
                 textDecoration: item.isDraft ? 'line-through' : 'none',
                 letterSpacing: 0.5,
               }}>
@@ -300,7 +296,7 @@ export default function ExportOrderPanel({ nodes, onClose, onUpdateNode }) {
               {/* Badge RASCUNHO */}
               {item.isDraft && (
                 <span style={{
-                  fontSize: 8, color: DRAFT_COLOR, border: `1px solid #444`,
+                  fontSize: 8, color: DRAFT_COLOR, border: '1px solid #444',
                   borderRadius: 2, padding: '0 4px', letterSpacing: 1,
                   flexShrink: 0,
                 }}>
@@ -320,8 +316,8 @@ export default function ExportOrderPanel({ nodes, onClose, onUpdateNode }) {
                     disabled={disabled}
                     style={{
                       background: 'transparent',
-                      border: `1px solid ${disabled ? BORDER : NEON_DIM}`,
-                      color: disabled ? BORDER : NEON_DIM,
+                      border: disabled ? '1px solid var(--line)' : '1px solid var(--neon-dim)',
+                      color: disabled ? 'var(--line)' : 'var(--neon-dim)',
                       fontFamily: 'inherit', fontSize: 9, cursor: disabled ? 'default' : 'pointer',
                       padding: '0 4px', lineHeight: '12px', borderRadius: 1,
                     }}
@@ -337,8 +333,8 @@ export default function ExportOrderPanel({ nodes, onClose, onUpdateNode }) {
                 title={item.isDraft ? 'Ativar para exportação' : 'Marcar como rascunho (excluir da exportação)'}
                 style={{
                   background: item.isDraft ? 'rgba(100,100,100,0.2)' : 'transparent',
-                  border: `1px solid ${item.isDraft ? '#555' : BORDER}`,
-                  color: item.isDraft ? DRAFT_COLOR : NEON_DIM,
+                  border: item.isDraft ? '1px solid #555' : '1px solid var(--line)',
+                  color: item.isDraft ? DRAFT_COLOR : 'var(--neon-dim)',
                   fontFamily: 'inherit', fontSize: 8, cursor: 'pointer',
                   padding: '2px 5px', borderRadius: 2, letterSpacing: 0.5,
                   flexShrink: 0, whiteSpace: 'nowrap',
@@ -353,21 +349,21 @@ export default function ExportOrderPanel({ nodes, onClose, onUpdateNode }) {
 
       {/* ── Prévia de exportação ────────────────────────────────────────────── */}
       <div style={{
-        borderTop: `1px solid ${BORDER}`,
+        borderTop: '1px solid var(--line)',
         padding: '10px 16px',
-        background: 'rgba(0,255,65,0.02)',
+        background: 'var(--neon-glow-bg)',
       }}>
-        <div style={{ color: NEON_DIM, fontSize: 9, letterSpacing: 1.5, marginBottom: 6 }}>
+        <div style={{ color: 'var(--neon-dim)', fontSize: 9, letterSpacing: 1.5, marginBottom: 6 }}>
           // PRÉVIA DO .conf (ordem de blocos)
         </div>
         <div style={{ lineHeight: 1.8 }}>
-          <div style={{ color: NEON, fontSize: 10, opacity: 0.6 }}>
+          <div style={{ color: 'var(--neon)', fontSize: 10, opacity: 0.6 }}>
             [orpen-ivr-{configNode?.data?.ivr || '??'}]
-            <span style={{ color: NEON_DIM, fontSize: 9 }}> ← sempre primeiro</span>
+            <span style={{ color: 'var(--neon-dim)', fontSize: 9 }}> ← sempre primeiro</span>
           </div>
           {preview.map((item, i) => (
-            <div key={item.id} style={{ color: NEON, fontSize: 10 }}>
-              <span style={{ color: NEON_DIM, marginRight: 6 }}>{i + 1}.</span>
+            <div key={item.id} style={{ color: 'var(--neon)', fontSize: 10 }}>
+              <span style={{ color: 'var(--neon-dim)', marginRight: 6 }}>{i + 1}.</span>
               [{item.contextName}]
             </div>
           ))}

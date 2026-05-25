@@ -465,7 +465,7 @@ export default function PropertiesPanel({ node, updateNodeData, deleteNode, togg
               />
               <div style={{ fontSize: 9, color: 'var(--neon-dim)', marginTop: 4, lineHeight: 1.5 }}>
                 Contexto para onde o fluxo vai quando a condição <span style={{ color: '#ffcc00' }}>BATER</span> (horário, dias, mês).<br />
-                Quando <span style={{ color: '#00ff41' }}>NÃO bater</span>, segue pelo handle de saída ↓.
+                Quando <span style={{ color: 'var(--neon)' }}>NÃO bater</span>, segue pelo handle de saída ↓.
               </div>
               {!d.trueContext && (
                 <div style={{ fontSize: 9, color: '#ff5050', marginTop: 4 }}>

@@ -237,7 +237,7 @@ export default function ConfigModal({ onClose }) {
       <div
         onClick={stopProp}
         style={{
-          background: '#0d0d0d',
+          background: 'var(--bg)',
           border: '1px solid var(--neon)',
           borderRadius: 4,
           width: 480,

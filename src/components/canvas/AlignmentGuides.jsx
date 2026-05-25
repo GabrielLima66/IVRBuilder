@@ -1,7 +1,7 @@
 import React, { memo } from 'react';
 import { useStore } from 'reactflow';
 
-const GUIDE_COLOR = 'rgba(0,255,65,0.7)';
+const GUIDE_COLOR = 'var(--canvas-guide)';
 
 /**
  * GuideLines — inner component subscribed to the viewport transform.

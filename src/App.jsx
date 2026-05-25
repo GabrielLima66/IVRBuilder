@@ -223,13 +223,13 @@ function Canvas({ initialFlow, projectName, projectCreatedAt, currentProjectId, 
           // offset inicializado em zero → edge usa trajeto automático
           ...(useFloating ? { data: { offsetX: 0, offsetY: 0 } } : {}),
           animated: false,
-          style: { stroke: '#00ff41', strokeWidth: 1.5 },
-          markerEnd: { type: MarkerType.ArrowClosed, color: '#00ff41' },
+          style: { stroke: neonColor, strokeWidth: 1.5 },
+          markerEnd: { type: MarkerType.ArrowClosed, color: neonColor },
         },
         eds
       )
     );
-  }, [setEdges, setNodes, nodes]);
+  }, [setEdges, setNodes, nodes, neonColor]);
 
   // ── Mudanças em edges — detecta deleção do handle 'true' → limpa campo ────
   const handleEdgesChange = useCallback((changes) => {
@@ -1205,7 +1205,7 @@ function Canvas({ initialFlow, projectName, projectCreatedAt, currentProjectId, 
               {canComment && (
                 <button
                   style={{ ...nodeBtnStyle, color: isCommented ? 'var(--neon)' : '#ffcc00' }}
-                  onMouseEnter={(e) => { e.currentTarget.style.background = isCommented ? '#00ff4112' : '#ffcc0012'; }}
+                  onMouseEnter={(e) => { e.currentTarget.style.background = isCommented ? 'var(--neon-glow-faint)' : '#ffcc0012'; }}
                   onMouseLeave={(e) => { e.currentTarget.style.background = 'transparent'; }}
                   onClick={() => { toggleComment(nodeMenu.nodeId); setNodeMenu(null); }}
                 >

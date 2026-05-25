@@ -276,7 +276,7 @@ const ContextNode = memo(({ id, data, selected }) => {
             style={{
               position: 'absolute', left: CTX_PAD_H,
               top: sep.y, width: `calc(100% - ${CTX_PAD_H * 2}px)`,
-              height: 1, background: isDraft ? '#555' : '#00ff41',
+              height: 1, background: isDraft ? '#555' : 'var(--neon)',
               opacity: 0.25, pointerEvents: 'none', borderRadius: 0.5,
             }}
           />

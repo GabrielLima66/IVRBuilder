@@ -28,6 +28,10 @@ import { ConfigProvider, useConfig } from './contexts/ConfigContext';
 import ConfigModal from './components/canvas/ConfigModal';
 import HomeScreen from './screens/HomeScreen';
 import { salvarProjeto, listarProjetos } from './services/projectStorage';
+import {
+  extractLayout, exportLayoutFile, importLayoutFile,
+  applyLayout, saveLayout,
+} from './services/layoutStorage';
 import { importConf } from './utils/conf/confImporter';
 import { useAlignmentGuides } from './hooks/useAlignmentGuides';
 import AlignmentGuides from './components/canvas/AlignmentGuides';
@@ -133,10 +137,16 @@ function Canvas({ initialFlow, projectName, projectCreatedAt, currentProjectId, 
   const [showOrderPanel,       setShowOrderPanel]       = useState(false);
   const [showConfigModal,      setShowConfigModal]      = useState(false);
   const [exportText,           setExportText]           = useState('');
+  const [exportLayout,         setExportLayout]         = useState(null); // URALayout para download junto ao .conf
   const [showFirstExportModal, setShowFirstExportModal] = useState(false);
   const [firstExportDontShow,  setFirstExportDontShow]  = useState(false);
+  // Ref para input de importação de arquivo .layout.json no canvas
+  const layoutInputRef = useRef(null);
   // Context menu de edge (botão direito)
   const [edgeMenu, setEdgeMenu] = useState(null); // { x, y, edgeId }
+
+  // Nome do arquivo .conf derivado do nome do projeto — usado na exportação e no layout.
+  const confFileName = projectName ? `${projectName}.conf` : 'orpen-ura-gerada.conf';
 
   // ── Rastreamento de alterações + auto-save IndexedDB (debounce 2s) ──────
   const isDirtyRef   = useRef(false);
@@ -171,6 +181,16 @@ function Canvas({ initialFlow, projectName, projectCreatedAt, currentProjectId, 
           isDirtyRef.current = false;
           setSaveStatus('saved');
           setTimeout(() => setSaveStatus(null), 3000);
+          // Persiste layout na store 'layouts' (fire-and-forget, não bloqueia o save principal)
+          try {
+            const layout = extractLayout(
+              rfInstance.getNodes(),
+              rfInstance.getEdges(),
+              rfInstance.getViewport(),
+              confFileName
+            );
+            saveLayout(confFileName, layout).catch(() => {});
+          } catch (_) { /* layout save failure é não-crítica */ }
         })
         .catch(() => setSaveStatus('error'));
     }, (config.autosaveDelay || 2) * 1000);
@@ -751,6 +771,17 @@ function Canvas({ initialFlow, projectName, projectCreatedAt, currentProjectId, 
     setExportText(generateDialplan(nodes, edges, {
       includeSectionComments: config.includeSectionComments,
     }));
+    // Computa e armazena o layout para download junto ao .conf
+    try {
+      const layout = extractLayout(
+        nodes, edges,
+        rfInstance.getViewport(),
+        confFileName
+      );
+      setExportLayout(layout);
+    } catch (_) {
+      setExportLayout(null);
+    }
     // Modo AMIGÁVEL: mostra aviso informativo na primeira exportação
     if (mode === 'amigavel' && !localStorage.getItem('orpen-first-export-shown')) {
       setShowFirstExportModal(true);
@@ -765,19 +796,55 @@ function Canvas({ initialFlow, projectName, projectCreatedAt, currentProjectId, 
     setShowExport(true);
   };
 
+  /** Baixa apenas o arquivo .conf */
   const downloadConf = () => {
-    let content = exportText.replace(/\r\n/g, '\n'); // normaliza primeiro
+    let content = exportText.replace(/\r\n/g, '\n');
     if (config.lineEnding === 'crlf') content = content.replace(/\n/g, '\r\n');
     const blob = new Blob([content], { type: 'text/plain;charset=utf-8' });
     const url  = URL.createObjectURL(blob);
     const a    = document.createElement('a');
     a.href     = url;
-    a.download = 'orpen-ura-gerada.conf';
+    a.download = confFileName;
     document.body.appendChild(a);
     a.click();
     document.body.removeChild(a);
     URL.revokeObjectURL(url);
   };
+
+  /** Baixa apenas o arquivo .layout.json */
+  const downloadLayoutJson = () => {
+    if (!exportLayout) return;
+    exportLayoutFile(exportLayout, confFileName.replace(/\.conf$/, ''));
+  };
+
+  /**
+   * Baixa os dois arquivos sequencialmente (300ms de intervalo para evitar bloqueio do browser).
+   * Comportamento descrito na spec: "ao clicar em EXPORTAR URA, dois arquivos são baixados".
+   */
+  const downloadBoth = () => {
+    downloadConf();
+    if (exportLayout) {
+      setTimeout(() => downloadLayoutJson(), 300);
+    }
+  };
+
+  /** Importa um .layout.json e aplica as posições sobre o canvas atual. */
+  const handleImportLayout = useCallback(async (file) => {
+    try {
+      const layout = await importLayoutFile(file);
+      const result = applyLayout(
+        rfInstance.getNodes(),
+        rfInstance.getEdges(),
+        layout
+      );
+      setNodes(result.nodes);
+      setEdges(result.edges);
+      if (result.viewport) rfInstance.setViewport(result.viewport);
+    } catch (err) {
+      // eslint-disable-next-line no-alert
+      alert(`⚠ Erro ao importar layout: ${err.message}`);
+    }
+  }, [rfInstance, setNodes, setEdges]);
 
   const copyConf = async () => {
     try { await navigator.clipboard.writeText(exportText); } catch (_) { /* ignore */ }
@@ -912,6 +979,36 @@ function Canvas({ initialFlow, projectName, projectCreatedAt, currentProjectId, 
           >
             ⚙ CONFIG
           </button>
+          <span style={{ color: 'var(--line)' }}>│</span>
+          {/* Importar Layout — restaura posições do canvas a partir de .layout.json */}
+          <button
+            type="button"
+            onClick={() => layoutInputRef.current?.click()}
+            title="Importar .layout.json para restaurar posições do canvas"
+            style={{
+              background: 'transparent',
+              border: '1px solid var(--line)',
+              color: 'var(--neon-dim)',
+              fontFamily: 'inherit', fontSize: 9, letterSpacing: 1,
+              padding: '1px 7px', cursor: 'pointer', borderRadius: 2,
+              transition: 'all 0.15s',
+            }}
+            onMouseEnter={(e) => { e.currentTarget.style.borderColor = 'var(--neon)'; e.currentTarget.style.color = 'var(--neon)'; }}
+            onMouseLeave={(e) => { e.currentTarget.style.borderColor = 'var(--line)'; e.currentTarget.style.color = 'var(--neon-dim)'; }}
+          >
+            ⤓ LAYOUT
+          </button>
+          <input
+            ref={layoutInputRef}
+            type="file"
+            accept=".json"
+            style={{ display: 'none' }}
+            onChange={(e) => {
+              const f = e.target.files?.[0];
+              if (f) handleImportLayout(f);
+              e.target.value = '';
+            }}
+          />
           {/* ── Toggle PRO / AMIGÁVEL ─────────────────────────────────────── */}
           <>
             <span style={{ color: 'var(--line)' }}>│</span>
@@ -1311,19 +1408,42 @@ function Canvas({ initialFlow, projectName, projectCreatedAt, currentProjectId, 
       {showExport && (
         <div className="modal-backdrop" onClick={() => setShowExport(false)}>
           <div className="modal" onClick={(e) => e.stopPropagation()}>
+            {/* Cabeçalho */}
             <div style={{
               padding: '10px 14px',
               borderBottom: '1px solid var(--line)',
               display: 'flex', justifyContent: 'space-between', alignItems: 'center',
             }}>
               <div style={{ letterSpacing: 2, fontSize: 12 }} className="neon-text">
-                ▌ DIALPLAN GERADO :: orpen-ura-gerada.conf
+                ▌ DIALPLAN GERADO :: {confFileName}
               </div>
               <button className="btn-neon btn-danger" style={{ padding: '4px 10px' }}
                 onClick={() => setShowExport(false)}>
                 X
               </button>
             </div>
+
+            {/* Banner dos arquivos gerados */}
+            <div style={{
+              padding: '8px 14px',
+              borderBottom: '1px solid var(--line)',
+              background: 'var(--panel-2)',
+              fontSize: 9,
+              color: 'var(--neon-dim)',
+              letterSpacing: 0.5,
+              lineHeight: 2.2,
+            }}>
+              <span style={{ color: '#555', letterSpacing: 1 }}>{'// arquivos gerados:'}</span>
+              <br />
+              <span style={{ color: 'var(--neon)' }}>{confFileName}</span>
+              {' — dialplan para o Asterisk'}
+              <br />
+              <span style={{ color: 'var(--neon)' }}>{confFileName.replace(/\.conf$/, '.layout.json')}</span>
+              {' — layout do canvas '}
+              <span style={{ color: '#555' }}>(mantenha junto ao .conf)</span>
+            </div>
+
+            {/* Preview do .conf */}
             <pre style={{
               flex: 1, overflow: 'auto', margin: 0,
               padding: '14px',
@@ -1335,13 +1455,38 @@ function Canvas({ initialFlow, projectName, projectCreatedAt, currentProjectId, 
             }}>
               {exportText}
             </pre>
+
+            {/* Ações */}
             <div style={{
               padding: '10px 14px',
               borderTop: '1px solid var(--line)',
-              display: 'flex', gap: 8, justifyContent: 'flex-end',
+              display: 'flex', gap: 8, justifyContent: 'flex-end', flexWrap: 'wrap',
             }}>
-              <button className="btn-neon" onClick={copyConf}>⎘ COPIAR</button>
-              <button className="btn-neon" onClick={downloadConf}>⤓ BAIXAR .conf</button>
+              <button className="btn-neon" onClick={copyConf} title="Copiar .conf para a área de transferência">
+                ⎘ COPIAR
+              </button>
+              <button className="btn-neon" onClick={downloadConf} title={`Baixar apenas ${confFileName}`}
+                style={{ borderColor: 'var(--neon-dim)', color: 'var(--neon-dim)' }}
+                onMouseEnter={(e) => { e.currentTarget.style.borderColor = 'var(--neon)'; e.currentTarget.style.color = 'var(--neon)'; }}
+                onMouseLeave={(e) => { e.currentTarget.style.borderColor = 'var(--neon-dim)'; e.currentTarget.style.color = 'var(--neon-dim)'; }}
+              >
+                ⤓ .conf
+              </button>
+              <button className="btn-neon" onClick={downloadLayoutJson}
+                disabled={!exportLayout}
+                title={`Baixar apenas ${confFileName.replace(/\.conf$/, '.layout.json')}`}
+                style={{ borderColor: 'var(--neon-dim)', color: 'var(--neon-dim)', opacity: exportLayout ? 1 : 0.4, cursor: exportLayout ? 'pointer' : 'not-allowed' }}
+                onMouseEnter={(e) => { if (exportLayout) { e.currentTarget.style.borderColor = 'var(--neon)'; e.currentTarget.style.color = 'var(--neon)'; } }}
+                onMouseLeave={(e) => { e.currentTarget.style.borderColor = 'var(--neon-dim)'; e.currentTarget.style.color = 'var(--neon-dim)'; }}
+              >
+                ⤓ .layout.json
+              </button>
+              <button className="btn-neon" onClick={downloadBoth}
+                title="Baixar ambos os arquivos sequencialmente"
+                style={{ boxShadow: '0 0 6px var(--neon-glow)' }}
+              >
+                ⤓ BAIXAR AMBOS
+              </button>
             </div>
           </div>
         </div>
@@ -1464,15 +1609,33 @@ export default function App() {
     reader.readAsText(file);
   }, []);
 
-  const handleConfImportConfirm = useCallback(async (name) => {
+  const handleConfImportConfirm = useCallback(async (name, layoutData) => {
     if (!confImportData) return;
-    const now = new Date().toISOString();
+    const now       = new Date().toISOString();
+    const cFileName = `${name}.conf`;
+
+    let finalNodes    = confImportData.nodes;
+    let finalEdges    = confImportData.edges;
+    let finalViewport = { x: 0, y: 0, zoom: 0.7 };
+
+    // Aplica o layout (se fornecido) sobre os nós gerados pelo parser
+    if (layoutData) {
+      try {
+        const result = applyLayout(finalNodes, finalEdges, layoutData);
+        finalNodes    = result.nodes;
+        finalEdges    = result.edges;
+        if (result.viewport) finalViewport = result.viewport;
+        // Persiste o layout para futuras re-importações via IMPORTAR LAYOUT no canvas
+        saveLayout(cFileName, layoutData).catch(() => {});
+      } catch (_) { /* layout apply failure é não-crítica */ }
+    }
+
     const project = {
       id:              Date.now().toString(),
       name,
       dataCriacao:     now,
       dataModificacao: now,
-      flow:            { nodes: confImportData.nodes, edges: confImportData.edges, viewport: { x: 0, y: 0, zoom: 0.7 } },
+      flow:            { nodes: finalNodes, edges: finalEdges, viewport: finalViewport },
     };
     await salvarProjeto(project);
     setCurrentProject(project);

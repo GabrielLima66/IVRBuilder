@@ -46,6 +46,7 @@
  */
 
 import { uid } from '../common.js';
+import { logUnknown } from './unknownCommandsLog.js';
 
 // ── Helpers de mapeamento de aplicações ──────────────────────────────────────
 
@@ -106,33 +107,61 @@ function appToNodeData(application, args) {
     case 'gotoiftime': {
       const qi = params.indexOf('?');
       if (qi < 0) return { type: 'raw', data: { rawLine: toCmdFull(application, args) } };
-      const spec  = params.substring(0, qi).split(',');
-      const dest  = params.substring(qi + 1).split(',')[0];
+      const spec      = params.substring(0, qi).split(',');
+      const destFull  = params.substring(qi + 1);
+      const destParts = destFull.split(',');
+      const dest      = destParts[0] || '';
+      // Preserve extensão/prioridade quando destino é 3-partes (ex: rcx-queue,7310,1)
+      const destExt   = destParts[1] && destParts[1] !== 's' ? destParts[1] : '';
+      const destPri   = destParts[2] && destParts[2] !== '1' ? destParts[2] : '';
       const [ts, weekdays, mdays, months] = spec;
       const [tStart, tEnd] = (ts || '*').split('-');
       return {
         type: 'time',
         data: {
-          timeStart:   tStart !== '*' ? tStart : '',
-          timeEnd:     tEnd   !== '*' ? tEnd   : '',
-          weekdays:    weekdays && weekdays !== '*' ? weekdays.split('&') : [],
-          months:      months   && months   !== '*' ? months.split('&')   : [],
-          mday:        mdays    && mdays    !== '*' ? mdays               : '',
-          trueContext: dest || '',
-          label:       '',
+          timeStart:      tStart !== '*' ? tStart : '',
+          timeEnd:        tEnd   !== '*' ? tEnd   : '',
+          weekdays:       weekdays && weekdays !== '*' ? weekdays.split('&') : [],
+          months:         months   && months   !== '*' ? months.split('&')   : [],
+          mday:           mdays    && mdays    !== '*' ? mdays               : '',
+          trueContext:    dest,
+          trueExtension:  destExt,
+          truePriority:   destPri,
+          label:          '',
         },
       };
     }
 
     case 'goto': {
       const parts = params.split(',');
+      const ctx   = parts[0] || '';
+      const ext   = parts[1] || 's';
+      const pri   = parts[2] || '1';
+      // Heurística: Goto(ctx-queue, NNNN, 1) → RouteNode modo FILA
+      // Critério: extensão é número puro (3-6 dígitos) E nome do contexto contém
+      // "queue" ou "fila" (insensível a maiúsculas).
+      const isQueueContext = /queue|fila/i.test(ctx);
+      const isNumericExt   = /^\d{3,6}$/.test(ext);
+      if (isQueueContext && isNumericExt) {
+        return {
+          type: 'route',
+          data: {
+            routeMode:    'fila',
+            queue:        ext,       // número da fila (ex: 7810)
+            queueOptions: '',
+            context:      ctx,       // preservado para referência
+            extension:    ext,
+            priority:     pri,
+          },
+        };
+      }
       return {
         type: 'route',
         data: {
           routeMode: 'contexto',
-          context:   parts[0] || '',
-          extension: parts[1] || 's',
-          priority:  parts[2] || '1',
+          context:   ctx,
+          extension: ext,
+          priority:  pri,
           queue: '7000', queueOptions: '',
         },
       };
@@ -217,6 +246,33 @@ function appToNodeData(application, args) {
       return { type: 'execif', data: { expression: expr, action } };
     }
 
+    case 'execiftime': {
+      // ExecIfTime(times,weekdays,mdays,months?App(args))
+      const qi = params.indexOf('?');
+      if (qi < 0) return { type: 'raw', data: { rawLine: toCmdFull(application, args) } };
+      const specParts = params.substring(0, qi).split(',');
+      const action    = params.substring(qi + 1);
+      const [ts, weekdays, mdays, months] = specParts;
+      return {
+        type: 'execiftime',
+        data: {
+          hours:     ts       || '*',
+          days:      weekdays || '*',
+          monthdays: mdays    || '*',
+          months:    months   || '*',
+          action:    action   || '',
+        },
+      };
+    }
+
+    case 'sipaddheader': {
+      // SIPAddHeader(Nome: valor)
+      const colonIdx = params.indexOf(':');
+      const headerName = colonIdx >= 0 ? params.slice(0, colonIdx).trim()  : params.trim();
+      const value      = colonIdx >= 0 ? params.slice(colonIdx + 1).trim() : '';
+      return { type: 'sipaddheader', data: { headerName, value } };
+    }
+
     case 'chanspy': {
       const parts = params.split(',');
       return { type: 'chanspy', data: { target: (parts[0] || '').replace(/^SIP\//, ''), options: parts[1] || '' } };
@@ -238,6 +294,7 @@ function appToNodeData(application, args) {
       return { type: 'saynumber', data: { value: params.split(',')[0], gender: params.split(',')[1] || 'm' } };
 
     default:
+      logUnknown(application);
       return { type: 'raw', data: { rawLine: toCmdFull(application, args) } };
   }
 }
@@ -339,13 +396,13 @@ function resolveContext(rawCtx, globalConfig, isFirstContext) {
   /** @type {Object.<string,string>} digit → context name */
   const dtmfGotos = {};
 
-  // ── 1. Process include directives as RawNodes ────────────────────────────
-  for (const dir of rawCtx.directives) {
-    childNodes.push({
-      type: 'raw',
-      data: { rawLine: `include => ${dir}` },
-    });
-  }
+  // ── 1. Collect include directives — serão adicionados ao FINAL (convenção Asterisk)
+  // Não adiciona aqui: includeNodes é appendado após todas as extensões 's'.
+  /** @type {ResolvedNodeData[]} */
+  const includeNodes = rawCtx.directives.map((dir) => ({
+    type: 'include',
+    data: { contextName: dir },
+  }));
 
   // ── 2. Process sequential 's' extensions ────────────────────────────────
   for (const ext of rawCtx.extensions) {
@@ -484,6 +541,11 @@ function resolveContext(rawCtx, globalConfig, isFirstContext) {
     for (const mn of macroChildNodes) {
       childNodes.push(mn);
     }
+  }
+
+  // ── 5. Append include directives ao FINAL (após todos os exten =>)
+  for (const inc of includeNodes) {
+    childNodes.push(inc);
   }
 
   return { childNodes, dtmfGotos, directives: rawCtx.directives };

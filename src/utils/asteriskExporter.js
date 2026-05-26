@@ -87,7 +87,7 @@ function generateDialplanFromContexts(nodes, edges, findNode, outEdges, options 
         return out;
       }
       case 'time': {
-        // TimeConditionNode → GotoIfTime(spec?dest,s,1)
+        // TimeConditionNode → GotoIfTime(spec?dest,ext,pri)
         // Se condição verdadeira: Goto para dest. Se falsa: cai na próxima linha (handle 'closed').
 
         // Passo 1: campo trueContext no data do nó (set pelo auto-wire ou digitação)
@@ -109,8 +109,10 @@ function generateDialplanFromContexts(nodes, edges, findNode, outEdges, options 
 
         if (!dest) return [];
 
-        const spec = buildTimeExport(n.data);
-        return [`GotoIfTime(${spec}?${dest},s,1)`];
+        const spec    = buildTimeExport(n.data);
+        const destExt = (n.data.trueExtension || '').trim() || 's';
+        const destPri = (n.data.truePriority  || '').trim() || '1';
+        return [`GotoIfTime(${spec}?${dest},${destExt},${destPri})`];
       }
       case 'route': {
         const m = n.data.routeMode || 'macro';
@@ -390,7 +392,18 @@ function generateDialplanFromContexts(nodes, edges, findNode, outEdges, options 
   for (const ctx of ctxNodes) {
     const ctxName  = ctx.data.contextName || 'orpen-ivr-contexto';
     const children = nodes.filter((n) => n.parentNode === ctx.id);
-    const chain    = getExecChain(ctx, children);
+    const chainRaw = getExecChain(ctx, children);
+
+    // Nós include => sempre emitidos ao FINAL do bloco (após todas as linhas exten =>)
+    const pendingIncludes = [];
+    const chain = chainRaw.filter((c) => {
+      if (c.type === 'include') {
+        const ln = actionLine(c);
+        if (ln) pendingIncludes.push(ln);
+        return false;
+      }
+      return true;
+    });
 
     emit(`[${ctxName}]`);
 
@@ -548,7 +561,7 @@ function generateDialplanFromContexts(nodes, edges, findNode, outEdges, options 
           // Bloco atômico: emite DTMF do menu imediatamente após o WaitExten
           emitMenuDtmf(item.menuFlush);
         } else if (item.isRaw) {
-          // Linhas raw (include =>, comentários, etc.) sem prefixo exten =>
+          // Linhas raw (comentários, etc.) sem prefixo exten =>
           emit(item.line);
         } else {
           const pri = seqIdx === 0 ? '1' : 'n';
@@ -557,6 +570,11 @@ function generateDialplanFromContexts(nodes, edges, findNode, outEdges, options 
           seqIdx++;
         }
       }
+    }
+
+    // Diretivas include => sempre ao final do bloco (convenção Asterisk)
+    for (const incl of pendingIncludes) {
+      emit(incl);
     }
 
     sep();

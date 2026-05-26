@@ -3,6 +3,7 @@
  * Projetos persistidos no IndexedDB (via App.jsx).
  */
 import React, { useState, useRef, useCallback } from 'react';
+import { importLayoutFile } from '../services/layoutStorage';
 
 // ── Utilitários ───────────────────────────────────────────────────────────────
 
@@ -125,11 +126,15 @@ function SectionHeader({ label }) {
 }
 
 function ConfImportModal({ data, onClose, onConfirm }) {
-  const [name, setName] = useState(data.suggestedName || 'projeto-importado');
-  const isValid         = name.length >= 3 && NAME_RE.test(name);
-  const { stats }       = data;
-  const validation      = data.validation || null;
-  const totalNodes      = Object.values(stats.nodesByType || {}).reduce((a, b) => a + b, 0);
+  const [name,        setName]        = useState(data.suggestedName || 'projeto-importado');
+  const [layoutData,  setLayoutData]  = useState(null);
+  const [layoutError, setLayoutError] = useState(null);
+  const layoutRef = useRef(null);
+
+  const isValid    = name.length >= 3 && NAME_RE.test(name);
+  const { stats }  = data;
+  const validation = data.validation || null;
+  const totalNodes = Object.values(stats.nodesByType || {}).reduce((a, b) => a + b, 0);
 
   return (
     <Modal title="IMPORTAR .CONF" onClose={onClose} maxWidth={600}>
@@ -265,9 +270,82 @@ function ConfImportModal({ data, onClose, onConfirm }) {
           )}
         </div>
 
+        {/* ── Layout opcional ────────────────────────────────────────────────── */}
+        <div style={{ borderTop: '1px solid var(--line)', paddingTop: 14, marginTop: 14 }}>
+          <div style={{ fontSize: 9, color: 'var(--neon-dim)', letterSpacing: 1, marginBottom: 10, lineHeight: 1.8 }}>
+            <span style={{ color: '#555' }}>// layout opcional —</span>
+            {' importe o .layout.json para restaurar as posições do canvas'}
+            <br />
+            <span style={{ color: '#555' }}>// se não fornecido, o posicionamento automático será usado</span>
+          </div>
+
+          {layoutData ? (
+            <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+              <div style={{ fontSize: 10, color: 'var(--neon)', letterSpacing: 0.5 }}>
+                ✓ layout carregado —{' '}
+                <span style={{ color: 'var(--neon-dim)' }}>
+                  {layoutData.contexts?.length || 0} contexto(s),{' '}
+                  {layoutData.freeNodes?.length || 0} nó(s) livre(s)
+                </span>
+              </div>
+              <button
+                type="button"
+                onClick={() => { setLayoutData(null); setLayoutError(null); }}
+                style={{
+                  background: 'none', border: '1px solid #ff5050', color: '#ff5050',
+                  cursor: 'pointer', fontSize: 9, padding: '2px 7px', borderRadius: 2,
+                  fontFamily: 'inherit', letterSpacing: 1,
+                }}
+              >
+                ✕ remover
+              </button>
+            </div>
+          ) : (
+            <button
+              type="button"
+              className="btn-neon"
+              onClick={() => layoutRef.current?.click()}
+              style={{
+                padding: '6px 14px', fontSize: 10, letterSpacing: 1,
+                borderColor: 'var(--neon-dim)', color: 'var(--neon-dim)',
+              }}
+              onMouseEnter={(e) => { e.currentTarget.style.borderColor = 'var(--neon)'; e.currentTarget.style.color = 'var(--neon)'; }}
+              onMouseLeave={(e) => { e.currentTarget.style.borderColor = 'var(--neon-dim)'; e.currentTarget.style.color = 'var(--neon-dim)'; }}
+            >
+              ⤓ IMPORTAR .LAYOUT.JSON
+            </button>
+          )}
+
+          <input
+            ref={layoutRef}
+            type="file"
+            accept=".json"
+            style={{ display: 'none' }}
+            onChange={async (e) => {
+              const f = e.target.files?.[0];
+              if (!f) return;
+              try {
+                const ld = await importLayoutFile(f);
+                setLayoutData(ld);
+                setLayoutError(null);
+              } catch (err) {
+                setLayoutError(err.message);
+                setLayoutData(null);
+              }
+              e.target.value = '';
+            }}
+          />
+
+          {layoutError && (
+            <div role="alert" aria-live="polite" style={{ fontSize: 9, color: '#ff5050', marginTop: 6 }}>
+              ⚠ {layoutError}
+            </div>
+          )}
+        </div>
+
         <div style={{ display: 'flex', gap: 8, justifyContent: 'flex-end', marginTop: 16 }}>
           <button className="btn-neon" onClick={onClose} style={{ padding: '8px 16px' }}>CANCELAR</button>
-          <button className="btn-neon" onClick={() => isValid && onConfirm(name)} disabled={!isValid}
+          <button className="btn-neon" onClick={() => isValid && onConfirm(name, layoutData)} disabled={!isValid}
             style={{ padding: '8px 16px', opacity: isValid ? 1 : 0.4, cursor: isValid ? 'pointer' : 'not-allowed' }}>
             ABRIR NO CANVAS
           </button>

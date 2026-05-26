@@ -56,7 +56,8 @@ src/
 ├── screens/
 │   └── HomeScreen.jsx        tela inicial: grid de projetos, criar/abrir/importar/exportar
 ├── services/
-│   └── projectStorage.js     CRUD IndexedDB — salvarProjeto, listarProjetos, carregarProjeto, excluirProjeto
+│   ├── projectStorage.js     CRUD IndexedDB v2 — salvarProjeto, listarProjetos, carregarProjeto, excluirProjeto + openDB() exportado
+│   └── layoutStorage.js      separação dialplan/layout — extractLayout, applyLayout, exportLayoutFile, importLayoutFile + LayoutStorageAdapter
 └── utils/
     ├── actionMeta.js         ACTION_META dict + actionLine() + validate() por tipo
     ├── asteriskExporter.js   generateDialplan() — compilador principal
@@ -274,11 +275,68 @@ pathD = `M ${sx} ${sy} C ${sx+80} ${sy}, ${tx-80} ${ty}, ${tx} ${ty}`
 | ContextNode largura mínima | `320px` (CTX_MIN_W em ContextNode.jsx) |
 | ContextNode padding filhos | `20px` lateral + `20px` inferior (CTX_PAD_H, CTX_PAD_BOTTOM) |
 | ContextNode altura header | `34px` (CTX_HEADER_H — constante exportada de ContextNode.jsx) |
-| IndexedDB database | `orpen-ura-db` v1, store `projects` |
+| IndexedDB database | `orpen-ura-db` v2, stores `projects` + `layouts` |
 | Projeto ID | `Date.now().toString()` |
 | Debounce de auto-save | `2000ms` |
 | Threshold smart guides | `8px` |
 | DTMF Bézier arm | `80px` (constante `DTMF_ARM` em EdgeWithWaypoints) |
+| `LAYOUT_VERSION` | `'1.0'` (em layoutStorage.js) |
+| confFileName derivado de | `${projectName}.conf` ou `'orpen-ura-gerada.conf'` |
+
+## Separação Dialplan / Layout
+
+### Responsabilidades
+
+| Dado | Pertence a | Formato |
+|---|---|---|
+| Nomes de contexto, comandos, parâmetros, childOrder | **Dialplan** | `.conf` |
+| Posições X/Y, largura, altura, viewport, exportOrder | **Layout** | `.layout.json` |
+
+### Fluxo de exportação
+Botão **⤓ EXPORTAR URA (.conf)** → modal mostra preview do `.conf` e lista ambos os arquivos:
+- **⤓ BAIXAR AMBOS** — baixa `.conf` e `.layout.json` com 300ms de intervalo entre eles
+- **⤓ .conf** — baixa apenas o dialplan
+- **⤓ .layout.json** — baixa apenas o layout
+
+### Fluxo de importação
+**IMPORTAR .CONF** → modal `ConfImportModal` → seção "// layout opcional" permite carregar o `.layout.json` junto. Se fornecido, `applyLayout()` é chamado antes de abrir o canvas.
+
+**⤓ LAYOUT** (botão na status bar do canvas) → importa um `.layout.json` e aplica as posições sobre o canvas aberto.
+
+### LayoutStorageAdapter — ponto de extensão para integração futura
+
+```js
+// src/services/layoutStorage.js
+class LayoutStorageAdapter {
+  async save(confFileName, layout) { ... }  // grava o URALayout
+  async load(confFileName)         { ... }  // retorna URALayout | null
+}
+```
+
+Implementação padrão: `IndexedDBLayoutAdapter` (store `layouts` no `orpen-ura-db`).
+
+Para integrar com servidor Asterisk (futuro):
+```js
+class AsteriskServerLayoutAdapter extends LayoutStorageAdapter {
+  async save(confFileName, layout) { await api.put(`/layouts/${confFileName}`, layout); }
+  async load(confFileName)         { return api.get(`/layouts/${confFileName}`); }
+}
+import { setLayoutAdapter } from './services/layoutStorage';
+setLayoutAdapter(new AsteriskServerLayoutAdapter());
+```
+
+### Chave de correspondência layout → nós importados
+
+| Tipo de nó | Chave usada em applyLayout |
+|---|---|
+| ContextNode | `contextName` (string estável entre importações) |
+| Filho de ContextNode | índice `i` dentro de `childOrder` (mesmo nodeType no índice) |
+| Nó livre (config, etc.) | `nodeType` (config é único por projeto) |
+| Edges com offset | `sourceKey:targetKey:sourceHandle:targetHandle` semântico |
+
+### openDB() — singleton compartilhado
+
+`projectStorage.js` exporta `openDB()`. `layoutStorage.js` o importa para compartilhar a mesma conexão IndexedDB (versão 2), evitando race conditions de versionamento. Nunca abrir o banco em outro lugar com uma versão diferente.
 
 ## Documentação completa
 Para documentação completa consulte PROJECT_BRIEF.md

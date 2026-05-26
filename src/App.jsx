@@ -67,9 +67,8 @@ function Canvas({ initialFlow, projectName, projectCreatedAt, currentProjectId, 
   const wrapperRef  = useRef(null);
   const rfInstance  = useReactFlow();
 
-  // Referências estáveis — evita re-mount de componentes internos
-  const stableNodeTypes = useMemo(() => nodeTypes, []);
-  const stableEdgeTypes = useMemo(() => edgeTypes, []);
+  // nodeTypes e edgeTypes são constantes de módulo — já têm referência estável;
+  // useMemo sobre constante de módulo seria overhead sem benefício.
 
   // Nós e edges iniciais: usa o flow carregado ou inicia com config padrão.
   // Calculados apenas uma vez no mount (o componente é "keyed" por projeto).
@@ -120,6 +119,16 @@ function Canvas({ initialFlow, projectName, projectCreatedAt, currentProjectId, 
 
   const [nodes, setNodes, onNodesChange] = useNodesState(initNodes);
   const [edges, setEdges, onEdgesChange] = useEdgesState(initEdges);
+
+  // ── Refs sincronizadas — leitura estável do estado atual sem dep em callbacks ─
+  // Permite que onConnect, handleEdgesChange, computeActiveFromNode etc. leiam o
+  // valor mais recente de nodes/edges sem precisar tê-los no array de deps do
+  // useCallback, evitando recriação de handlers a cada mudança no grafo.
+  const nodesRef = useRef(nodes);
+  const edgesRef = useRef(edges);
+  useEffect(() => { nodesRef.current = nodes; }, [nodes]);
+  useEffect(() => { edgesRef.current = edges; }, [edges]);
+
   const [selectedId,      setSelectedId]      = useState(null);
   // ── Seleção visual de edges/nós vizinhos ─────────────────────────────────
   // activeEdgeIds: edges em estado ativo (sólidas, pulsantes)
@@ -203,19 +212,19 @@ function Canvas({ initialFlow, projectName, projectCreatedAt, currentProjectId, 
 
     // Handle 'true' do TimeNode → direção EDGE → CAMPO
     if (sourceHandle === 'true') {
-      const srcNode = nodes.find((n) => n.id === source);
-      const tgtNode = nodes.find((n) => n.id === target);
-
-      // Atualiza trueContext se destino é um ContextNode
-      if (srcNode?.type === 'time' && tgtNode?.type === 'context') {
-        setNodes((ns) =>
-          ns.map((n) =>
+      // Atualiza trueContext via functional updater — sem dep em nodes do closure
+      setNodes((ns) => {
+        const srcNode = ns.find((n) => n.id === source);
+        const tgtNode = ns.find((n) => n.id === target);
+        if (srcNode?.type === 'time' && tgtNode?.type === 'context') {
+          return ns.map((n) =>
             n.id === source
               ? { ...n, data: { ...n.data, trueContext: tgtNode.data.contextName } }
               : n
-          )
-        );
-      }
+          );
+        }
+        return ns;
+      });
 
       // Remove edge 'true' anterior e adiciona nova (amarela, floating com offset zero)
       setEdges((es) => {
@@ -256,13 +265,33 @@ function Canvas({ initialFlow, projectName, projectCreatedAt, currentProjectId, 
         eds
       )
     );
-  }, [setEdges, setNodes, nodes, neonColor]);
+
+    // ── Sync Goto.context quando goto conecta a um contexto ─────────────────
+    // Substitui o useEffect que varreria todos os nós; aqui sabemos exatamente
+    // qual nó mudou e qual é o destino.
+    setNodes((ns) => {
+      const srcNode = ns.find((n) => n.id === source);
+      const tgtNode = ns.find((n) => n.id === target);
+      if (srcNode?.type === 'goto' && tgtNode?.type === 'context') {
+        return ns.map((n) =>
+          n.id === source
+            ? { ...n, data: { ...n.data, context: tgtNode.data.contextName } }
+            : n
+        );
+      }
+      return ns;
+    });
+  }, [setEdges, setNodes, neonColor]); // ← nodes removido das deps
 
   // ── Mudanças em edges — detecta deleção do handle 'true' → limpa campo ────
+  // Usa edgesRef.current (estável) em vez de edges no closure — sem dep edges.
   const handleEdgesChange = useCallback((changes) => {
     for (const c of changes) {
       if (c.type === 'remove') {
-        const edge = edges.find((e) => e.id === c.id);
+        const edge    = edgesRef.current.find((e) => e.id === c.id);
+        const srcNode = nodesRef.current.find((n) => n.id === edge?.source);
+
+        // Limpa trueContext quando edge do TimeNode é removida
         if (edge?.sourceHandle === 'true') {
           setNodes((ns) =>
             ns.map((n) =>
@@ -272,12 +301,23 @@ function Canvas({ initialFlow, projectName, projectCreatedAt, currentProjectId, 
             )
           );
         }
+
+        // ── Sync Goto.context quando edge do goto é removida ─────────────────
+        if (srcNode?.type === 'goto') {
+          setNodes((ns) =>
+            ns.map((n) =>
+              n.id === edge.source
+                ? { ...n, data: { ...n.data, context: '' } }
+                : n
+            )
+          );
+        }
       }
     }
     // Fecha o context menu se qualquer edge foi removida
     if (changes.some((c) => c.type === 'remove')) setEdgeMenu(null);
     onEdgesChange(changes);
-  }, [edges, onEdgesChange, setNodes]);
+  }, [onEdgesChange, setNodes]); // ← edges removido das deps
 
   // ── Context menu de botão direito em edge ────────────────────────────────
   const onEdgeContextMenu = useCallback((event, edge) => {
@@ -298,7 +338,9 @@ function Canvas({ initialFlow, projectName, projectCreatedAt, currentProjectId, 
 
   // Remove edge por ID — aplica o mesmo cleanup do handleEdgesChange
   const removeEdgeById = useCallback((edgeId) => {
-    const edge = edges.find((e) => e.id === edgeId);
+    const edge    = edgesRef.current.find((e) => e.id === edgeId);
+    const srcNode = nodesRef.current.find((n) => n.id === edge?.source);
+
     if (edge?.sourceHandle === 'true') {
       setNodes((ns) =>
         ns.map((n) =>
@@ -306,9 +348,17 @@ function Canvas({ initialFlow, projectName, projectCreatedAt, currentProjectId, 
         )
       );
     }
+    // Sync Goto.context quando removida via context menu
+    if (srcNode?.type === 'goto') {
+      setNodes((ns) =>
+        ns.map((n) =>
+          n.id === edge.source ? { ...n, data: { ...n.data, context: '' } } : n
+        )
+      );
+    }
     setEdges((es) => es.filter((e) => e.id !== edgeId));
     setEdgeMenu(null);
-  }, [edges, setEdges, setNodes]);
+  }, [setEdges, setNodes]); // ← edges removido das deps
 
   // ── Direção CAMPO → EDGE (chamado pelo PropertiesPanel no onBlur/Enter) ───
   const syncTrueContext = useCallback((timeNodeId, trueCtx) => {
@@ -321,7 +371,8 @@ function Canvas({ initialFlow, projectName, projectCreatedAt, currentProjectId, 
       return;
     }
 
-    const targetCtx = nodes.find(
+    // Lê nodesRef.current em vez de nodes do closure — sem dep em nodes
+    const targetCtx = nodesRef.current.find(
       (n) => n.type === 'context' && n.data.contextName === trimmed
     );
     if (!targetCtx) return; // Texto livre sem match — mantém o texto, sem edge
@@ -345,7 +396,7 @@ function Canvas({ initialFlow, projectName, projectCreatedAt, currentProjectId, 
         filtered
       );
     });
-  }, [nodes, setEdges]);
+  }, [setEdges]); // ← nodes removido das deps
 
   const onDragOver = useCallback((e) => {
     e.preventDefault();
@@ -375,10 +426,9 @@ function Canvas({ initialFlow, projectName, projectCreatedAt, currentProjectId, 
     const type = e.dataTransfer.getData('application/rcx-node');
     if (!type) return;
 
-    const rect = wrapperRef.current.getBoundingClientRect();
-    const position = rfInstance.project({
-      x: e.clientX - rect.left,
-      y: e.clientY - rect.top,
+    const position = rfInstance.screenToFlowPosition({
+      x: e.clientX,
+      y: e.clientY,
     });
 
     if (type === 'config' && nodes.some((n) => n.type === 'config')) {
@@ -519,8 +569,9 @@ function Canvas({ initialFlow, projectName, projectCreatedAt, currentProjectId, 
   // ── Seleção ───────────────────────────────────────────────────────────────
 
   // Helpers para calcular conjunto ativo a partir de um nó clicado
+  // edgesRef.current sempre atualizado pelo useEffect acima — callback estável para sempre
   const computeActiveFromNode = useCallback((nodeId) => {
-    const connectedEdges = edges.filter((e) => e.source === nodeId || e.target === nodeId);
+    const connectedEdges = edgesRef.current.filter((e) => e.source === nodeId || e.target === nodeId);
     const newEdgeIds     = new Set(connectedEdges.map((e) => e.id));
     const newNodeIds     = new Set();
     for (const e of connectedEdges) {
@@ -528,7 +579,7 @@ function Canvas({ initialFlow, projectName, projectCreatedAt, currentProjectId, 
     }
     setActiveEdgeIds(newEdgeIds);
     setActiveNodeIds(newNodeIds);
-  }, [edges]);
+  }, []); // ← edges removido das deps; edgesRef é estável
 
   const onNodeClick  = useCallback((_, n) => {
     setSelectedId(n.id);
@@ -573,24 +624,9 @@ function Canvas({ initialFlow, projectName, projectCreatedAt, currentProjectId, 
     );
   }, [setNodes]);
 
-  // Sincroniza campo Goto.context com o contextName do nó destino conectado
-  useEffect(() => {
-    setNodes((ns) => {
-      let changed = false;
-      const upd = ns.map((n) => {
-        if (n.type !== 'goto') return n;
-        const e = edges.find((ed) => ed.source === n.id);
-        if (!e) return n;
-        const tgt = ns.find((x) => x.id === e.target);
-        if (tgt && tgt.type === 'context' && tgt.data.contextName !== n.data.context) {
-          changed = true;
-          return { ...n, data: { ...n.data, context: tgt.data.contextName } };
-        }
-        return n;
-      });
-      return changed ? upd : ns;
-    });
-  }, [edges]); // eslint-disable-line react-hooks/exhaustive-deps
+  // Goto.context sync removido deste useEffect — movido para onConnect (conexão)
+  // e handleEdgesChange/removeEdgeById (desconexão), onde o evento é preciso e
+  // não requer varredura O(n×m) de todos os nós a cada mudança de edges.
 
   // ── Propagação de rename de ContextNode ──────────────────────────────────
   // Chamado pelo PropertiesPanel quando contextName muda via painel de edição.
@@ -652,16 +688,9 @@ function Canvas({ initialFlow, projectName, projectCreatedAt, currentProjectId, 
     onNodeDragStop: alignDragStop,
   } = useAlignmentGuides(nodes, setNodes, config.smartGuides);
 
-  // ── Posição do mouse relativa ao wrapperRef (para ContextOrderOverlay) ──────
-  const [mousePos, setMousePos] = useState(null);
-
-  const onWrapperMouseMove = useCallback((e) => {
-    if (!wrapperRef.current) return;
-    const rect = wrapperRef.current.getBoundingClientRect();
-    setMousePos({ x: e.clientX - rect.left, y: e.clientY - rect.top });
-  }, []);
-
-  const onWrapperMouseLeave = useCallback(() => setMousePos(null), []);
+  // mousePos e seus callbacks foram movidos para dentro do ContextOrderOverlay.
+  // O componente lê o mouse diretamente via wrapperRef, evitando que o Canvas
+  // todo re-renderize a cada movimento do mouse.
 
   // ── Helpers de reordenação de childOrder ────────────────────────────────────
   // Atualiza childOrder de um ContextNode e retorna os novos nodes
@@ -845,7 +874,10 @@ function Canvas({ initialFlow, projectName, projectCreatedAt, currentProjectId, 
     [nodes, selectedId, highlightedCtxId]
   );
 
-  const selectedNode = nodes.find((n) => n.id === selectedId) || null;
+  const selectedNode = useMemo(
+    () => nodes.find((n) => n.id === selectedId) ?? null,
+    [nodes, selectedId]
+  );
 
   // ── Tema: sincroniza cor do marker das edges quando o tema muda ───────────────
   useEffect(() => {
@@ -883,8 +915,6 @@ function Canvas({ initialFlow, projectName, projectCreatedAt, currentProjectId, 
         style={{ flex: 1, position: 'relative', height: '100%', minWidth: 0 }}
         onDragOver={onDragOver}
         onDrop={onDrop}
-        onMouseMove={onWrapperMouseMove}
-        onMouseLeave={onWrapperMouseLeave}
       >
         {/* Botão ← VOLTAR (apenas no modo projeto) */}
         {onGoBack && (
@@ -1019,8 +1049,8 @@ function Canvas({ initialFlow, projectName, projectCreatedAt, currentProjectId, 
           onNodeDragStop={onNodeDragStop}
           onEdgeContextMenu={onEdgeContextMenu}
           onNodeContextMenu={onNodeContextMenu}
-          nodeTypes={stableNodeTypes}
-          edgeTypes={stableEdgeTypes}
+          nodeTypes={nodeTypes}
+          edgeTypes={edgeTypes}
           fitView
           deleteKeyCode={['Backspace', 'Delete']}
           edgesFocusable
@@ -1083,8 +1113,8 @@ function Canvas({ initialFlow, projectName, projectCreatedAt, currentProjectId, 
 
         {/* Reorder controls overlay — rendered above React Flow, z-index 50 */}
         <ContextOrderOverlay
-          nodes={nodesWithSel}
-          mousePos={mousePos}
+          nodes={nodes}
+          wrapperRef={wrapperRef}
           onMoveUp={onMoveUp}
           onMoveDown={onMoveDown}
           onMoveTo={onMoveTo}
@@ -1630,10 +1660,11 @@ export default function App() {
     refreshProjects();
   }, [refreshProjects]);
 
-  // ── Renderização ──────────────────────────────────────────────────────────
-  if (screen === 'home') {
-    return (
-      <ConfigProvider>
+  // ── Renderização — ConfigProvider único envolve todo o roteamento ──────────
+  // Provider estável entre trocas de tela: contexto de config/tema não remonta.
+  return (
+    <ConfigProvider>
+      {screen === 'home' ? (
         <HomeScreen
           projects={projects}
           onCreateProject={handleCreateProject}
@@ -1646,26 +1677,22 @@ export default function App() {
           onConfImportConfirm={handleConfImportConfirm}
           onConfImportCancel={() => setConfImportData(null)}
         />
-      </ConfigProvider>
-    );
-  }
-
-  return (
-    <ConfigProvider>
-      <div style={{ height: '100vh', width: '100vw', display: 'flex' }}>
-        <ReactFlowProvider>
-          {/* key força remount completo ao trocar de projeto */}
-          <Canvas
-            key={currentProject?.id || 'standalone'}
-            initialFlow={pendingFlow}
-            projectName={currentProject?.name}
-            projectCreatedAt={currentProject?.dataCriacao}
-            currentProjectId={currentProject?.id}
-            onGoBack={handleGoBack}
-            onProjectSaved={handleProjectSaved}
-          />
-        </ReactFlowProvider>
-      </div>
+      ) : (
+        <div style={{ height: '100vh', width: '100vw', display: 'flex' }}>
+          <ReactFlowProvider>
+            {/* key força remount completo ao trocar de projeto */}
+            <Canvas
+              key={currentProject?.id || 'standalone'}
+              initialFlow={pendingFlow}
+              projectName={currentProject?.name}
+              projectCreatedAt={currentProject?.dataCriacao}
+              currentProjectId={currentProject?.id}
+              onGoBack={handleGoBack}
+              onProjectSaved={handleProjectSaved}
+            />
+          </ReactFlowProvider>
+        </div>
+      )}
     </ConfigProvider>
   );
 }

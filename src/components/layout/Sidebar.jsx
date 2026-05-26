@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback, useRef } from 'react';
+import React, { useState, useEffect, useCallback, useRef, memo } from 'react';
 import {
   Settings, LayoutList, Clock, FolderTree, Navigation,
   CornerDownRight, Undo2, Scissors,
@@ -103,7 +103,9 @@ const CATEGORIES = [
   },
 ];
 
-export default function Sidebar() {
+// memo: Sidebar não recebe props e lê apenas contextos estáveis (theme, mode).
+// Não re-renderiza quando Canvas muda estado (nodes, edges, seleção, mouse, etc.).
+const Sidebar = memo(function Sidebar() {
   const theme = useThemeContext();
   const mode  = useModeContext();
 
@@ -429,4 +431,6 @@ export default function Sidebar() {
       )}
     </aside>
   );
-}
+});
+
+export default Sidebar;

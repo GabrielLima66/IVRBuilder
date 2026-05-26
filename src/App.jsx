@@ -30,7 +30,7 @@ import HomeScreen from './screens/HomeScreen';
 import { salvarProjeto, listarProjetos } from './services/projectStorage';
 import {
   extractLayout, exportLayoutFile, importLayoutFile,
-  applyLayout, saveLayout,
+  applyLayout, saveLayout, loadLayout,
 } from './services/layoutStorage';
 import { importConf } from './utils/conf/confImporter';
 import { useAlignmentGuides } from './hooks/useAlignmentGuides';
@@ -140,8 +140,6 @@ function Canvas({ initialFlow, projectName, projectCreatedAt, currentProjectId, 
   const [exportLayout,         setExportLayout]         = useState(null); // URALayout para download junto ao .conf
   const [showFirstExportModal, setShowFirstExportModal] = useState(false);
   const [firstExportDontShow,  setFirstExportDontShow]  = useState(false);
-  // Ref para input de importação de arquivo .layout.json no canvas
-  const layoutInputRef = useRef(null);
   // Context menu de edge (botão direito)
   const [edgeMenu, setEdgeMenu] = useState(null); // { x, y, edgeId }
 
@@ -828,24 +826,6 @@ function Canvas({ initialFlow, projectName, projectCreatedAt, currentProjectId, 
     }
   };
 
-  /** Importa um .layout.json e aplica as posições sobre o canvas atual. */
-  const handleImportLayout = useCallback(async (file) => {
-    try {
-      const layout = await importLayoutFile(file);
-      const result = applyLayout(
-        rfInstance.getNodes(),
-        rfInstance.getEdges(),
-        layout
-      );
-      setNodes(result.nodes);
-      setEdges(result.edges);
-      if (result.viewport) rfInstance.setViewport(result.viewport);
-    } catch (err) {
-      // eslint-disable-next-line no-alert
-      alert(`⚠ Erro ao importar layout: ${err.message}`);
-    }
-  }, [rfInstance, setNodes, setEdges]);
-
   const copyConf = async () => {
     try { await navigator.clipboard.writeText(exportText); } catch (_) { /* ignore */ }
   };
@@ -979,36 +959,6 @@ function Canvas({ initialFlow, projectName, projectCreatedAt, currentProjectId, 
           >
             ⚙ CONFIG
           </button>
-          <span style={{ color: 'var(--line)' }}>│</span>
-          {/* Importar Layout — restaura posições do canvas a partir de .layout.json */}
-          <button
-            type="button"
-            onClick={() => layoutInputRef.current?.click()}
-            title="Importar .layout.json para restaurar posições do canvas"
-            style={{
-              background: 'transparent',
-              border: '1px solid var(--line)',
-              color: 'var(--neon-dim)',
-              fontFamily: 'inherit', fontSize: 9, letterSpacing: 1,
-              padding: '1px 7px', cursor: 'pointer', borderRadius: 2,
-              transition: 'all 0.15s',
-            }}
-            onMouseEnter={(e) => { e.currentTarget.style.borderColor = 'var(--neon)'; e.currentTarget.style.color = 'var(--neon)'; }}
-            onMouseLeave={(e) => { e.currentTarget.style.borderColor = 'var(--line)'; e.currentTarget.style.color = 'var(--neon-dim)'; }}
-          >
-            ⤓ LAYOUT
-          </button>
-          <input
-            ref={layoutInputRef}
-            type="file"
-            accept=".json"
-            style={{ display: 'none' }}
-            onChange={(e) => {
-              const f = e.target.files?.[0];
-              if (f) handleImportLayout(f);
-              e.target.value = '';
-            }}
-          />
           {/* ── Toggle PRO / AMIGÁVEL ─────────────────────────────────────── */}
           <>
             <span style={{ color: 'var(--line)' }}>│</span>
@@ -1538,9 +1488,23 @@ export default function App() {
   }, []);
 
   // ── Abrir projeto existente ───────────────────────────────────────────────
-  const handleOpenProject = useCallback((project) => {
+  // Carrega automaticamente o layout da store 'layouts' e aplica sobre o flow.
+  // Isso é não-crítico: se não houver layout salvo, usa as posições do project.flow.
+  const handleOpenProject = useCallback(async (project) => {
+    let flow = project.flow;
+    if (flow?.nodes?.length) {
+      try {
+        const cFileName = `${project.name}.conf`;
+        const layout = await loadLayout(cFileName);
+        if (layout) {
+          const result = applyLayout(flow.nodes, flow.edges || [], layout);
+          // Mantém o viewport do project.flow (posição de câmera que o usuário deixou)
+          flow = { ...flow, nodes: result.nodes, edges: result.edges };
+        }
+      } catch (_) { /* não-crítico — prossegue com flow original */ }
+    }
     setCurrentProject(project);
-    setPendingFlow(project.flow);
+    setPendingFlow(flow);
     setScreen('canvas');
   }, []);
 
@@ -1585,20 +1549,47 @@ export default function App() {
   }, [refreshProjects]);
 
   // ── Importar projeto via arquivo .CONF ────────────────────────────────────
-  const handleImportConf = useCallback((file) => {
+  // Aceita um confFile obrigatório e um layoutFile opcional (detecção automática
+  // pelo input múltiplo no HomeScreen).
+  const handleImportConf = useCallback((confFile, layoutFile) => {
     const reader = new FileReader();
-    reader.onload = (e) => {
+    reader.onload = async (e) => {
       try {
         const result = importConf(e.target.result);
-        // Expose the data shape that HomeScreen expects:
-        //   nodes, edges (for legacy compat), stats, suggestedName, validation
+        let nodes         = result.flowState.nodes;
+        let edges         = result.flowState.edges;
+        let viewport      = { x: 0, y: 0, zoom: 0.7 };
+        let layoutApplied = false;
+
+        // Aplica o layout automaticamente se o arquivo foi detectado junto ao .conf
+        if (layoutFile) {
+          try {
+            const layout = await importLayoutFile(layoutFile);
+            const applied = applyLayout(nodes, edges, layout);
+            nodes    = applied.nodes;
+            edges    = applied.edges;
+            viewport = applied.viewport || viewport;
+            layoutApplied = true;
+            // Persiste para sessões futuras (abertura via IndexedDB)
+            const cFileName = result.suggestedName
+              ? `${result.suggestedName}.conf`
+              : confFile.name;
+            saveLayout(cFileName, layout).catch(() => {});
+          } catch (err) {
+            console.warn('[layout] não foi possível aplicar o layout:', err.message);
+            layoutApplied = false;
+          }
+        }
+
         setConfImportData({
-          nodes:         result.flowState.nodes,
-          edges:         result.flowState.edges,
+          nodes,
+          edges,
+          viewport,
           stats:         result.stats,
           suggestedName: result.suggestedName,
           validation:    result.validation,
-          fileName:      file.name,
+          fileName:      confFile.name,
+          layoutApplied,
         });
         setImportError(null);
       } catch (err) {
@@ -1606,36 +1597,23 @@ export default function App() {
         setImportError('erro ao processar o arquivo .conf');
       }
     };
-    reader.readAsText(file);
+    reader.readAsText(confFile);
   }, []);
 
-  const handleConfImportConfirm = useCallback(async (name, layoutData) => {
+  // Layout já foi aplicado dentro de handleImportConf — aqui apenas cria o projeto.
+  const handleConfImportConfirm = useCallback(async (name) => {
     if (!confImportData) return;
-    const now       = new Date().toISOString();
-    const cFileName = `${name}.conf`;
-
-    let finalNodes    = confImportData.nodes;
-    let finalEdges    = confImportData.edges;
-    let finalViewport = { x: 0, y: 0, zoom: 0.7 };
-
-    // Aplica o layout (se fornecido) sobre os nós gerados pelo parser
-    if (layoutData) {
-      try {
-        const result = applyLayout(finalNodes, finalEdges, layoutData);
-        finalNodes    = result.nodes;
-        finalEdges    = result.edges;
-        if (result.viewport) finalViewport = result.viewport;
-        // Persiste o layout para futuras re-importações via IMPORTAR LAYOUT no canvas
-        saveLayout(cFileName, layoutData).catch(() => {});
-      } catch (_) { /* layout apply failure é não-crítica */ }
-    }
-
+    const now     = new Date().toISOString();
     const project = {
       id:              Date.now().toString(),
       name,
       dataCriacao:     now,
       dataModificacao: now,
-      flow:            { nodes: finalNodes, edges: finalEdges, viewport: finalViewport },
+      flow: {
+        nodes:    confImportData.nodes,
+        edges:    confImportData.edges,
+        viewport: confImportData.viewport || { x: 0, y: 0, zoom: 0.7 },
+      },
     };
     await salvarProjeto(project);
     setCurrentProject(project);

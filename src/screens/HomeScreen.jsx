@@ -3,7 +3,6 @@
  * Projetos persistidos no IndexedDB (via App.jsx).
  */
 import React, { useState, useRef, useCallback } from 'react';
-import { importLayoutFile } from '../services/layoutStorage';
 
 // ── Utilitários ───────────────────────────────────────────────────────────────
 
@@ -126,10 +125,7 @@ function SectionHeader({ label }) {
 }
 
 function ConfImportModal({ data, onClose, onConfirm }) {
-  const [name,        setName]        = useState(data.suggestedName || 'projeto-importado');
-  const [layoutData,  setLayoutData]  = useState(null);
-  const [layoutError, setLayoutError] = useState(null);
-  const layoutRef = useRef(null);
+  const [name, setName] = useState(data.suggestedName || 'projeto-importado');
 
   const isValid    = name.length >= 3 && NAME_RE.test(name);
   const { stats }  = data;
@@ -141,6 +137,20 @@ function ConfImportModal({ data, onClose, onConfirm }) {
       <div style={{ padding: '16px 20px', overflow: 'auto', maxHeight: '75vh' }}>
 
         <SectionHeader label="SEÇÃO 1 — MAPEAMENTO" />
+
+        {/* Status da detecção automática de layout */}
+        <div style={{ marginBottom: 14, fontSize: 10, letterSpacing: 0.5 }}>
+          {data.layoutApplied ? (
+            <div style={{ color: 'var(--neon)', display: 'flex', alignItems: 'center', gap: 6 }}>
+              <span>✓</span>
+              <span>layout restaurado — posições do canvas preservadas</span>
+            </div>
+          ) : (
+            <div style={{ color: 'var(--neon)', opacity: 0.5 }}>
+              // layout não encontrado — usando posicionamento automático
+            </div>
+          )}
+        </div>
 
         <div style={{ marginBottom: 14, fontSize: 11, lineHeight: 2, color: 'var(--neon-dim)' }}>
           <div><span style={{ color: 'var(--neon)' }}>{stats.contexts || 0}</span> contexto(s) importado(s)</div>
@@ -270,82 +280,9 @@ function ConfImportModal({ data, onClose, onConfirm }) {
           )}
         </div>
 
-        {/* ── Layout opcional ────────────────────────────────────────────────── */}
-        <div style={{ borderTop: '1px solid var(--line)', paddingTop: 14, marginTop: 14 }}>
-          <div style={{ fontSize: 9, color: 'var(--neon-dim)', letterSpacing: 1, marginBottom: 10, lineHeight: 1.8 }}>
-            <span style={{ color: '#555' }}>// layout opcional —</span>
-            {' importe o .layout.json para restaurar as posições do canvas'}
-            <br />
-            <span style={{ color: '#555' }}>// se não fornecido, o posicionamento automático será usado</span>
-          </div>
-
-          {layoutData ? (
-            <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-              <div style={{ fontSize: 10, color: 'var(--neon)', letterSpacing: 0.5 }}>
-                ✓ layout carregado —{' '}
-                <span style={{ color: 'var(--neon-dim)' }}>
-                  {layoutData.contexts?.length || 0} contexto(s),{' '}
-                  {layoutData.freeNodes?.length || 0} nó(s) livre(s)
-                </span>
-              </div>
-              <button
-                type="button"
-                onClick={() => { setLayoutData(null); setLayoutError(null); }}
-                style={{
-                  background: 'none', border: '1px solid #ff5050', color: '#ff5050',
-                  cursor: 'pointer', fontSize: 9, padding: '2px 7px', borderRadius: 2,
-                  fontFamily: 'inherit', letterSpacing: 1,
-                }}
-              >
-                ✕ remover
-              </button>
-            </div>
-          ) : (
-            <button
-              type="button"
-              className="btn-neon"
-              onClick={() => layoutRef.current?.click()}
-              style={{
-                padding: '6px 14px', fontSize: 10, letterSpacing: 1,
-                borderColor: 'var(--neon-dim)', color: 'var(--neon-dim)',
-              }}
-              onMouseEnter={(e) => { e.currentTarget.style.borderColor = 'var(--neon)'; e.currentTarget.style.color = 'var(--neon)'; }}
-              onMouseLeave={(e) => { e.currentTarget.style.borderColor = 'var(--neon-dim)'; e.currentTarget.style.color = 'var(--neon-dim)'; }}
-            >
-              ⤓ IMPORTAR .LAYOUT.JSON
-            </button>
-          )}
-
-          <input
-            ref={layoutRef}
-            type="file"
-            accept=".json"
-            style={{ display: 'none' }}
-            onChange={async (e) => {
-              const f = e.target.files?.[0];
-              if (!f) return;
-              try {
-                const ld = await importLayoutFile(f);
-                setLayoutData(ld);
-                setLayoutError(null);
-              } catch (err) {
-                setLayoutError(err.message);
-                setLayoutData(null);
-              }
-              e.target.value = '';
-            }}
-          />
-
-          {layoutError && (
-            <div role="alert" aria-live="polite" style={{ fontSize: 9, color: '#ff5050', marginTop: 6 }}>
-              ⚠ {layoutError}
-            </div>
-          )}
-        </div>
-
         <div style={{ display: 'flex', gap: 8, justifyContent: 'flex-end', marginTop: 16 }}>
           <button className="btn-neon" onClick={onClose} style={{ padding: '8px 16px' }}>CANCELAR</button>
-          <button className="btn-neon" onClick={() => isValid && onConfirm(name, layoutData)} disabled={!isValid}
+          <button className="btn-neon" onClick={() => isValid && onConfirm(name)} disabled={!isValid}
             style={{ padding: '8px 16px', opacity: isValid ? 1 : 0.4, cursor: isValid ? 'pointer' : 'not-allowed' }}>
             ABRIR NO CANVAS
           </button>
@@ -479,15 +416,36 @@ export default function HomeScreen({
         <input ref={jsonRef} type="file" accept=".json" style={{ display: 'none' }}
           onChange={(e) => { const f = e.target.files?.[0]; if (f) onImportProject(f); e.target.value = ''; }} />
 
-        {/* Importar CONF */}
-        <button className="btn-neon" onClick={() => confRef.current?.click()}
-          style={{ padding: '9px 18px', fontSize: 12, letterSpacing: 1.5, borderColor: '#ffcc0077', color: '#ffcc00' }}
-          onMouseEnter={(e) => { e.currentTarget.style.borderColor = '#ffcc00'; }}
-          onMouseLeave={(e) => { e.currentTarget.style.borderColor = '#ffcc0077'; }}>
-          IMPORTAR .CONF
-        </button>
-        <input ref={confRef} type="file" accept=".conf,.txt" style={{ display: 'none' }}
-          onChange={(e) => { const f = e.target.files?.[0]; if (f) onImportConf(f); e.target.value = ''; }} />
+        {/* Importar CONF — aceita múltiplos arquivos para detecção automática do .layout.json */}
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
+          <button className="btn-neon" onClick={() => confRef.current?.click()}
+            style={{ padding: '9px 18px', fontSize: 12, letterSpacing: 1.5, borderColor: '#ffcc0077', color: '#ffcc00' }}
+            onMouseEnter={(e) => { e.currentTarget.style.borderColor = '#ffcc00'; }}
+            onMouseLeave={(e) => { e.currentTarget.style.borderColor = '#ffcc0077'; }}>
+            IMPORTAR .CONF
+          </button>
+          {/* Instrução discreta: orienta o usuário a selecionar os dois arquivos juntos */}
+          <div style={{ fontSize: 9, color: 'var(--neon)', opacity: 0.5, letterSpacing: 0.3, lineHeight: 1.5 }}>
+            // selecione o .conf para importar<br />
+            dica: selecione também o .layout.json para restaurar posições
+          </div>
+        </div>
+        <input
+          ref={confRef}
+          type="file"
+          accept=".conf,.json,.txt"
+          multiple
+          style={{ display: 'none' }}
+          onChange={(e) => {
+            const files    = Array.from(e.target.files || []);
+            const confFile = files.find((f) => /\.(conf|txt)$/i.test(f.name));
+            if (!confFile) return;
+            const baseName   = confFile.name.replace(/\.(conf|txt)$/i, '');
+            const layoutFile = files.find((f) => f.name === `${baseName}.layout.json`) || null;
+            onImportConf(confFile, layoutFile);
+            e.target.value = '';
+          }}
+        />
 
         {importError && (
           <div role="alert" aria-live="polite" style={{ fontSize: 11, color: '#ff5050', letterSpacing: 1 }}>// {importError}</div>

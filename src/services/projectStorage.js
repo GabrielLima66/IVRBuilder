@@ -6,21 +6,32 @@
  */
 
 const DB_NAME    = 'orpen-ura-db';
-const DB_VERSION = 1;
+const DB_VERSION = 2;           // v1 → v2: adicionada store 'layouts' para separação dialplan/layout
 const STORE      = 'projects';
+const LAYOUT_STORE = 'layouts'; // indexado por confFileName
 
-// ── Abertura (singleton lazy) ─────────────────────────────────────────────────
+// ── Abertura (singleton lazy) — compartilhado com layoutStorage.js ───────────
 let _db = null;
 
-function openDB() {
+/**
+ * Abre (ou reaproveita) a conexão com o banco IndexedDB.
+ * Exportado para que layoutStorage.js possa compartilhar o mesmo singleton
+ * sem abrir o banco em versões conflitantes.
+ */
+export function openDB() {
   if (_db) return Promise.resolve(_db);
   return new Promise((resolve, reject) => {
     const req = indexedDB.open(DB_NAME, DB_VERSION);
 
     req.onupgradeneeded = (e) => {
       const db = e.target.result;
+      // v1: store de projetos
       if (!db.objectStoreNames.contains(STORE)) {
         db.createObjectStore(STORE, { keyPath: 'id' });
+      }
+      // v2: store de layouts — indexado pelo nome do .conf
+      if (!db.objectStoreNames.contains(LAYOUT_STORE)) {
+        db.createObjectStore(LAYOUT_STORE, { keyPath: 'confFileName' });
       }
     };
 

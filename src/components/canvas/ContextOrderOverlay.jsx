@@ -4,9 +4,10 @@
  * cada nó filho de ContextNode quando o mouse está sobre ele.
  *
  * Arquitetura:
+ *  - Gerencia o rastreamento do mouse internamente via wrapperRef — evita que o
+ *    Canvas pai re-renderize a cada mousemove (antes, mousePos era state no Canvas).
  *  - Usa useStore(s => s.transform) para converter coordenadas de flow → tela.
  *  - Usa useStore(s => s.nodeInternals) para posição absoluta e dimensões de cada filho.
- *  - Recebe mousePos do Canvas (onMouseMove no wrapperRef) para detectar hover.
  *  - Callbacks onMoveUp/onMoveDown/onMoveTo/onDragReorder atualizam data.childOrder
  *    no Canvas via setNodes.
  *
@@ -14,7 +15,7 @@
  * acima dos nós React Flow (que têm z-index ≤ 0 por padrão), portanto sem
  * problemas de stacking com o ContextNode (zIndex: -1).
  */
-import React, { useState, useRef, useCallback, useEffect } from 'react';
+import React, { useState, useRef, useCallback, useEffect, useMemo } from 'react';
 import { useStore } from 'reactflow';
 
 // ─── helpers ──────────────────────────────────────────────────────────────────
@@ -31,7 +32,7 @@ function canvasToScreen(absPos, transform) {
 
 function ContextOrderOverlay({
   nodes,
-  mousePos,       // { x, y } relativo ao wrapperRef (px)
+  wrapperRef,     // ref ao container do canvas — rastreia posição do mouse internamente
   onMoveUp,       // (ctxId, nodeId) => void
   onMoveDown,     // (ctxId, nodeId) => void
   onMoveTo,       // (ctxId, nodeId, newIndex1Based) => void
@@ -40,13 +41,44 @@ function ContextOrderOverlay({
   const transform     = useStore((s) => s.transform);
   const nodeInternals = useStore((s) => s.nodeInternals);
 
+  // ── mousePos gerenciado internamente — evita re-renders no Canvas pai ─────────
+  // O Canvas não precisa mais de onMouseMove/onMouseLeave no wrapper div.
+  const [mousePos, setMousePos] = useState(null);
+
+  useEffect(() => {
+    const el = wrapperRef?.current;
+    if (!el) return;
+    const onMove = (e) => {
+      const rect = el.getBoundingClientRect();
+      setMousePos({ x: e.clientX - rect.left, y: e.clientY - rect.top });
+    };
+    const onLeave = () => setMousePos(null);
+    el.addEventListener('mousemove', onMove);
+    el.addEventListener('mouseleave', onLeave);
+    return () => {
+      el.removeEventListener('mousemove', onMove);
+      el.removeEventListener('mouseleave', onLeave);
+    };
+  }, [wrapperRef]);
+
   // Estado de drag-to-reorder
-  const [dragging, setDragging]         = useState(null); // { ctxId, nodeId, startY, currentY }
-  const [dropIndex, setDropIndex]       = useState(null); // índice de destino durante drag
-  const dragRef                         = useRef(null);
+  const [dragging, setDragging]   = useState(null); // { ctxId, nodeId, startY, currentY }
+  const [dropIndex, setDropIndex] = useState(null); // índice de destino durante drag
 
   // Estado do campo de posição em edição
-  const [editingPos, setEditingPos]   = useState(null); // { nodeId, value }
+  const [editingPos, setEditingPos] = useState(null); // { nodeId, value }
+
+  // ── Lista memoizada de ContextNodes — evita re-filtrar a cada render ─────────
+  const contextNodes = useMemo(
+    () => nodes.filter((n) => n.type === 'context'),
+    [nodes]
+  );
+
+  // ── Mapa de nós por ID — lookups O(1) em vez de array.find() ─────────────────
+  const nodeById = useMemo(
+    () => new Map(nodes.map((n) => [n.id, n])),
+    [nodes]
+  );
 
   // ── Detecta qual filho está sob o mouse ──────────────────────────────────────
   let hoveredCtxId  = null;
@@ -54,8 +86,7 @@ function ContextOrderOverlay({
   let hoveredIndex  = -1;
 
   if (mousePos && !dragging) {
-    for (const ctx of nodes) {
-      if (ctx.type !== 'context') continue;
+    for (const ctx of contextNodes) {
       const childOrder = ctx.data.childOrder || [];
       for (let i = 0; i < childOrder.length; i++) {
         const cid      = childOrder[i];
@@ -86,7 +117,7 @@ function ContextOrderOverlay({
   useEffect(() => {
     if (!dragging) return;
 
-    const ctx        = nodes.find((n) => n.id === dragging.ctxId);
+    const ctx        = nodeById.get(dragging.ctxId);
     const childOrder = ctx?.data?.childOrder || [];
 
     const onMove = (e) => {
@@ -123,13 +154,13 @@ function ContextOrderOverlay({
       window.removeEventListener('mousemove', onMove);
       window.removeEventListener('mouseup',   onUp);
     };
-  }, [dragging, dropIndex, nodes, nodeInternals, transform, onDragReorder]);
+  }, [dragging, dropIndex, nodeById, nodeInternals, transform, onDragReorder]);
 
   // ── Linha indicadora durante drag ─────────────────────────────────────────────
   let dropIndicator = null;
   if (dragging && dropIndex !== null) {
-    const ctx        = nodes.find((n) => n.id === dragging.ctxId);
-    const childOrder = ctx?.data?.childOrder || [];
+    const ctx         = nodeById.get(dragging.ctxId);
+    const childOrder  = ctx?.data?.childOrder || [];
     const ctxInternal = nodeInternals.get(dragging.ctxId);
 
     if (ctxInternal) {
@@ -180,7 +211,7 @@ function ContextOrderOverlay({
 
   if (activeNodeId) {
     const ctxId      = hoveredCtxId || (dragging ? dragging.ctxId : null);
-    const ctx        = nodes.find((n) => n.id === ctxId);
+    const ctx        = nodeById.get(ctxId);
     const childOrder = ctx?.data?.childOrder || [];
     const idx        = childOrder.indexOf(activeNodeId);
     const internal   = nodeInternals.get(activeNodeId);
@@ -230,22 +261,22 @@ function ContextOrderOverlay({
 
       // ── Mecanismo B: Botões ↑ ↓ (canto superior direito) ─────────────────
       const btnStyle = (disabled) => ({
-        background:    'var(--panel)',
-        border:        `1px solid ${disabled ? 'var(--line)' : 'var(--neon)'}`,
-        color:         disabled ? 'var(--line)' : 'var(--neon)',
-        fontFamily:    'inherit',
-        fontSize:      Math.max(8, 10 * zoom),
-        width:         Math.max(14, 18 * zoom),
-        height:        Math.max(14, 18 * zoom),
-        cursor:        disabled ? 'default' : 'pointer',
-        display:       'flex',
-        alignItems:    'center',
-        justifyContent:'center',
-        padding:       0,
-        lineHeight:    1,
-        pointerEvents: disabled ? 'none' : 'all',
-        borderRadius:  2,
-        transition:    'background 0.1s',
+        background:     'var(--panel)',
+        border:         `1px solid ${disabled ? 'var(--line)' : 'var(--neon)'}`,
+        color:          disabled ? 'var(--line)' : 'var(--neon)',
+        fontFamily:     'inherit',
+        fontSize:       Math.max(8, 10 * zoom),
+        width:          Math.max(14, 18 * zoom),
+        height:         Math.max(14, 18 * zoom),
+        cursor:         disabled ? 'default' : 'pointer',
+        display:        'flex',
+        alignItems:     'center',
+        justifyContent: 'center',
+        padding:        0,
+        lineHeight:     1,
+        pointerEvents:  disabled ? 'none' : 'all',
+        borderRadius:   2,
+        transition:     'background 0.1s',
       });
 
       const arrowButtons = (
@@ -254,9 +285,9 @@ function ContextOrderOverlay({
           right:  (sc.x + w) - (sc.x + w),   // alinha à direita
           left:   sc.x + w - Math.max(42, 44 * zoom),
           top:    sc.y,
-          display:        'flex',
-          gap:            2,
-          pointerEvents:  'none',
+          display:       'flex',
+          gap:           2,
+          pointerEvents: 'none',
           zIndex: 56,
         }}>
           <button
@@ -282,10 +313,10 @@ function ContextOrderOverlay({
       const posFieldW = Math.max(28, 32 * zoom);
       const posField  = (
         <div style={{
-          position:   'absolute',
-          left:       sc.x + 18 * zoom,  // logo à direita do drag handle
-          top:        sc.y,
-          zIndex:     56,
+          position:      'absolute',
+          left:          sc.x + 18 * zoom,  // logo à direita do drag handle
+          top:           sc.y,
+          zIndex:        56,
           pointerEvents: 'none',
         }}>
           <input
@@ -295,16 +326,16 @@ function ContextOrderOverlay({
             max={childOrder.length}
             value={editingPos?.nodeId === activeNodeId ? editingPos.value : idx + 1}
             style={{
-              width:      posFieldW,
-              height:     Math.max(14, 18 * zoom),
-              background: 'var(--panel)',
-              border:     '1px solid var(--neon-dim)',
-              color:      'var(--neon)',
-              fontFamily: 'inherit',
-              fontSize:   Math.max(8, 9 * zoom),
-              textAlign:  'center',
-              padding:    0,
-              outline:    'none',
+              width:        posFieldW,
+              height:       Math.max(14, 18 * zoom),
+              background:   'var(--panel)',
+              border:       '1px solid var(--neon-dim)',
+              color:        'var(--neon)',
+              fontFamily:   'inherit',
+              fontSize:     Math.max(8, 9 * zoom),
+              textAlign:    'center',
+              padding:      0,
+              outline:      'none',
               borderRadius: 2,
               pointerEvents: 'all',
             }}

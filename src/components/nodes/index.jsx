@@ -31,6 +31,9 @@ export const nodeTypes = {
   execiftime:  mkActionType('execiftime'),
   noop:        mkActionType('noop'),
   verbose:     mkActionType('verbose'),
+  // Diretivas / Integração SIP
+  include:      mkActionType('include'),
+  sipaddheader: mkActionType('sipaddheader'),
   // Interação & Monitoramento
   dial:        mkActionType('dial'),
   read:        mkActionType('read'),

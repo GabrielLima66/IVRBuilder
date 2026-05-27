@@ -117,6 +117,16 @@ export const NODE_TAGS = {
     'ouvir', 'sussurro', 'barge', 'supervisao',
   ],
 
+  // ── Diretivas / Integração SIP ───────────────────────────────────────────────
+  include: [
+    'include', 'importar', 'diretiva', 'contexto', 'hangup', 'estrutura',
+    'encerramento', 'referencia', 'inserir', 'bloco',
+  ],
+  sipaddheader: [
+    'sip', 'header', 'cabecalho', 'protocolo', 'cpf', 'variavel', 'integracao',
+    'dados', 'crm', 'identificacao', 'caller', 'canal', 'custom',
+  ],
+
   // ── Sistema / Áudio ──────────────────────────────────────────────────────────
   answer: [
     'atender', 'iniciar', 'comecar', 'chamada', 'answer', 'conectar',

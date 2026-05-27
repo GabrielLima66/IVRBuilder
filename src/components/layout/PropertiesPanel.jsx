@@ -752,6 +752,31 @@ export default function PropertiesPanel({ node, updateNodeData, deleteNode, togg
           </div>
         </>
       )}
+      {node.type === 'include' && (
+        <>
+          <Field d={d} set={set} label="Contexto incluído" k="contextName" placeholder="hangup-ivr" />
+          <div style={{ fontSize: 9, color: '#00d4ff', marginTop: 6, border: '1px dashed #00d4ff33', padding: 6, borderRadius: 3 }}>
+            <code>include =&gt; {d.contextName || '...'}</code>
+          </div>
+          <div style={{ fontSize: 9, color: 'var(--neon-dim)', marginTop: 6, lineHeight: 1.5 }}>
+            Diretiva de contexto Asterisk — inclui outro contexto.<br />
+            Emitida <strong>sem</strong> prefixo <code>exten =&gt; s,n,</code>, sempre ao final do bloco.
+          </div>
+        </>
+      )}
+      {node.type === 'sipaddheader' && (
+        <>
+          <Field d={d} set={set} label="Nome do Header SIP"  k="headerName" placeholder="X-CPF" />
+          <Field d={d} set={set} label="Valor (suporta vars)" k="value"      placeholder="${CPF_USER}" />
+          <div style={{ fontSize: 9, color: '#00d4ff', marginTop: 6, border: '1px dashed #00d4ff33', padding: 6, borderRadius: 3 }}>
+            <code>SIPAddHeader({d.headerName || 'X-Header'}: {d.value || '${VAR}'})</code>
+          </div>
+          <div style={{ fontSize: 9, color: 'var(--neon-dim)', marginTop: 6, lineHeight: 1.5 }}>
+            Adiciona header SIP customizado à chamada atual.<br />
+            Exemplo: <code>SIPAddHeader(X-CPF: {'${CPF_USER}'})</code>
+          </div>
+        </>
+      )}
       {node.type === 'noop' && (
         <Field d={d} set={set} label="Texto de Debug" k="text" placeholder="## DEBUG ##" />
       )}

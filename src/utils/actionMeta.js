@@ -4,6 +4,7 @@ import {
   Keyboard, ListOrdered, Hash, Disc, Square, Eye,
   PhoneCall, Timer, Play,
   Pen, GitFork, PhoneOutgoing, Volume2, Hourglass,
+  Link2, Tag,
 } from 'lucide-react';
 
 // ── Helpers de validação reutilizáveis ───────────────────────────────────────
@@ -170,6 +171,23 @@ export const ACTION_META = {
     validate: (d) => req(d.target, 'Ramal alvo'),
   },
 
+  // ── Diretivas de Contexto ──────────────────────────────────────────────────
+  include: {
+    title: 'INCLUDE', app: 'include', icon: Link2, color: '#00d4ff', category: 'flow',
+    summary: (d) => [{ k: 'context', v: d.contextName || '—' }],
+    validate: (d) => req(d.contextName, 'Contexto'),
+  },
+
+  // ── Integração SIP ─────────────────────────────────────────────────────────
+  sipaddheader: {
+    title: 'SIP ADD HEADER', app: 'SIPAddHeader', icon: Tag, color: '#00d4ff', category: 'io',
+    summary: (d) => [
+      { k: 'header', v: d.headerName || '—' },
+      { k: 'value',  v: d.value      || '—' },
+    ],
+    validate: (d) => req(d.headerName, 'Nome do header'),
+  },
+
   // ── Sistema / Áudio ───────────────────────────────────────────────────────
   answer: {
     title: 'ANSWER', app: 'Answer', icon: PhoneCall, color: '#00ff41', category: 'system',
@@ -271,6 +289,12 @@ export function actionLine(n) {
       return `Playback(\${SOUND_PATH}/${d.filename || ''})`;
     case 'background':
       return `Background(\${SOUND_PATH}/${d.filename || ''})`;
+    // Diretiva include — sem prefixo exten => (detectado como isRaw no exportador)
+    case 'include':
+      return `include => ${d.contextName || ''}`;
+    // SIP header
+    case 'sipaddheader':
+      return `SIPAddHeader(${d.headerName || ''}: ${d.value || ''})`;
     default:
       return null;
   }

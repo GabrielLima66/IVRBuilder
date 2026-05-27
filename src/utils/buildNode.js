@@ -92,6 +92,10 @@ export function buildNode(type, position) {
       return { ...base, data: { expression: '"${MINHA_VAR}"!=""', action: 'Playback(${SOUND_PATH}/nome-do-audio)' } };
     case 'execiftime':
       return { ...base, data: { hours: '08:00-18:00', days: 'mon-fri', monthdays: '*', months: '*', action: 'Goto(orpen-ivr-home,s,1)' } };
+    case 'include':
+      return { ...base, data: { contextName: 'hangup-ivr' } };
+    case 'sipaddheader':
+      return { ...base, data: { headerName: 'X-Meu-Header', value: '${MINHA_VAR}' } };
     case 'noop':
       return { ...base, data: { text: '## DEBUG ##', label: '' } };
     case 'verbose':

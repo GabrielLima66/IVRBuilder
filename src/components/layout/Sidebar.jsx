@@ -6,6 +6,7 @@ import {
   Keyboard, ListOrdered, Hash, Disc, Square, Eye,
   PhoneCall, Timer, Play,
   Pen, GitFork, PhoneOutgoing, Volume2, Hourglass,
+  Link2, Tag,
 } from 'lucide-react';
 import { NODE_TAGS } from '../../config/nodeTags';
 import { useThemeContext } from '../../contexts/ThemeContext';
@@ -52,10 +53,11 @@ const CATEGORIES = [
   {
     label: 'ESTRUTURA',
     items: [
-      { type: 'config', title: 'CONFIG / START', desc: '__IVR · SOUND_PATH · AGI_PATH',          accent: '#00ff41', Icon: Settings },
-      { type: 'menu',   title: 'MENU DTMF',      desc: 'Background + WaitExten + dígitos DTMF',  accent: '#00ff41', Icon: LayoutList },
-      { type: 'time',   title: 'TIME COND',      desc: 'GotoIfTime · horário/dias/meses',         accent: '#ffcc00', Icon: Clock },
-      { type: 'route',  title: 'DESTINO / ROTA', desc: 'Goto · Queue · Macro+Transfer',           accent: '#ff8c00', Icon: Navigation },
+      { type: 'config',  title: 'CONFIG / START', desc: '__IVR · SOUND_PATH · AGI_PATH',          accent: '#00ff41', Icon: Settings },
+      { type: 'menu',    title: 'MENU DTMF',      desc: 'Background + WaitExten + dígitos DTMF',  accent: '#00ff41', Icon: LayoutList },
+      { type: 'time',    title: 'TIME COND',      desc: 'GotoIfTime · horário/dias/meses',         accent: '#ffcc00', Icon: Clock },
+      { type: 'route',   title: 'DESTINO / ROTA', desc: 'Goto · Queue · Macro+Transfer',           accent: '#ff8c00', Icon: Navigation },
+      { type: 'include', title: 'INCLUDE',        desc: 'include => contexto (diretiva final)',    accent: '#00d4ff', Icon: Link2 },
     ],
   },
   {
@@ -82,7 +84,8 @@ const CATEGORIES = [
   {
     label: 'INTERAÇÃO & MONITOR',
     items: [
-      { type: 'dial',        title: 'DIAL',         desc: 'Dial(SIP/ramal,timeout,opts)',    accent: '#ff8c00', Icon: PhoneOutgoing },
+      { type: 'dial',         title: 'DIAL',           desc: 'Dial(SIP/ramal,timeout,opts)',     accent: '#ff8c00', Icon: PhoneOutgoing },
+      { type: 'sipaddheader', title: 'SIP ADD HEADER', desc: 'SIPAddHeader(Header: ${VAR})',     accent: '#00d4ff', Icon: Tag },
       { type: 'read',        title: 'READ DTMF',    desc: 'Read(var,audio,max,,timeout)',    accent: '#ffcc00', Icon: Keyboard },
       { type: 'saydigits',   title: 'SAY DIGITS',   desc: 'SayDigits(${VAR})',              accent: '#ffcc00', Icon: ListOrdered },
       { type: 'saynumber',   title: 'SAY NUMBER',   desc: 'SayNumber(${VAR},m|f)',          accent: '#ffcc00', Icon: Hash },

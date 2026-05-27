@@ -39,6 +39,7 @@
  * @typedef {Object} TokenCommentSection
  * @property {'comment_section'} type
  * @property {string} text
+ * @property {boolean} double  true para ;; (seção), false para ; (comentário de linha)
  * @property {number} lineNumber
  *
  * @typedef {Object} TokenBlank
@@ -107,13 +108,13 @@ export function lex(content) {
 
     // Double-semicolon section comment: ;; text
     if (line.startsWith(';;')) {
-      tokens.push({ type: 'comment_section', text: line.slice(2).trim(), lineNumber });
+      tokens.push({ type: 'comment_section', text: line.slice(2).trim(), double: true, lineNumber });
       continue;
     }
 
-    // Single-line comment (not double) — treat as comment_section but ignored content
+    // Single-line comment — pode ser rótulo de opção DTMF (;Texto da opção)
     if (line.startsWith(';')) {
-      tokens.push({ type: 'comment_section', text: line.slice(1).trim(), lineNumber });
+      tokens.push({ type: 'comment_section', text: line.slice(1).trim(), double: false, lineNumber });
       continue;
     }
 

@@ -16,6 +16,7 @@
  * @typedef {Object} RawDtmfBlock
  * @property {string} digit
  * @property {RawDtmfLine[]} lines
+ * @property {string|null} comment  comentário ;Texto imediatamente antes da primeira linha do bloco
  *
  * @typedef {Object} RawContext
  * @property {string} name
@@ -48,11 +49,14 @@ export function map(tokens) {
   const getDtmfBlock = (digit) => {
     let block = current.dtmfBlocks.find((b) => b.digit === digit);
     if (!block) {
-      block = { digit, lines: [] };
+      block = { digit, lines: [], comment: null };
       current.dtmfBlocks.push(block);
     }
     return block;
   };
+
+  // Rastrea o comentário de linha simples (;texto) imediatamente antes de um bloco DTMF
+  let pendingComment = null;
 
   for (const token of tokens) {
     switch (token.type) {
@@ -66,10 +70,12 @@ export function map(tokens) {
           commentedLines: [],
         };
         contexts.push(current);
+        pendingComment = null;
         break;
 
       case 'extension_s':
         if (!current) break;
+        pendingComment = null; // não é DTMF, reseta
         current.extensions.push({
           priority: token.priority,
           label: token.label,
@@ -79,30 +85,52 @@ export function map(tokens) {
         });
         break;
 
-      case 'extension_dtmf':
+      case 'extension_dtmf': {
         if (!current) break;
-        getDtmfBlock(token.digit).lines.push({
+        const block = getDtmfBlock(token.digit);
+        // Associa o comentário de linha ao primeiro token do bloco
+        if (block.lines.length === 0 && pendingComment !== null) {
+          block.comment = pendingComment;
+        }
+        pendingComment = null;
+        block.lines.push({
           application: token.application,
           args: token.args,
         });
         break;
+      }
 
       case 'extension_commented':
         if (!current) break;
+        pendingComment = null;
         current.commentedLines.push(token.raw);
         break;
 
       case 'directive':
         if (!current) break;
+        pendingComment = null;
         if (token.name === 'include') {
           current.directives.push(token.value);
         }
         break;
 
-      case 'blank':
       case 'comment_section':
+        // Captura apenas comentários simples (;) — não duplos (;;) — como label de opção DTMF
+        if (!current) break;
+        if (token.double === false) {
+          pendingComment = token.text;
+        } else {
+          // Comentário de seção (;;) limpa qualquer pendente
+          pendingComment = null;
+        }
+        break;
+
+      case 'blank':
+        // Linha em branco NÃO limpa pendingComment — é comum ter blank entre o comentário e o bloco DTMF
+        break;
+
       case 'unknown':
-        // Intentionally ignored at this phase
+        pendingComment = null;
         break;
 
       default:

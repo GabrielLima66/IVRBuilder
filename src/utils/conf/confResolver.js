@@ -100,8 +100,11 @@ function appToNodeData(application, args) {
     }
 
     case 'background': {
-      const fname = params.split('/').pop();
-      return { type: 'background', data: { filename: fname, label: '' } };
+      // Suporta múltiplos arquivos separados por &:
+      // Background(${SOUND_PATH}/arq1&${SOUND_PATH}/arq2&${SOUND_PATH}/arq3)
+      const rawParts = params.split('&').map((p) => p.split('/').pop().trim()).filter(Boolean);
+      const filenames = rawParts.length > 0 ? rawParts : [''];
+      return { type: 'background', data: { filename: filenames[0], filenames, label: '' } };
     }
 
     case 'gotoiftime': {
@@ -379,6 +382,89 @@ function resolveCommentedLine(rawLine) {
   return { type: nd.type, data: nd.data || {} };
 }
 
+// ── Helpers para processamento de opções DTMF ────────────────────────────────
+
+/**
+ * Retorna true se a aplicação encerra o fluxo da opção (não há linhas depois).
+ * @param {string} application
+ * @returns {boolean}
+ */
+function isTerminalApp(application) {
+  return ['goto', 'dial', 'hangup'].includes(application.toLowerCase());
+}
+
+/**
+ * Constrói um objeto `finalDestination` a partir da linha terminal de uma opção DTMF.
+ * @param {string} application
+ * @param {string} args
+ * @returns {{ type: string, [key: string]: unknown }|null}
+ */
+function buildFinalDest(application, args) {
+  const cmd = application.toLowerCase();
+  if (cmd === 'goto') {
+    const parts = args.split(',');
+    const ctx = (parts[0] || '').trim();
+    const ext = (parts[1] || 's').trim();
+    const pri = (parts[2] || '1').trim();
+    // Heurística fila: contexto contém "queue" ou "fila" + extensão numérica de 3-6 dígitos
+    if (/queue|fila/i.test(ctx) && /^\d{3,6}$/.test(ext)) {
+      return { type: 'queue', ctx, ext, pri };
+    }
+    return { type: 'context', contextName: ctx, ext, pri };
+  }
+  if (cmd === 'dial') {
+    const parts = args.split(',');
+    return { type: 'dial', target: parts[0] || '', timeout: parts[1] || '' };
+  }
+  if (cmd === 'hangup') {
+    return { type: 'hangup', causeCode: args || '' };
+  }
+  return null;
+}
+
+/**
+ * Classifica as linhas de um bloco DTMF em `actions[]` + `finalDestination`.
+ * Boilerplate ignorado: Macro(sayDigit,...) e Macro(logIvr,ENTER_CONTEXT,...).
+ *
+ * @param {import('../conf/confMapper.js').RawDtmfLine[]} lines
+ * @returns {{ actions: Array<{type:string, data:Object}>, finalDest: Object|null }}
+ */
+function processOptionLines(lines) {
+  const actions = [];
+  let finalDest = null;
+
+  for (const line of lines) {
+    const cmd = line.application.toLowerCase();
+
+    // Ignora boilerplate: Macro(sayDigit,...) e Macro(sayDigits,...)
+    if (cmd === 'macro') {
+      const macroName = line.args.split(',')[0].toLowerCase().trim();
+      if (macroName === 'saydigit' || macroName === 'saydigits') continue;
+      // Ignora Macro(logIvr,ENTER_CONTEXT,...) (logIvr com contexto)
+      if (macroName === 'logivr' && /ENTER_CONTEXT/i.test(line.args)) continue;
+    }
+
+    // Linha terminal: termina a sequência de ações da opção
+    if (isTerminalApp(cmd)) {
+      finalDest = buildFinalDest(line.application, line.args);
+      break;
+    }
+
+    // Linha de ação intermediária
+    const nd = appToNodeData(line.application, line.args);
+    if (!nd) continue;
+
+    if (nd._configField) {
+      // Linhas de config dentro de opção DTMF são tratadas como Set genérico
+      actions.push({ type: 'set', data: { assignment: line.args, label: '' } });
+    } else {
+      actions.push({ type: nd.type, data: nd.data || {} });
+    }
+  }
+
+  return { actions, finalDest };
+}
+
 // ── Résolution d'un contexte ─────────────────────────────────────────────────
 
 /**
@@ -451,96 +537,105 @@ function resolveContext(rawCtx, globalConfig, isFirstContext) {
 
   // ── 4. Process DTMF blocks → MenuNode ───────────────────────────────────
   if (rawCtx.dtmfBlocks.length > 0) {
+    // Mapa de digit → bloco completo (inclui comment e lines)
     const dtmfMap = new Map();
     for (const block of rawCtx.dtmfBlocks) {
-      dtmfMap.set(block.digit, block.lines);
+      dtmfMap.set(block.digit, block);
     }
 
-    // Absorb WaitExten and Background from the END of childNodes (before dtmf)
-    // These are embedded into the MenuNode
+    // Absorb WaitExten do FINAL de childNodes
     let menuWaitExten = 4;
-    let greeting = '';
-
-    // Remove trailing waitexten node if present
     if (childNodes.length > 0 && childNodes[childNodes.length - 1].type === 'waitexten') {
       const removed = childNodes.pop();
       menuWaitExten = removed.data?.seconds ?? 4;
     }
-    // Remove trailing background node if present
-    if (childNodes.length > 0 && childNodes[childNodes.length - 1].type === 'background') {
-      const removed = childNodes.pop();
-      greeting = removed.data?.filename || '';
-    }
 
-    // Build digits list (1-9, 0)
+    // Absorb TODOS os Background do FINAL de childNodes (múltiplos arquivos via & ou nós separados)
+    const audioFiles = [];
+    while (childNodes.length > 0 && childNodes[childNodes.length - 1].type === 'background') {
+      const removed = childNodes.pop();
+      const fnames = removed.data?.filenames || [removed.data?.filename || ''];
+      audioFiles.unshift(...fnames);
+    }
+    if (audioFiles.length === 0) audioFiles.push('boas-vindas');
+
+    // ── Dígitos numéricos (1-9, 0) ──────────────────────────────────────────
     const DIGIT_ORDER = ['1', '2', '3', '4', '5', '6', '7', '8', '9', '0'];
     const menuDigits = [];
 
     for (const dig of DIGIT_ORDER) {
       if (!dtmfMap.has(dig)) continue;
-      const lines = dtmfMap.get(dig);
-      const gotoLine = lines.find((l) => /^Goto$/i.test(l.application));
-      if (gotoLine) {
-        const ctxTarget = gotoLine.args.split(',')[0];
-        if (ctxTarget) dtmfGotos[dig] = ctxTarget;
-      }
-      menuDigits.push({ id: dig, label: `Opcao ${dig}` });
+      const block = dtmfMap.get(dig);
+      const { actions, finalDest } = processOptionLines(block.lines);
+
+      if (finalDest?.type === 'context') dtmfGotos[dig] = finalDest.contextName;
+      else if (finalDest?.type === 'queue') dtmfGotos[dig] = finalDest.ctx;
+
+      menuDigits.push({
+        id:               dig,
+        label:            block.comment || `Opcao ${dig}`,
+        comment:          block.comment || null,
+        actions,
+        finalDestination: finalDest,
+      });
     }
 
-    // Process 'i' and 't' extensions
+    // ── Opções i (inválido) e t (timeout) ───────────────────────────────────
     let invalidMacro = '';
     let timeoutMacro = '';
-    /** @type {ResolvedNodeData[]} macro nodes to append after MenuNode */
-    const macroChildNodes = [];
-    /** @type {Array<{digit: string, targetIdx: number}>} edges from menu d-x to macro node */
-    const macroEdgeSpecs = [];
+    let invalidOption = null;
+    let timeoutOption = null;
 
     for (const ext of ['i', 't']) {
       if (!dtmfMap.has(ext)) continue;
-      const lines = dtmfMap.get(ext);
-      const macroLine = lines.find((l) => /^Macro$/i.test(l.application));
-      const gotoLine  = lines.find((l) => /^Goto$/i.test(l.application));
+      const block = dtmfMap.get(ext);
+      const { actions, finalDest } = processOptionLines(block.lines);
 
-      if (macroLine) {
-        const parts = macroLine.args.split(',');
-        const name  = parts[0] || '';
-        if (ext === 'i') invalidMacro = name;
-        else             timeoutMacro = name;
+      if (finalDest?.type === 'context') dtmfGotos[ext] = finalDest.contextName;
+      else if (finalDest?.type === 'queue') dtmfGotos[ext] = finalDest.ctx;
 
-        const macroNodeIdx = childNodes.length + 1 + macroChildNodes.length; // tentative
-        macroChildNodes.push({
-          type: 'macro',
-          data: { name, params: parts.slice(1).filter(Boolean), label: '' },
-          _dtmfMacroFor: ext,
-        });
-      } else if (gotoLine) {
-        const ctxTarget = gotoLine.args.split(',')[0];
-        if (ctxTarget) dtmfGotos[ext] = ctxTarget;
+      const optObj = { comment: block.comment || null, actions, finalDestination: finalDest };
+
+      if (ext === 'i') {
+        invalidOption = optObj;
+        const macroAct = actions.find((a) => a.type === 'macro');
+        if (macroAct) invalidMacro = macroAct.data.name || '';
+        if (!invalidMacro) {
+          const rawMacro = block.lines.find((l) => /^Macro$/i.test(l.application));
+          if (rawMacro) invalidMacro = rawMacro.args.split(',')[0] || '';
+        }
+      } else {
+        timeoutOption = optObj;
+        const macroAct = actions.find((a) => a.type === 'macro');
+        if (macroAct) timeoutMacro = macroAct.data.name || '';
+        if (!timeoutMacro) {
+          const rawMacro = block.lines.find((l) => /^Macro$/i.test(l.application));
+          if (rawMacro) timeoutMacro = rawMacro.args.split(',')[0] || '';
+        }
       }
     }
 
-    // Add MenuNode
+    // ── Adiciona MenuNode ────────────────────────────────────────────────────
     childNodes.push({
       type: 'menu',
       data: {
-        contextName:  rawCtx.name,
-        greeting,
-        waitExten:    menuWaitExten,
-        digits:       menuDigits,
+        contextName:   rawCtx.name,
+        audioFiles,
+        greeting:      audioFiles[0] || 'boas-vindas', // compat legado
+        waitExten:     menuWaitExten,
+        waitSeconds:   menuWaitExten,
+        digits:        menuDigits,
         invalidMacro,
         timeoutMacro,
-        maxRetry:     2,
-        retryGoto:    '',
-        invalidSound: '',
-        _dtmfGotos:   dtmfGotos,
+        invalidOption,
+        timeoutOption,
+        maxRetry:      2,
+        retryGoto:     '',
+        invalidSound:  '',
+        _dtmfGotos:    dtmfGotos,
       },
       _menuNodeMarker: true,
     });
-
-    // Add macro child nodes for i/t after the MenuNode
-    for (const mn of macroChildNodes) {
-      childNodes.push(mn);
-    }
   }
 
   // ── 5. Append include directives ao FINAL (após todos os exten =>)

@@ -27,8 +27,10 @@ src/
 ├── main.jsx              entry point — importa reactflow CSS, node-resizer CSS, index.css
 ├── components/
 │   ├── canvas/
-│   │   ├── AlignmentGuides.jsx   linhas-guia sobre o canvas
-│   │   └── ContextOrderOverlay.jsx  controles de reordenação (drag ⠿, ↑↓, campo numérico)
+│   │   ├── AlignmentGuides.jsx      linhas-guia sobre o canvas
+│   │   ├── ConfigModal.jsx          modal de configurações (6 seções: INTERFACE, CANVAS, EDGES, EXPORTAÇÃO, IMPORTAÇÃO, PROJETO)
+│   │   ├── ContextOrderOverlay.jsx  controles de reordenação de filhos (drag ⠿, ↑↓, campo numérico)
+│   │   └── ExportOrderPanel.jsx     painel lateral de ordem de exportação (exportOrder, isDraft toggle)
 │   ├── edges/
 │   │   ├── EdgeWithWaypoints.jsx  componente de edge principal (floating + smoothstep + DTMF)
 │   │   └── FloatingEdge.jsx       LEGADO — existe no disco, NÃO registrado em edgeTypes
@@ -43,57 +45,75 @@ src/
 │       ├── RouteNode.jsx     destino unificado: macro / fila / contexto
 │       └── TimeNode.jsx      condição temporal — handle true (right) + closed (bottom)
 ├── components/layout/
-│   ├── Sidebar.jsx           palette accordion + busca com relevância semântica
-│   └── PropertiesPanel.jsx   editor de propriedades (320px, lado direito)
+│   ├── ContextNavPanel.jsx   painel de contextos (lista ordenada por exportOrder, clique → pan + highlight)
+│   ├── PropertiesPanel.jsx   editor de propriedades (320px, lado direito)
+│   └── Sidebar.jsx           palette accordion + busca com relevância semântica
 ├── config/
+│   ├── nodeModeConfig.js     labels e dicas por tipo de nó para modo AMIGÁVEL (NODE_MODE_CONFIG)
 │   └── nodeTags.js           mapa de tags semânticas por tipo (alimenta busca da sidebar)
 ├── contexts/
-│   ├── EdgeModeContext.js    contexto React: 'free'|'grid', GRID_SIZE=20, snapToGrid()
 │   ├── ActiveSelectionContext.js  contexto de seleção visual: activeEdgeIds + activeNodeIds
-│   └── ThemeContext.js       contexto de tema ativo ('matrix' | 'orpen') + hook useThemeContext()
+│   ├── ConfigContext.jsx     store global de configurações (mode, colorTheme, snapToGrid, etc.) + useConfig()
+│   ├── EdgeModeContext.js    contexto React: 'free'|'grid', GRID_SIZE=20, snapToGrid()
+│   ├── ModeContext.js        contexto de modo PRO/AMIGÁVEL — 'pro'|'amigavel' + useModeContext()
+│   └── ThemeContext.js       contexto de tema efetivo ('matrix' | 'orpen' | 'dark') + hook useThemeContext()
 ├── hooks/
+│   ├── useActiveContext.js   detecta ContextNode mais próximo do centro do viewport (debounce 150ms)
 │   └── useAlignmentGuides.js smart guides Figma-style + snap ao soltar
 ├── screens/
 │   └── HomeScreen.jsx        tela inicial: grid de projetos, criar/abrir/importar/exportar
 ├── services/
-│   ├── projectStorage.js     CRUD IndexedDB v2 — salvarProjeto, listarProjetos, carregarProjeto, excluirProjeto + openDB() exportado
-│   └── layoutStorage.js      separação dialplan/layout — extractLayout, applyLayout, exportLayoutFile, importLayoutFile + LayoutStorageAdapter
+│   ├── layoutStorage.js      separação dialplan/layout — extractLayout, applyLayout, exportLayoutFile, importLayoutFile + LayoutStorageAdapter
+│   └── projectStorage.js     CRUD IndexedDB v2 — salvarProjeto, listarProjetos, carregarProjeto, excluirProjeto + openDB() exportado
 └── utils/
-    ├── actionMeta.js         ACTION_META dict + actionLine() + validate() por tipo
-    ├── asteriskExporter.js   generateDialplan() — compilador principal
-    ├── buildNode.js          factory de nós com defaults por tipo
-    ├── common.js             uid(), cls(), slugify(), DEFAULT_DIGITS
-    ├── confParser.js         parseConfFile() — converte .conf Asterisk em nós+edges
-    ├── edgeUtils.js          getEdgeParams(), getEdgeParamsDirected(), isSemanticHandle()
-    ├── nodeColors.js         resolveNodeColor(color, theme) + COLOR_REMAP — remapeia cores colidentes por tema
-    ├── renamePropagator.js   applyContextRename() — cascata de rename em time/route/gosub
-    └── timeUtils.js          formatDayRange(), buildTimeExport()
+    ├── conf/                  pipeline de importação .conf (5 fases)
+    │   ├── confBuilder.js     fase 5: constrói nós/edges React Flow a partir do grafo resolvido
+    │   ├── confImporter.js    orquestrador — entry point: importConf(rawContent)
+    │   ├── confLayout.js      fase 4: calcula posições iniciais dos ContextNodes
+    │   ├── confLexer.js       fase 1: tokeniza o .conf em Token[]
+    │   ├── confMapper.js      fase 2: mapeia tokens em RawContext[] e chama cmdToNodeData()
+    │   └── confResolver.js    fase 3: resolve referências entre contextos e gera edges
+    ├── actionMeta.js          ACTION_META dict + actionLine() + validate() por tipo
+    ├── asteriskExporter.js    generateDialplan() — compilador principal
+    ├── buildNode.js           factory de nós com defaults por tipo
+    ├── common.js              uid(), cls(), slugify(), DEFAULT_DIGITS
+    ├── confParser.js          LEGADO — parser monolítico original; não usado pelo App (substituído por conf/)
+    ├── confParser.legacy.js   LEGADO — backup do confParser.js original (referência histórica)
+    ├── contextDimensions.js   CTX_HEADER_H, NODE_DEFAULT_HEIGHTS, calculateContextDimensions(), getNodeHeight()
+    ├── contextUtils.js        generateUniqueContextName(), isContextNameDuplicate()
+    ├── edgeUtils.js           getEdgeParams(), getEdgeParamsDirected(), isSemanticHandle()
+    ├── nodeColors.js          resolveNodeColor(color, theme) + COLOR_REMAP — remapeia cores colidentes por tema
+    ├── renamePropagator.js    applyContextRename() — cascata de rename em time/route/gosub
+    ├── theme.js               LEGADO — getTheme/setTheme/toggleTheme/initTheme (substituído por ConfigContext)
+    └── timeUtils.js           formatDayRange(), buildTimeExport()
 ```
 
 ## Sistema de Temas
 
-O editor suporta dois temas alterados em runtime via `data-theme` no `<html>`:
+O editor suporta **três temas de cor** alterados em runtime. O tema é selecionado em **Configurações → Tema de cores** e persiste em `localStorage` via `ConfigContext.colorTheme`:
 
-| Tema | `--neon` | Identidade |
-|---|---|---|
-| `matrix` (padrão) | `#00ff41` | verde neon sobre preto terminal |
-| `orpen` | `#c084fc` | roxo sobre preto profundo — identidade da marca |
+| `colorTheme` (ConfigContext) | `data-theme` (DOM) | `--neon` | Identidade |
+|---|---|---|---|
+| `hacking` (padrão) | `matrix` | `#00ff41` | verde neon sobre preto terminal |
+| `orpen` | `orpen` | `#c084fc` | roxo sobre preto profundo — identidade da marca |
+| `dark` | `dark` | `#4fc1ff` | paleta VS Code — azul suave sobre fundo escuro |
 
 ### Aplicação do tema
 
+- **`ConfigContext`** (`src/contexts/ConfigContext.jsx`) é a única fonte de verdade. Persiste `colorTheme` (`'hacking'|'orpen'|'dark'`) no localStorage e aplica `data-theme` ao `<html>` via `useEffect`, usando o mapeamento `COLOR_THEME_TO_DATA_THEME`.
 - **`data-theme`** no elemento `<html>` seleciona o bloco de variáveis CSS correto em `index.css`.
-- **`ThemeContext`** (`src/contexts/ThemeContext.js`) fornece o valor `'matrix' | 'orpen'` para componentes React via `useThemeContext()`.
-- **`color-scheme: dark`** declarado em ambos os temas para que controles nativos do browser (scrollbars, inputs) usem a versão dark.
-- O toggle de tema fica no App; o Canvas envolve filhos com `<ThemeContext.Provider value={theme}>`.
+- **`ThemeContext`** (`src/contexts/ThemeContext.js`) fornece o valor `effectiveTheme` = `'matrix' | 'orpen' | 'dark'` para componentes React via `useThemeContext()`.
+- **`color-scheme: dark`** declarado nos três temas para que controles nativos do browser (scrollbars, inputs) usem a versão dark.
+- `theme.js` (`src/utils/theme.js`) é LEGADO — existe mas o `ConfigContext` é o controle correto. Não usar `setTheme()` / `toggleTheme()` diretamente.
 
 ### Cores de acento por tema (`resolveNodeColor`)
 
 Alguns nós de ação têm cores que colidem com `--neon` em determinado tema — ficam invisíveis sobre o chrome:
 
-| Cor base | Matrix → | Orpen → |
-|---|---|---|
-| `#00ff41` (Answer, Wait, Playback, BG, WaitExten) | `#2dd4bf` (teal) | inalterada |
-| `#a78bfa` (Set, AGI, Macro, ExecIf, ExecIfTime) | inalterada | `#f472b6` (pink) |
+| Cor base | Matrix → | Orpen → | Dark → |
+|---|---|---|---|
+| `#00ff41` (Answer, Wait, Playback, BG, WaitExten) | `#2dd4bf` (teal) | inalterada | `#2dd4bf` (teal) |
+| `#a78bfa` (Set, AGI, Macro, ExecIf, ExecIfTime) | inalterada | `#f472b6` (pink) | inalterada |
 
 Fonte: `COLOR_REMAP` em `src/utils/nodeColors.js`.
 
@@ -230,7 +250,7 @@ Sequências consecutivas usam `-`; múltiplos não-consecutivos usam `&`.
 4. `Sidebar.jsx` — item em uma categoria de `CATEGORIES`
 5. `nodeTags.js` — tags semânticas (array de strings PT-BR para busca)
 6. `PropertiesPanel.jsx` — bloco `{node.type === 'mynewtype' && (...)}`
-7. `confParser.js` — case em `cmdToNodeData()` se importável
+7. `conf/confMapper.js` — case em `cmdToNodeData()` se importável (pipeline ativo); `confParser.js` é LEGADO
 
 ### Adicionar nó estrutural
 Mesmo fluxo, mas com componente próprio em `nodes/MyNode.jsx`, registro direto no `nodeTypes` (não via `mkActionType`), e handles declarados com `<Handle>` do React Flow.
@@ -299,9 +319,11 @@ Botão **⤓ EXPORTAR URA (.conf)** → modal mostra preview do `.conf` e lista 
 - **⤓ .layout.json** — baixa apenas o layout
 
 ### Fluxo de importação
-**IMPORTAR .CONF** → modal `ConfImportModal` → seção "// layout opcional" permite carregar o `.layout.json` junto. Se fornecido, `applyLayout()` é chamado antes de abrir o canvas.
+**IMPORTAR .CONF** — seleção múltipla (`multiple`): o modal `ConfImportModal` detecta automaticamente um `.layout.json` com o mesmo nome base entre os arquivos selecionados. Se encontrado, `applyLayout()` é chamado antes de abrir o canvas e o status exibe `✓ layout restaurado`.
 
-**⤓ LAYOUT** (botão na status bar do canvas) → importa um `.layout.json` e aplica as posições sobre o canvas aberto.
+**Abrir projeto do IndexedDB** — `handleOpenProject` carrega o layout via `loadLayout(confFileName)` e aplica com `applyLayout()`. A viewport salva no `project.flow` é preservada; apenas posições de nós e edges são atualizadas.
+
+Não há botão manual de importação de `.layout.json` — a detecção é sempre automática por nome de arquivo ou por ID do projeto no IndexedDB.
 
 ### LayoutStorageAdapter — ponto de extensão para integração futura
 

@@ -20,7 +20,7 @@
 | Vite 5 | Bundler / dev server |
 | React 18 | UI framework |
 | ReactFlow 11 | Canvas de grafo interativo |
-| @reactflow/node-resizer | Handle de resize para ContextNode |
+| @reactflow/node-resizer | INSTALADO MAS NÃO UTILIZADO — ContextNode não é mais redimensionável manualmente |
 | lucide-react | Ícones SVG |
 | TailwindCSS 3 | Utility classes (uso mínimo — styling principal é CSS custom em `index.css`) |
 
@@ -32,21 +32,24 @@
 
 ### Sistema de Temas
 
-O editor suporta dois temas trocados em runtime via atributo `data-theme` no `<html>`:
+O editor suporta **três temas de cor** trocados em runtime. O tema é selecionado em **Configurações → Tema de cores** e gerenciado por `ConfigContext.colorTheme`:
 
-| Tema | Seletor CSS | `--neon` | Identidade |
-|---|---|---|---|
-| **Matrix** (padrão) | `:root, [data-theme="matrix"]` | `#00ff41` | verde neon sobre preto terminal |
-| **Orpen** | `[data-theme="orpen"]` | `#c084fc` | roxo sobre preto profundo — identidade da marca |
+| `colorTheme` | `data-theme` | Seletor CSS | `--neon` | Identidade |
+|---|---|---|---|---|
+| `hacking` (padrão) | `matrix` | `:root, [data-theme="matrix"]` | `#00ff41` | verde neon sobre preto terminal |
+| `orpen` | `orpen` | `[data-theme="orpen"]` | `#c084fc` | roxo sobre preto profundo — identidade da marca |
+| `dark` | `dark` | `[data-theme="dark"]` | `#4fc1ff` | paleta VS Code — azul suave sobre fundo escuro |
 
-Ambos os temas declaram `color-scheme: dark` para que controles nativos do browser (scrollbars, inputs de sistema) usem a versão dark.
+Os três temas declaram `color-scheme: dark` para que controles nativos do browser (scrollbars, inputs de sistema) usem a versão dark.
 
-O tema é provido ao React via `ThemeContext` (`src/contexts/ThemeContext.js`):
+O tema é gerenciado por `ConfigContext` (`src/contexts/ConfigContext.jsx`), que persiste `colorTheme` no localStorage e aplica `data-theme` ao `<html>` via `useEffect` usando `COLOR_THEME_TO_DATA_THEME`. O `ThemeContext` (`src/contexts/ThemeContext.js`) distribui o `effectiveTheme` (`'matrix'|'orpen'|'dark'`) para componentes filhos:
 ```js
 export const ThemeContext = createContext('matrix');
 export const useThemeContext = () => useContext(ThemeContext);
+// Retorna 'matrix' | 'orpen' | 'dark'
 ```
-O `App` alterna o atributo no `<html>` e envolve o Canvas com `<ThemeContext.Provider value={theme}>`.
+O Canvas envolve filhos com `<ThemeContext.Provider value={effectiveTheme}>`.
+`theme.js` (`src/utils/theme.js`) é LEGADO — não usar diretamente; o `ConfigContext` é a fonte de verdade.
 
 ### CSS Custom Properties (`src/index.css`)
 
@@ -163,7 +166,9 @@ Construtor URA/
     ├── components/
     │   ├── canvas/
     │   │   ├── AlignmentGuides.jsx       ← Renderiza linhas-guia sobre o canvas (usa useStore para viewport)
-    │   │   └── ContextOrderOverlay.jsx   ← Controles de reordenação de filhos (drag ⠿, ↑↓, campo numérico)
+    │   │   ├── ConfigModal.jsx           ← Modal de configurações (6 seções: INTERFACE, CANVAS, EDGES, EXPORTAÇÃO, IMPORTAÇÃO, PROJETO)
+    │   │   ├── ContextOrderOverlay.jsx   ← Controles de reordenação de filhos (drag ⠿, ↑↓, campo numérico)
+    │   │   └── ExportOrderPanel.jsx      ← Painel lateral de ordem de exportação (exportOrder, isDraft toggle)
     │   ├── edges/
     │   │   ├── EdgeWithWaypoints.jsx ← Componente de edge principal (floating + smoothstep)
     │   │   └── FloatingEdge.jsx      ← Componente legacy simples (existe no disco, NÃO registrado em edgeTypes)
@@ -172,35 +177,52 @@ Construtor URA/
     │   │   ├── ActionNode.jsx  ← Componente genérico para os 22 nós de ação
     │   │   ├── CommentedNode.jsx ← Nó comentado (borda dashed amarela, exibe originalLine)
     │   │   ├── ConfigNode.jsx  ← Nó START — apenas handles de saída (out, out-right, out-left)
-    │   │   ├── ContextNode.jsx ← Container resizável; handles ctx-in (top) e ctx-start (interno)
+    │   │   ├── ContextNode.jsx ← Container de altura automática; handle ctx-in (top); filhos por childOrder
     │   │   ├── MenuNode.jsx    ← Menu DTMF com handles d-N, d-i, d-t na borda direita
     │   │   ├── RawNode.jsx     ← Linha não reconhecida (orange, textarea editável)
     │   │   ├── RouteNode.jsx   ← Destino unificado: macro/fila/contexto
     │   │   └── TimeNode.jsx    ← Condição temporal: handle true (right, amarelo) + closed (bottom, verde)
     │   └── layout/
-    │       ├── Sidebar.jsx     ← Palette accordion (6 categorias) + busca com relevância + drag-and-drop
-    │       └── PropertiesPanel.jsx ← Editor de propriedades por tipo de nó (320px, lado direito)
+    │       ├── ContextNavPanel.jsx ← Painel de contextos (lista ordenada, clique → pan + highlight ativo)
+    │       ├── PropertiesPanel.jsx ← Editor de propriedades por tipo de nó (320px, lado direito)
+    │       └── Sidebar.jsx     ← Palette accordion (6 categorias) + busca com relevância + drag-and-drop
     ├── config/
+    │   ├── nodeModeConfig.js   ← Labels e dicas por tipo de nó para o modo AMIGÁVEL (NODE_MODE_CONFIG)
     │   └── nodeTags.js         ← Mapa de tags semânticas por tipo (para busca na Sidebar)
     ├── contexts/
-    │   ├── EdgeModeContext.js          ← Context React: 'free'|'grid' + GRID_SIZE=20 + snapToGrid()
     │   ├── ActiveSelectionContext.js   ← Context de seleção visual: activeEdgeIds + activeNodeIds (Set)
-    │   └── ThemeContext.js             ← Context de tema: 'matrix'|'orpen' + hook useThemeContext()
+    │   ├── ConfigContext.jsx           ← Store global de configurações (mode, colorTheme, snapToGrid, etc.) + useConfig()
+    │   ├── EdgeModeContext.js          ← Context React: 'free'|'grid' + GRID_SIZE=20 + snapToGrid()
+    │   ├── ModeContext.js              ← Contexto de modo PRO/AMIGÁVEL: 'pro'|'amigavel' + useModeContext()
+    │   └── ThemeContext.js             ← Context de tema efetivo: 'matrix'|'orpen'|'dark' + hook useThemeContext()
     ├── hooks/
+    │   ├── useActiveContext.js   ← Detecta ContextNode mais próximo do centro do viewport (debounce 150ms)
     │   └── useAlignmentGuides.js ← Smart guides Figma-style + snap ao soltar
     ├── screens/
     │   └── HomeScreen.jsx      ← Tela inicial: lista de projetos, criar/abrir/importar/excluir
     ├── services/
-    │   └── projectStorage.js   ← CRUD IndexedDB: salvarProjeto, listarProjetos, carregarProjeto, excluirProjeto, projetoExiste
+    │   ├── layoutStorage.js    ← Separação dialplan/layout: extractLayout, applyLayout, exportLayoutFile, importLayoutFile + LayoutStorageAdapter
+    │   └── projectStorage.js   ← CRUD IndexedDB v2: salvarProjeto, listarProjetos, carregarProjeto, excluirProjeto, projetoExiste + openDB() exportado
     └── utils/
+        ├── conf/                   ← Pipeline de importação .conf (5 fases)
+        │   ├── confBuilder.js      ← Fase 5: constrói nós/edges React Flow
+        │   ├── confImporter.js     ← Orquestrador — entry point: importConf(rawContent)
+        │   ├── confLayout.js       ← Fase 4: calcula posições iniciais dos ContextNodes
+        │   ├── confLexer.js        ← Fase 1: tokeniza o .conf em Token[]
+        │   ├── confMapper.js       ← Fase 2: mapeia tokens em RawContext[] (inclui cmdToNodeData)
+        │   └── confResolver.js     ← Fase 3: resolve referências entre contextos e gera edges
         ├── actionMeta.js       ← ACTION_META (title, app, icon, color, summary, validate, terminal, supportsLabel) + actionLine()
         ├── asteriskExporter.js ← generateDialplan(): modo hierárquico (com ContextNodes) ou legado (sem)
         ├── buildNode.js        ← Factory de nós com todos os defaults por tipo
         ├── common.js           ← uid(), cls(), slugify(), DEFAULT_DIGITS
-        ├── confParser.js       ← parseConfFile(): converte .conf Asterisk em nós+edges React Flow
+        ├── confParser.js       ← LEGADO — parser monolítico original; não usado pelo App (substituído por conf/)
+        ├── confParser.legacy.js← LEGADO — backup do confParser.js original (referência histórica)
+        ├── contextDimensions.js← CTX_HEADER_H, NODE_DEFAULT_HEIGHTS, calculateContextDimensions(), getNodeHeight()
+        ├── contextUtils.js     ← generateUniqueContextName(), isContextNameDuplicate()
         ├── edgeUtils.js        ← getEdgeParams(), getEdgeParamsDirected(), isSemanticHandle(), computeObstacleAvoidance()
         ├── nodeColors.js       ← resolveNodeColor(baseColor, theme): remapeia cores colidentes por tema; COLOR_REMAP dict
         ├── renamePropagator.js ← applyContextRename(): cascata de rename em time/route/gosub
+        ├── theme.js            ← LEGADO — getTheme/setTheme/toggleTheme/initTheme (substituído por ConfigContext)
         └── timeUtils.js        ← formatDayRange(), formatTimeRange(), buildTimeExport(), getMaxDay()
 ```
 
@@ -214,7 +236,7 @@ Construtor URA/
 
 | Tipo | Componente | Responsabilidade |
 |---|---|---|
-| `context` | ContextNode.jsx | Container de altura automática. Agrupa filhos com `parentNode`. Ordem gerenciada por `childOrder`. |
+| `context` | ContextNode.jsx | Container de altura automática. Agrupa filhos com `parentNode`. Sequência gerenciada por `childOrder`. Handle `ctx-start` removido. |
 | `config` | ConfigNode.jsx | Nó START — define variáveis globais. Sem handles de entrada. |
 | `menu` | MenuNode.jsx | Menu DTMF. Gera Background + WaitExten + extensões por dígito. |
 | `time` | TimeNode.jsx | Condição temporal GotoIfTime. |
@@ -418,7 +440,7 @@ BFS partindo do nó `config`:
 
 #### Passo 2 — Ordenação dos contextos
 
-Contextos ativos são ordenados pelo campo `data.order` (crescente). Contextos sem `order` vão para o final.
+Contextos ativos são filtrados (excluindo `isDraft: true`) e ordenados pelo campo `data.exportOrder` (crescente). Contextos sem `exportOrder` explícito vão para o final. O campo legado `data.order` é ignorado pelo compilador atual.
 
 #### Passo 3 — Bloco standalone (Config sem edges a ContextNode)
 
@@ -510,41 +532,34 @@ Funções validadas contra docs.asterisk.org (auditoría 2026-05):
 
 ## 6. Parser de Importação (.conf)
 
-### Entry Point
+### Entry Point (pipeline ativo)
 
 ```js
-export function parseConfFile(text)
-// Retorna: { nodes, edges, stats, suggestedName }
+// src/utils/conf/confImporter.js
+export function importConf(rawContent)
+// Retorna: { flowState, graph, validation, tokens, rawContexts, suggestedName, stats }
 ```
 
-### Estágios
+> ⚠️ **`confParser.js` é LEGADO.** O App importa `importConf` de `src/utils/conf/confImporter.js`. O `confParser.js` original ainda existe no disco mas não é invocado pelo App.
 
-**1. `extractContexts(lines)`**  
-Divide o texto em blocos `[nome]` + suas linhas. Aceita linhas `exten =>`, `;exten =>` (comentadas) e `include =>`. Ignora `;;` (comentários duplos).
+### Pipeline de 5 Fases (`src/utils/conf/`)
 
-**2. `extractGlobalConfig(firstCtx)`**  
-Lê o primeiro contexto para extrair variáveis globais: IVR, soundPath, agiPath, language, comment, numberDialed.
+**Fase 1 — `lex()` (confLexer.js)**  
+Tokeniza o texto bruto do `.conf` em `Token[]`. Reconhece cabeçalhos de contexto `[nome]`, linhas `exten =>`, `;exten =>` (comentadas), `include =>` e ignora `;;`.
 
-**3. `processContext(ctx, xOffset, stats, globalConfig, isFirstContext)`**  
-Para cada contexto. Ao final, popula `data.childOrder` com os IDs dos filhos na ordem do arquivo — garante que a ordem do .conf original é preservada após a importação.  
-Todos os filhos são criados com `draggable: false`.
+**Fase 2 — `map()` (confMapper.js)**  
+Converte `Token[]` em `RawContext[]`. Para cada linha de extensão, chama `cmdToNodeData()`:
 
-Para cada contexto:
-- Linhas `include =>` → RawNode
-- Linhas comentadas (`;exten =>`) → nó do tipo real com `_commented: true` e `_origLine`
-- Linhas DTMF (`exten => 1,n,Cmd()`) → agrupadas em `dtmfGroups`
-- Linhas de config global repetidas no mesmo valor → ignoradas; se valor diferente → SetNode
-- Demais linhas → `cmdToNodeData()` → nó do tipo correspondente
-- MenuNode: construído ao final a partir do `dtmfGroups` (absorve WaitExten e Background imediatamente anteriores)
-- Edges sequenciais entre nós são geradas com handle `out` → `in`, tipo `floating`, `data: { waypoints: [] }`
+`cmdToNodeData(cmdFull)` mapeia comando Asterisk → `{ type, data }`. Comandos não mapeados → `{ type: 'raw', data: { rawLine } }`.
 
-**4. `cmdToNodeData(cmdFull)`**  
-Mapeia comando Asterisk → `{ type, data }`. Comandos não mapeados → `{ type: 'raw', data: { rawLine } }`.
+Mapeamentos suportados: `Answer, Hangup, Wait, WaitExten, Noop, Playback, Background, GotoIfTime, Goto, Queue, AGI, Macro, Gosub, Return, GotoIf, Dial, Set, Verbose, ExecIf, ChanSpy, MixMonitor, StopMonitor, SayDigits, SayNumber`.
 
-Mapeamentos suportados: `Answer, Hangup, Wait, WaitExten, Noop, Playback, Background, GotoIfTime, Goto, Queue, Agi, Macro, Gosub, Return, GotoIf, Dial, Set, Verbose, ExecIf, ChanSpy, MixMonitor, StopMonitor, SayDigits, SayNumber`.
+Linhas DTMF (`exten => 1,n,Cmd()`) são agrupadas em `dtmfGroups` para reconstituição do MenuNode.  
+Linhas de config global repetidas com mesmo valor → ignoradas; valor diferente → SetNode.  
+Ao final, popula `childOrder` com os IDs dos filhos na ordem do arquivo.
 
-**5. `resolveReferences(allNodes, allEdges)`**  
-Varre todos os nós e cria edges visuais para ContextNodes referenciados por nome:
+**Fase 3 — `resolve()` (confResolver.js)**  
+Varre o grafo e cria edges visuais para ContextNodes referenciados por nome:
 - `route` (contexto) → handle `out`, edge verde
 - `gosub` → handle `out`, edge verde
 - `time` → handle `true`, edge amarela
@@ -552,21 +567,28 @@ Varre todos os nós e cria edges visuais para ContextNodes referenciados por nom
 - `menu` via `_dtmfGotos` → handles `d-{ext}`, edges smoothstep
 - Referências sem ContextNode correspondente → `stats.unresolvedRefs`
 
-### Layout Gerado
+**Fase 4 — `calculateLayout()` (confLayout.js)**  
+Calcula posições X/Y iniciais para os ContextNodes e GlobalConfigNode. Usa constantes de `contextDimensions.js`:
 
 ```
-Constantes (confParser.js):
-  CTX_MIN_WIDTH  = 520   largura mínima de um ContextNode
-  CTX_PAD_TOP    = 34    espaço topo = altura do header (sem barra START)
-  CTX_PAD_BOTTOM = 20    padding inferior
-  CTX_PAD_H      = 20    padding horizontal dos filhos
-  NODE_H         = 60    altura estimada de nó filho
-  NODE_GAP       = 0     sem espaçamento entre filhos (colados verticalmente)
-  CTX_COL_GAP    = 120   gap horizontal entre ContextNodes
-  CTX_ROW_Y      = 220   Y fixo de todos os ContextNodes
+CTX_MIN_W      = 320   largura mínima do ContextNode
+CTX_HEADER_H   = 34    altura do header
+CTX_PAD_BOTTOM = 20    padding inferior
+CTX_PAD_H      = 20    padding horizontal dos filhos
+CTX_CHILD_GAP  = 8     gap vertical entre filhos consecutivos
+CTX_COL_GAP    = 120   gap horizontal entre ContextNodes
+CTX_ROW_Y      = 220   Y fixo de todos os ContextNodes
 ```
 
-GlobalConfigNode posicionado centralizado horizontalmente acima de todos os contextos, y=20.
+GlobalConfigNode posicionado centralizado horizontalmente acima de todos os contextos, y=20.  
+Alturas estimadas por tipo de nó definidas em `NODE_DEFAULT_HEIGHTS` (contextDimensions.js).
+
+**Fase 5 — `build()` (confBuilder.js)**  
+Constrói o array final de nós e edges React Flow. Todos os filhos de ContextNode são criados com `draggable: false`. Edges sequenciais usam handle `out` → `in`, tipo `floating`.
+
+### Round-trip Validation
+
+Após o `build()`, o `confImporter.js` gera o `.conf` a partir dos nós/edges via `generateDialplan()` e compara com o original para calcular a fidelidade da importação (métricas em `validation`).
 
 ### Stats Retornadas
 
@@ -598,6 +620,7 @@ const edgeTypes = {
 ### 7.2 Handles Semânticos (`isSemanticHandle`)
 
 ```js
+// src/utils/edgeUtils.js
 const FIXED_HANDLES = new Set(['ctx-start']);
 
 export function isSemanticHandle(handle) {
@@ -606,9 +629,9 @@ export function isSemanticHandle(handle) {
 }
 ```
 
-**`ctx-start`** (ContextNode): único handle semântico → usa `type: 'smoothstep'` (renderer nativo do React Flow).
+**`ctx-start`** permanece em `FIXED_HANDLES` para retrocompatibilidade com projetos legados (garante que edges salvas com esse handle carreguem como `smoothstep`). O handle em si foi **removido do ContextNode** — não é mais criado em projetos novos.
 
-**`d-*` (DTMF):** **NÃO é mais semântico** no sentido de `isSemanticHandle`. Usa `type: 'floating'` (EdgeWithWaypoints), mas com cálculo de path totalmente independente via Bézier cúbico — veja seção 7.5.
+**`d-*` (DTMF):** **NÃO é semântico** no sentido de `isSemanticHandle`. Usa `type: 'floating'` (EdgeWithWaypoints), com cálculo de path independente via Bézier cúbico — veja seção 7.5.
 
 ### 7.3 Seleção de Tipo na Conexão (`onConnect`)
 
@@ -618,9 +641,9 @@ const useFloating = !isSemanticHandle(sourceHandle) && !isSemanticHandle(targetH
 // smoothstep: { type: 'smoothstep' } — sem data de offset
 ```
 
-- `ctx-start` → `smoothstep` (via `isSemanticHandle`)
+- `ctx-start` (legado) → `smoothstep` (via `isSemanticHandle`) — retrocompat
 - `d-*` → `floating` (isSemanticHandle retorna false → EdgeWithWaypoints com Bézier DTMF)
-- Exceção: handle `true` do TimeNode → sempre `floating`, edge amarela (`stroke: '#ffcc00'`)
+- Handle `true` do TimeNode → sempre `floating`, edge amarela (`stroke: '#ffcc00'`)
 
 ### 7.4 Normalização na Carga de Projeto (`initEdges`)
 
@@ -916,7 +939,15 @@ Aplicado via `style` prop do `BaseEdge` (suporta CSS custom properties e `animat
 
 ### 9.9 Exportação
 
-Botão "⤓ EXPORTAR URA (.conf)" (bottom-right absoluto). Modal com preview, botão COPIAR e BAIXAR (filename: `orpen-ura-gerada.conf`). Usa LF como quebra de linha na exportação.
+Botão "⤓ EXPORTAR URA (.conf)" (bottom-right absoluto). Modal com preview do `.conf` gerado e quatro ações:
+- **⎘ COPIAR** — copia o dialplan para a área de transferência
+- **⤓ .conf** — baixa apenas o dialplan (`nome-projeto.conf`)
+- **⤓ .layout.json** — baixa apenas o layout do canvas (`nome-projeto.layout.json`)
+- **⤓ BAIXAR AMBOS** — baixa `.conf` e `.layout.json` com 300ms de intervalo
+
+O `.layout.json` preserva posições X/Y, viewport, `exportOrder` e `isDraft` de cada ContextNode. Mantê-lo junto ao `.conf` permite restaurar o canvas exatamente ao re-importar.
+
+Encoding de fim de linha configurável (LF padrão; CRLF disponível em Configurações → Exportação).
 
 ---
 
@@ -924,10 +955,12 @@ Botão "⤓ EXPORTAR URA (.conf)" (bottom-right absoluto). Modal com preview, bo
 
 ### IndexedDB
 
-**Arquivo:** `src/services/projectStorage.js`  
-**DB:** `orpen-ura-db` v1, object store `projects`, keyPath: `'id'`
+**Arquivos:** `src/services/projectStorage.js` + `src/services/layoutStorage.js`  
+**DB:** `orpen-ura-db` **v2**, object stores: `projects` (keyPath: `'id'`) + `layouts` (keyPath: `'confFileName'`)
 
-#### Schema de Projeto
+`openDB()` é exportado de `projectStorage.js` e compartilhado por `layoutStorage.js` via singleton lazy — nunca abrir o banco em outro lugar.
+
+#### Schema de Projeto (`projects` store)
 
 ```js
 {
@@ -943,7 +976,7 @@ Botão "⤓ EXPORTAR URA (.conf)" (bottom-right absoluto). Modal com preview, bo
 }
 ```
 
-#### API
+#### API de Projetos (`projectStorage.js`)
 
 ```js
 salvarProjeto(projeto)      // upsert (put)
@@ -953,17 +986,74 @@ excluirProjeto(id)          // delete por id
 projetoExiste(id)           // boolean
 ```
 
+#### Separação Dialplan / Layout (`layoutStorage.js`)
+
+O `.conf` contém apenas dados de dialplan (comandos, contextos). O layout do canvas (posições X/Y, viewport) é persistido separadamente:
+
+```js
+// Extrair layout do canvas atual
+extractLayout(nodes, edges, viewport, confFileName) → URALayout
+
+// Aplicar layout salvo sobre nós/edges gerados pelo parser
+applyLayout(nodes, edges, layout) → { nodes, edges, viewport }
+
+// Persistência via adapter (padrão: IndexedDB 'layouts' store)
+saveLayout(confFileName, layout)  // salva
+loadLayout(confFileName)          // carrega → URALayout | null
+```
+
+**Adapter Pattern:** `LayoutStorageAdapter` define a interface; `IndexedDBLayoutAdapter` é o padrão. Para integrar com servidor Asterisk, implementar `AsteriskServerLayoutAdapter` com `save/load` e chamar `setLayoutAdapter(new AsteriskServerLayoutAdapter())`.
+
+**Auto-detecção na importação:** ao selecionar múltiplos arquivos em IMPORTAR .CONF, o `.layout.json` com o mesmo nome base é detectado automaticamente e aplicado antes de abrir o canvas.
+
+**Auto-carregamento ao abrir projeto:** `handleOpenProject` carrega o layout via `loadLayout()` e aplica posições sobre o fluxo salvo, preservando o viewport do `project.flow`.
+
 ### HomeScreen (`src/screens/HomeScreen.jsx`)
 
 Tela inicial com roteamento simples gerenciado pelo `App`:
 
 - **Grid de cards** — `repeat(auto-fill, minmax(280px,1fr))` — cada card mostra nome, datas, botões ABRIR / EXP .JSON / ⌫
 - **Criar projeto** — modal `CreateProjectModal`: valida slug (`/^[a-z0-9-]+$/`, mín. 3 chars)
-- **Abrir projeto** — modal `ConfirmOpenModal` → `handleOpenProject` → Canvas keyed por `project.id`
+- **Abrir projeto** — modal `ConfirmOpenModal` → `handleOpenProject` → aplica layout do IndexedDB via `loadLayout()` → Canvas keyed por `project.id`
 - **Importar .JSON** — valida campos `name, dataCriacao, flow.nodes`; atribui novo `id` (Date.now())
-- **Importar .CONF** — `parseConfFile()` → modal `ConfImportModal` com stats; após confirmar, abre canvas
+- **Importar .CONF** — seleção múltipla: `importConf()` + auto-detecção do `.layout.json` com mesmo nome base → modal `ConfImportModal` com stats; após confirmar, abre canvas
 - **Exportar .JSON** — download direto (sem modal)
 - **Excluir** — modal `ConfirmDeleteModal` + `excluirProjeto(id)` + refresh da lista
+
+### Configurações do Editor (`ConfigContext` / `ConfigModal`)
+
+`ConfigContext` (`src/contexts/ConfigContext.jsx`) é o store global de configurações, persistido em `localStorage` (`'orpen-ura-config'`). Qualquer componente acessa via `useConfig()`.
+
+Chaves disponíveis (`CONFIG_DEFAULTS`):
+
+| Categoria | Chave | Tipo | Padrão |
+|---|---|---|---|
+| Interface | `mode` | `'pro'|'amigavel'` | `'pro'` |
+| Interface | `colorTheme` | `'hacking'|'orpen'|'dark'` | `'hacking'` |
+| Canvas | `snapToGrid` | bool | `true` |
+| Canvas | `gridSize` | number (8-32) | `16` |
+| Canvas | `showGrid` | bool | `true` |
+| Canvas | `smartGuides` | bool | `true` |
+| Edges | `edgeStyle` | `'smooth'|'straight'|'step'` | `'smooth'` |
+| Edges | `edgeIdleOpacity` | number (0.10-0.60) | `0.25` |
+| Exportação | `contextPrefix` | string | `'orpen-ivr'` |
+| Exportação | `includeSectionComments` | bool | `true` |
+| Exportação | `lineEnding` | `'lf'|'crlf'` | `'lf'` |
+| Importação | `rawOnUnknown` | bool | `true` |
+| Importação | `preserveComments` | bool | `true` |
+| Projeto | `autosaveDelay` | number (1-10) segundos | `2` |
+| Projeto | `confirmBack` | bool | `true` |
+
+`ConfigModal` (`src/components/canvas/ConfigModal.jsx`) expõe estas configurações em 6 seções. Alterações são imediatas, sem botão "Salvar".
+
+### Modo PRO / AMIGÁVEL
+
+`ModeContext` (`src/contexts/ModeContext.js`) distribui `'pro'|'amigavel'` para componentes via `useModeContext()`. O valor é sincronizado com `config.mode` do `ConfigContext`. Labels e dicas por tipo de nó definidas em `nodeModeConfig.js` (`NODE_MODE_CONFIG`).
+
+### ExportOrderPanel e ContextNavPanel
+
+- **`ExportOrderPanel`** (`src/components/canvas/ExportOrderPanel.jsx`) — painel lateral de 320px para gestão da ordem de exportação: drag-to-reorder, botões ↑↓, campo numérico, toggle DRAFT (exclui contexto da exportação).
+- **`ContextNavPanel`** (`src/components/layout/ContextNavPanel.jsx`) — exibido no painel direito quando nenhum nó está selecionado: lista todos os ContextNodes ordenados por `exportOrder`, clique anima o viewport até o contexto e dispara borda pulsante. Usa `useActiveContext` para destacar o contexto mais próximo do centro da tela.
 
 ### Roteamento App
 
@@ -993,7 +1083,7 @@ App state: 'home' | 'canvas'
 
 2. **`src/utils/buildNode.js`** — adicionar case em `buildNode()` com defaults.
 
-3. **`src/utils/confParser.js`** — adicionar case em `cmdToNodeData()` se o comando Asterisk deve ser importado.
+3. **`src/utils/conf/confMapper.js`** — adicionar case em `cmdToNodeData()` se o comando Asterisk deve ser importado (pipeline ativo; `confParser.js` é LEGADO).
 
 4. **`src/components/nodes/index.jsx`** — adicionar `mynewtype: mkActionType('mynewtype')` no `nodeTypes`.
 
@@ -1014,7 +1104,7 @@ Mesmos passos acima, mas com componente próprio em `src/components/nodes/MyNode
 - **Handles de entrada:** `id="in"` (TOP) e `id="in-left"` (LEFT) na maioria dos nós
 - **Handles de saída:** `id="out"` (BOTTOM) e `id="out-right"` (RIGHT) nos nós não-terminais
 - **Handles DTMF:** `id="d-{digitId}"` (RIGHT) no MenuNode — usam `floating` (EdgeWithWaypoints) com Bézier cúbico `C sx+80 sy, tx-80 ty, tx ty`; não passam por getEdgeParams nem por offset/drag
-- **Handle ctx-start:** posição absoluta `top: 44, left: 50%` no ContextNode — semântico, força smoothstep
+- **Handle ctx-start:** REMOVIDO do ContextNode — mantido em `FIXED_HANDLES` apenas para retrocompatibilidade ao carregar projetos legados
 - **Styling inline predominante** — TailwindCSS é importado mas quase não usado; CSS custom em `index.css` é a fonte principal
 - **`React.memo` em todos os componentes de nó** — crítico para performance no ReactFlow
 - **`useCallback` em todos os handlers** passados como props ou usados em `useEffect`
@@ -1037,27 +1127,33 @@ O exportador:
 ## 12. Fluxo de Renderização
 
 ```
-App
+App (ConfigProvider envolvendo tudo)
 ├── HomeScreen (quando screen === 'home')
 └── ReactFlowProvider
     └── Canvas (key=projectId, remontado ao trocar projeto)
-        ├── EdgeModeContext.Provider (value: 'free'|'grid')
+        ├── ModeContext.Provider (value: 'pro'|'amigavel')
+        ├── ThemeContext.Provider (value: effectiveTheme)
+        ├── ActiveSelectionContext.Provider
+        ├── EdgeModeContext.Provider (value: 'grid')
         ├── Sidebar (palette + search)
         ├── div.wrapperRef (onDrop, onDragOver)
         │   ├── ReactFlow
-        │   │   ├── Background gap=20
+        │   │   ├── Background gap=gridSize
         │   │   ├── Controls
         │   │   ├── MiniMap
         │   │   └── [nós e edges renderizados pelos tipos registrados]
         │   ├── AlignmentGuides (guides=[])
+        │   ├── ContextOrderOverlay (quando mousePos sobre ContextNode)
         │   ├── Botão ← VOLTAR (quando onGoBack)
-        │   ├── Status bar (NODES|EDGES|STATUS|save|toggle LIVRE/GRADE)
+        │   ├── Status bar (NODES|EDGES|STATUS|save|toggle|⚙ CONF)
         │   └── Botão ⤓ EXPORTAR
-        ├── PropertiesPanel (node selecionado)
+        ├── PropertiesPanel (node selecionado) ou ContextNavPanel (sem seleção)
+        ├── ExportOrderPanel (quando showExportOrder === true)
+        ├── ConfigModal (quando showConfigModal === true)
         ├── Context menu de edge (edgeMenu state)
         ├── Context menu de nó (nodeMenu state)
         ├── Modal ALTERAÇÕES NÃO SALVAS
-        └── Modal de exportação .conf
+        └── Modal de exportação .conf + .layout.json
 ```
 
 ---
@@ -1085,7 +1181,7 @@ Isso permite que leitores de tela anunciem o erro sem redirecionar o foco.
 - `autoComplete="off"` em campos que não devem ser preenchidos pelo browser (nomes de projeto, slugs)
 
 ### Tema e controles nativos
-- `color-scheme: dark` nos dois temas garante scrollbars, inputs de data/cor e outros controles nativos do browser com aparência dark — sem necessidade de sobrescrever via CSS.
+- `color-scheme: dark` nos três temas garante scrollbars, inputs de data/cor e outros controles nativos do browser com aparência dark — sem necessidade de sobrescrever via CSS.
 
 ### Movimento reduzido
 `@media (prefers-reduced-motion: reduce)` no final de `index.css` garante que usuários que optaram por reduzir movimento não recebam animações. Não contornar com `animation: nome !important` inline no JS.

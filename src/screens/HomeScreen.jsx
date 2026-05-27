@@ -173,10 +173,26 @@ function ConfImportModal({ data, onClose, onConfirm }) {
           </div>
         )}
 
-        {(stats.raw || []).length > 0 && (
+        {(stats.unknownCommands || []).length > 0 && (
           <div style={{ marginBottom: 12 }}>
             <div style={{ fontSize: 10, color: '#ff8c00', letterSpacing: 1, marginBottom: 6 }}>
-              COMANDOS NÃO RECONHECIDOS ({stats.raw.length})
+              // COMANDOS NÃO RECONHECIDOS ({stats.unknownCommands.length})
+            </div>
+            <div style={{ fontSize: 9, color: 'var(--neon-dim)', marginBottom: 6, opacity: 0.7 }}>
+              // comandos que viraram NóRaw — candidatos ao dicionário
+            </div>
+            {stats.unknownCommands.map(({ cmd, count }, i) => (
+              <div key={i} style={{ fontSize: 9, color: '#ff8c00', opacity: 0.85, padding: '2px 0' }}>
+                {cmd} — <span style={{ color: '#fff' }}>{count}</span> ocorrência(s)
+              </div>
+            ))}
+          </div>
+        )}
+        {/* Lista bruta de linhas não reconhecidas (debug) — oculta quando há unknownCommands resumido */}
+        {(stats.unknownCommands || []).length === 0 && (stats.raw || []).length > 0 && (
+          <div style={{ marginBottom: 12 }}>
+            <div style={{ fontSize: 10, color: '#ff8c00', letterSpacing: 1, marginBottom: 6 }}>
+              NÓS RAW ({stats.raw.length})
             </div>
             {stats.raw.map((l, i) => (
               <div key={i} style={{ fontSize: 9, color: '#ff8c00', opacity: 0.75, padding: '2px 0', wordBreak: 'break-all' }}>{l}</div>

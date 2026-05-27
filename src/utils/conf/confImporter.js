@@ -27,6 +27,7 @@ import { resolve }         from './confResolver.js';
 import { calculateLayout } from './confLayout.js';
 import { build }           from './confBuilder.js';
 import { generateDialplan } from '../asteriskExporter.js';
+import { resetUnknownCommands, getUnknownCommands } from './unknownCommandsLog.js';
 
 /**
  * Importa um arquivo .conf de Asterisk e produz o estado completo do canvas.
@@ -35,6 +36,9 @@ import { generateDialplan } from '../asteriskExporter.js';
  * @returns {ImportResult}
  */
 export function importConf(rawContent) {
+  // Limpa log de comandos desconhecidos antes de cada importação
+  resetUnknownCommands();
+
   // ── Fase 1: Lexer ──────────────────────────────────────────────────────────
   const tokens = lex(rawContent);
 
@@ -69,7 +73,7 @@ export function importConf(rawContent) {
     tokens,
     rawContexts,
     suggestedName: graph.suggestedName || 'projeto-importado',
-    stats: { ...baseStats, contextNameRenames },
+    stats: { ...baseStats, contextNameRenames, unknownCommands: getUnknownCommands() },
   };
 }
 

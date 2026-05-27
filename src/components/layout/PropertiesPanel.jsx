@@ -747,6 +747,9 @@ export default function PropertiesPanel({ node, updateNodeData, deleteNode, togg
           <Field d={d} set={set} label="Dias do mês"                   k="monthdays" placeholder="*" />
           <Field d={d} set={set} label="Meses"                         k="months"    placeholder="*" />
           <Field d={d} set={set} label="Aplicação"                     k="action"    placeholder="Goto(orpen-ivr-home,s,1)" />
+          <div style={{ fontSize: 9, color: '#a78bfa', marginTop: 6, border: '1px dashed #a78bfa33', padding: 6, borderRadius: 3, lineHeight: 1.5 }}>
+            <code>ExecIfTime({d.hours || '*'},{d.days || '*'},{d.monthdays || '*'},{d.months || '*'}?{d.action || 'App()'})</code>
+          </div>
         </>
       )}
       {node.type === 'noop' && (

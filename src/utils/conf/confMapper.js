@@ -7,11 +7,13 @@
  * @property {string|null} label
  * @property {string} application
  * @property {string} args
+ * @property {boolean} hasParens
  * @property {number} lineNumber
  *
  * @typedef {Object} RawDtmfLine
  * @property {string} application
  * @property {string} args
+ * @property {boolean} hasParens
  *
  * @typedef {Object} RawDtmfBlock
  * @property {string} digit
@@ -77,10 +79,11 @@ export function map(tokens) {
         if (!current) break;
         pendingComment = null; // não é DTMF, reseta
         current.extensions.push({
-          priority: token.priority,
-          label: token.label,
+          priority:  token.priority,
+          label:     token.label,
           application: token.application,
-          args: token.args,
+          args:      token.args,
+          hasParens: token.hasParens ?? true,
           lineNumber: token.lineNumber,
         });
         break;
@@ -95,7 +98,8 @@ export function map(tokens) {
         pendingComment = null;
         block.lines.push({
           application: token.application,
-          args: token.args,
+          args:        token.args,
+          hasParens:   token.hasParens ?? true,
         });
         break;
       }

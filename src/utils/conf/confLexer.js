@@ -55,20 +55,20 @@
  */
 
 /**
- * Parses one application call string into { application, args }.
- * Strips the outer parens correctly.
+ * Parses one application call string into { application, args, hasParens }.
+ * hasParens: false quando a chamada não tinha parênteses (ex: bare "Hangup").
  * @param {string} cmdFull
- * @returns {{ application: string, args: string }}
+ * @returns {{ application: string, args: string, hasParens: boolean }}
  */
 function parseApplication(cmdFull) {
   const s = cmdFull.trim();
   const parenIdx = s.indexOf('(');
-  if (parenIdx < 0) return { application: s, args: '' };
+  if (parenIdx < 0) return { application: s, args: '', hasParens: false };
   const application = s.slice(0, parenIdx).trim();
   // Remove outer parens — strip trailing )
   const inner = s.slice(parenIdx + 1);
   const args = inner.endsWith(')') ? inner.slice(0, inner.length - 1) : inner;
-  return { application, args };
+  return { application, args, hasParens: true };
 }
 
 /**
@@ -143,7 +143,7 @@ export function lex(content) {
         priority = 'n';
       }
 
-      const { application, args } = parseApplication(cmdFull);
+      const { application, args, hasParens } = parseApplication(cmdFull);
       const isDtmf = /^[0-9]$/.test(extension) || extension === 'i' || extension === 't';
       const isS    = extension.toLowerCase() === 's';
 
@@ -154,6 +154,7 @@ export function lex(content) {
           label,
           application,
           args,
+          hasParens,
           lineNumber,
         });
       } else if (isDtmf) {
@@ -163,6 +164,7 @@ export function lex(content) {
           priority: /** @type {Priority} */ (priority),
           application,
           args,
+          hasParens,
           lineNumber,
         });
       } else {

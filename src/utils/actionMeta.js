@@ -287,8 +287,14 @@ export function actionLine(n) {
       return `WaitExten(${d.seconds ?? 4})`;
     case 'playback':
       return `Playback(\${SOUND_PATH}/${d.filename || ''})`;
-    case 'background':
-      return `Background(\${SOUND_PATH}/${d.filename || ''})`;
+    case 'background': {
+      // Suporta múltiplos arquivos: filenames[] tem prioridade sobre filename string
+      const files = Array.isArray(d.filenames) && d.filenames.length > 0
+        ? d.filenames
+        : [d.filename || ''];
+      const joined = files.map((f) => `\${SOUND_PATH}/${f}`).join('&');
+      return `Background(${joined})`;
+    }
     // Diretiva include — sem prefixo exten => (detectado como isRaw no exportador)
     case 'include':
       return `include => ${d.contextName || ''}`;

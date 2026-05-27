@@ -312,8 +312,12 @@ function generateDialplanFromContexts(nodes, edges, findNode, outEdges, options 
           if (c.type === 'menu') {
             scMenus.push(c);
             const menuLabel = (c.data.label || '').trim() || 'menu';
-            scSeq.push({ line: `Background(\${SOUND_PATH}/${c.data.greeting || '1-bem-vindo'})`, label: menuLabel });
-            scSeq.push({ line: `WaitExten(${c.data.waitExten || 4})` });
+            const scAudioFiles = Array.isArray(c.data.audioFiles) && c.data.audioFiles.length > 0
+              ? c.data.audioFiles
+              : [c.data.greeting || '1-bem-vindo'];
+            const scBgLine = `Background(${scAudioFiles.map((f) => `\${SOUND_PATH}/${f}`).join('&')})`;
+            scSeq.push({ line: scBgLine, label: menuLabel });
+            scSeq.push({ line: `WaitExten(${c.data.waitExten || c.data.waitSeconds || 4})` });
           } else {
             const lns = linesForChild(c);
             const nodeLbl = ACTION_META[c.type]?.supportsLabel ? (c.data.label || '').trim() : '';
@@ -444,13 +448,15 @@ function generateDialplanFromContexts(nodes, edges, findNode, outEdges, options 
       }
 
       if (c.type === 'menu') {
-        // MenuNode → Background + WaitExten + marcador atômico (DTMF emitido inline)
+        // MenuNode → Background (múltiplos arquivos via &) + WaitExten + marcador atômico
         const menuLabel = (c.data.label || '').trim() || 'menu';
-        sSeq.push({
-          line: `Background(\${SOUND_PATH}/${c.data.greeting || '1-bem-vindo'})`,
-          label: menuLabel,
-        });
-        sSeq.push({ line: `WaitExten(${c.data.waitExten || 4})` });
+        // Constrói a linha Background com audioFiles (suporta múltiplos via &)
+        const audioFiles = Array.isArray(c.data.audioFiles) && c.data.audioFiles.length > 0
+          ? c.data.audioFiles
+          : [c.data.greeting || '1-bem-vindo'];
+        const bgLine = `Background(${audioFiles.map((f) => `\${SOUND_PATH}/${f}`).join('&')})`;
+        sSeq.push({ line: bgLine, label: menuLabel });
+        sSeq.push({ line: `WaitExten(${c.data.waitExten || c.data.waitSeconds || 4})` });
         sSeq.push({ menuFlush: c }); // ← flush DTMF aqui, antes do próximo nó
       } else {
         const lns = linesForChild(c);
@@ -533,21 +539,80 @@ function generateDialplanFromContexts(nodes, edges, findNode, outEdges, options 
         };
 
         for (const dig of digits) {
+          // ── Modo rico: usa actions[] e finalDestination stored no dig (importação) ──
+          const hasStoredData = Array.isArray(dig.actions)
+            ? (dig.actions.length > 0 || dig.finalDestination != null)
+            : false;
+
+          if (hasStoredData) {
+            if (dig.comment) emit(`;${dig.comment}`);
+            emit(`exten => ${dig.id},1,Macro(sayDigit,\${EXTEN})`);
+            emit(`exten => ${dig.id},n,Macro(logIvr,ENTER_CONTEXT,${ctxName}-op-${dig.id})`);
+            for (const action of (dig.actions || [])) {
+              const ln = actionLine({ type: action.type, data: action.data });
+              if (ln) emit(`exten => ${dig.id},n,${ln}`);
+            }
+            const fd = dig.finalDestination;
+            if (fd?.type === 'context') {
+              emit(`exten => ${dig.id},n,Goto(${fd.contextName},${fd.ext || 's'},${fd.pri || '1'})`);
+            } else if (fd?.type === 'queue') {
+              emit(`exten => ${dig.id},n,Goto(${fd.ctx},${fd.ext},${fd.pri})`);
+            } else if (fd?.type === 'dial') {
+              const tmo = fd.timeout ? `,${fd.timeout}` : '';
+              emit(`exten => ${dig.id},n,Dial(${fd.target}${tmo})`);
+            } else if (fd?.type === 'hangup') {
+              emit(`exten => ${dig.id},n,Hangup(${fd.causeCode || ''})`);
+            } else {
+              // Sem finalDest stored: tenta edge como fallback
+              const e = handleEdge(dig.id);
+              if (e) emitDigit(dig.id, findNode(e.target));
+            }
+            continue;
+          }
+
+          // ── Modo legado: segue edges do canvas ──────────────────────────────
           const e = handleEdge(dig.id);
           if (!e) continue;
           emitDigit(dig.id, findNode(e.target));
         }
 
-        const ei = handleEdge('i');
-        if (ei) {
+        // ── Opção i (inválido) ───────────────────────────────────────────────
+        const iOpt = m.data.invalidOption;
+        const ei   = handleEdge('i');
+        const hasStoredI = iOpt && (iOpt.actions?.length > 0 || iOpt.finalDestination != null);
+        if (hasStoredI) {
+          if (iOpt.comment) emit(`;${iOpt.comment}`);
+          for (const action of (iOpt.actions || [])) {
+            const ln = actionLine({ type: action.type, data: action.data });
+            if (ln) emit(`exten => i,${iOpt.actions.indexOf(action) === 0 ? '1' : 'n'},${ln}`);
+          }
+          const ifd = iOpt.finalDestination;
+          if (ifd?.type === 'context') emit(`exten => i,n,Goto(${ifd.contextName},${ifd.ext || 's'},${ifd.pri || '1'})`);
+          else if (ifd?.type === 'queue') emit(`exten => i,n,Goto(${ifd.ctx},${ifd.ext},${ifd.pri})`);
+          else emit(`exten => i,n,Goto(${ctxName},s,${menuLabel})`);
+        } else if (ei) {
           emitDigit('i', findNode(ei.target));
         } else {
           const inv = (m.data.invalidMacro || 'macro-menu-invalid-orpen-home').replace(/^macro-/, '');
           emit(`exten => i,1,Macro(${inv})`);
           emit(`exten => i,n,Goto(${ctxName},s,${menuLabel})`);
         }
-        const et = handleEdge('t');
-        if (et) {
+
+        // ── Opção t (timeout) ────────────────────────────────────────────────
+        const tOpt = m.data.timeoutOption;
+        const et   = handleEdge('t');
+        const hasStoredT = tOpt && (tOpt.actions?.length > 0 || tOpt.finalDestination != null);
+        if (hasStoredT) {
+          if (tOpt.comment) emit(`;${tOpt.comment}`);
+          for (const action of (tOpt.actions || [])) {
+            const ln = actionLine({ type: action.type, data: action.data });
+            if (ln) emit(`exten => t,${tOpt.actions.indexOf(action) === 0 ? '1' : 'n'},${ln}`);
+          }
+          const tfd = tOpt.finalDestination;
+          if (tfd?.type === 'context') emit(`exten => t,n,Goto(${tfd.contextName},${tfd.ext || 's'},${tfd.pri || '1'})`);
+          else if (tfd?.type === 'queue') emit(`exten => t,n,Goto(${tfd.ctx},${tfd.ext},${tfd.pri})`);
+          else emit(`exten => t,n,Goto(${ctxName},s,${menuLabel})`);
+        } else if (et) {
           emitDigit('t', findNode(et.target));
         } else {
           const tmo = (m.data.timeoutMacro || 'macro-menu-timeout-orpen-home').replace(/^macro-/, '');

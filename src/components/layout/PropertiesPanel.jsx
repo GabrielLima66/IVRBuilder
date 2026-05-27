@@ -459,8 +459,10 @@ export default function PropertiesPanel({ node, updateNodeData, deleteNode, togg
             <div style={{ margin: '14px 0 6px', fontSize: 10, color: 'var(--neon-dim)', letterSpacing: 1 }}>
               ▌FALLBACK (i / t)
             </div>
-            <Field d={d} set={set} label="Macro Invalid"  k="invalidMacro" />
-            <Field d={d} set={set} label="Macro Timeout"  k="timeoutMacro" />
+            <Field d={d} set={set} label="Nome macro invalid" k="invalidMacroName" placeholder="ex: menu-invalid-sac-2502" />
+            <Field d={d} set={set} label="Nome macro timeout" k="timeoutMacroName" placeholder="ex: menu-timeout-sac-2502" />
+            <Field d={d} set={set} label="Macro Invalid (legado)"  k="invalidMacro" placeholder="macro-menu-invalid-orpen-home" />
+            <Field d={d} set={set} label="Macro Timeout (legado)"  k="timeoutMacro" placeholder="macro-menu-timeout-orpen-home" />
             <Field d={d} set={set} label="Áudio invalid"  k="invalidSound" />
             <Field d={d} set={set} label="Max tentativas" k="maxRetry" type="number" />
             <Field d={d} set={set} label="Goto após retry" k="retryGoto" />

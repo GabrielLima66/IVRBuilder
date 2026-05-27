@@ -49,13 +49,15 @@ export function buildNode(type, position) {
       return {
         ...base,
         data: {
-          timeStart:   '08:00',
-          timeEnd:     '18:00',
-          weekdays:    ['mon', 'tue', 'wed', 'thu', 'fri'],
-          months:      [],
-          mday:        '',
-          label:       'horario-comercial',
-          trueContext: '',
+          timeStart:      '08:00',
+          timeEnd:        '18:00',
+          weekdays:       ['mon', 'tue', 'wed', 'thu', 'fri'],
+          months:         [],
+          mday:           '',
+          label:          'horario-comercial',
+          trueContext:    '',
+          trueExtension:  '', // extensão de destino quando ≠ 's' (ex: 7310 p/ fila)
+          truePriority:   '', // prioridade de destino quando ≠ '1'
         },
       };
     case 'route':

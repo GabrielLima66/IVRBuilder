@@ -448,7 +448,7 @@ export default function PropertiesPanel({ node, updateNodeData, deleteNode, togg
             </div>
 
             {/* Destino quando condição é VERDADEIRA */}
-            <div style={{ marginBottom: 14 }}>
+            <div style={{ marginBottom: 10 }}>
               <div style={SECTION_HDR}>▌ DESTINO SE VERDADEIRO</div>
               <input
                 className="term-input"
@@ -464,7 +464,7 @@ export default function PropertiesPanel({ node, updateNodeData, deleteNode, togg
                 }}
               />
               <div style={{ fontSize: 9, color: 'var(--neon-dim)', marginTop: 4, lineHeight: 1.5 }}>
-                Contexto para onde o fluxo vai quando a condição <span style={{ color: '#ffcc00' }}>BATER</span> (horário, dias, mês).<br />
+                Contexto para onde o fluxo vai quando a condição <span style={{ color: '#ffcc00' }}>BATER</span>.<br />
                 Quando <span style={{ color: 'var(--neon)' }}>NÃO bater</span>, segue pelo handle de saída ↓.
               </div>
               {!d.trueContext && (
@@ -472,6 +472,32 @@ export default function PropertiesPanel({ node, updateNodeData, deleteNode, togg
                   ⚠ Campo obrigatório — linha será omitida do .conf se vazio.
                 </div>
               )}
+            </div>
+
+            {/* Extensão e prioridade do destino (para destinos não-padrão como fila) */}
+            <div style={{ display: 'flex', gap: 8, marginBottom: 14 }}>
+              <div style={{ flex: 1 }}>
+                <label className="term-label">Extensão destino</label>
+                <input
+                  className="term-input"
+                  value={d.trueExtension || ''}
+                  placeholder="s"
+                  onChange={(e) => set('trueExtension', e.target.value.trim())}
+                />
+              </div>
+              <div style={{ flex: 1 }}>
+                <label className="term-label">Prioridade destino</label>
+                <input
+                  className="term-input"
+                  value={d.truePriority || ''}
+                  placeholder="1"
+                  onChange={(e) => set('truePriority', e.target.value.trim())}
+                />
+              </div>
+            </div>
+            <div style={{ fontSize: 9, color: 'var(--neon-dim)', marginTop: -10, marginBottom: 14, lineHeight: 1.5 }}>
+              Deixe em branco para usar os padrões <code>s,1</code>.<br />
+              Use quando o destino é uma fila, ex: <code>rcx-queue,7310,1</code>.
             </div>
 
             <Field d={d} set={set} label="Label / descrição" k="label" />
@@ -487,7 +513,7 @@ export default function PropertiesPanel({ node, updateNodeData, deleteNode, togg
               </div>
               {d.trueContext ? (
                 <code style={{ color: '#a7ffba', wordBreak: 'break-all' }}>
-                  GotoIfTime({buildTimeExport(d)}?{d.trueContext},s,1)
+                  GotoIfTime({buildTimeExport(d)}?{d.trueContext},{d.trueExtension || 's'},{d.truePriority || '1'})
                 </code>
               ) : (
                 <span style={{ color: '#ff5050', fontStyle: 'italic' }}>

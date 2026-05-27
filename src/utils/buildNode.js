@@ -34,15 +34,24 @@ export function buildNode(type, position) {
       return {
         ...base,
         data: {
-          contextName: 'orpen-ivr-home',
-          greeting: 'boas-vindas',
-          waitExten: 4,
-          digits: [...DEFAULT_DIGITS],
-          invalidMacro: 'macro-menu-invalid-orpen-home',
-          timeoutMacro: 'macro-menu-timeout-orpen-home',
-          maxRetry: 2,
-          retryGoto: 'ivr-encerramento,s,1',
-          invalidSound: 'opcao-invalida',
+          contextName:  'orpen-ivr-home',
+          audioFiles:   ['boas-vindas'],       // array de arquivos de áudio (suporta múltiplos via &)
+          greeting:     'boas-vindas',         // compat legado (= audioFiles[0])
+          waitExten:    4,
+          waitSeconds:  4,
+          digits:       DEFAULT_DIGITS.map((d) => ({
+            ...d,
+            comment:          null,
+            actions:          [],
+            finalDestination: null,
+          })),
+          invalidMacro:  'macro-menu-invalid-orpen-home',
+          timeoutMacro:  'macro-menu-timeout-orpen-home',
+          invalidOption: null,
+          timeoutOption: null,
+          maxRetry:      2,
+          retryGoto:     'ivr-encerramento,s,1',
+          invalidSound:  'opcao-invalida',
         },
       };
     case 'time':
@@ -129,7 +138,7 @@ export function buildNode(type, position) {
     case 'playback':
       return { ...base, data: { filename: 'nome-do-audio', label: '' } };
     case 'background':
-      return { ...base, data: { filename: 'nome-do-audio', label: '' } };
+      return { ...base, data: { filename: 'nome-do-audio', filenames: ['nome-do-audio'], label: '' } };
 
     default:
       return base;

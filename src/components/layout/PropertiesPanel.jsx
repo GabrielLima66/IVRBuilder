@@ -318,54 +318,155 @@ export default function PropertiesPanel({ node, updateNodeData, deleteNode, togg
       )}
 
       {/* ── MENU ── */}
-      {node.type === 'menu' && (
-        <>
-          <Field d={d} set={set} label={fl('Contexto Asterisk', 'contextName')} k="contextName" placeholder="orpen-ivr-home" />
-          <Field d={d} set={set} label={fl('Áudio (Background)', 'greeting')} k="greeting" placeholder="1-bem-vindo" />
-          <Field d={d} set={set} label={fl('WaitExten (seg)', 'waitExten')} k="waitExten" type="number" />
+      {node.type === 'menu' && (() => {
+        // Garante backward-compat: se audioFiles não existe, constrói do greeting
+        const audioFiles = Array.isArray(d.audioFiles) && d.audioFiles.length > 0
+          ? d.audioFiles
+          : [d.greeting || '1-bem-vindo'];
 
-          <div style={{ margin: '14px 0 6px', fontSize: 10, color: 'var(--neon-dim)', letterSpacing: 1 }}>
-            ▌DÍGITOS (DTMF)
-          </div>
-          {(d.digits || []).map((dig, idx) => (
-            <div key={dig.id} style={{ display: 'flex', gap: 6, marginBottom: 6, alignItems: 'center' }}>
-              <input className="term-input" style={{ width: 46, textAlign: 'center' }}
-                value={dig.id}
-                onChange={(e) => {
-                  const nd = [...d.digits];
-                  nd[idx] = { ...dig, id: e.target.value };
-                  set('digits', nd);
-                }}
-              />
-              <input className="term-input" style={{ flex: 1 }}
-                value={dig.label}
-                onChange={(e) => {
-                  const nd = [...d.digits];
-                  nd[idx] = { ...dig, label: e.target.value };
-                  set('digits', nd);
-                }}
-              />
-              <button className="btn-neon btn-danger" style={{ padding: '4px 8px' }}
-                onClick={() => set('digits', d.digits.filter((_, i) => i !== idx))}>
-                ×
-              </button>
+        const setAudioFiles = (newFiles) => {
+          set('audioFiles', newFiles);
+          set('greeting', newFiles[0] || ''); // mantém compat legado
+        };
+
+        // Drag state para reordenação de áudios
+        const dragRef = useRef(null);
+
+        const handleAudioDragStart = (e, idx) => {
+          dragRef.current = idx;
+          e.dataTransfer.effectAllowed = 'move';
+        };
+        const handleAudioDrop = (e, idx) => {
+          e.preventDefault();
+          const from = dragRef.current;
+          if (from == null || from === idx) return;
+          const arr = [...audioFiles];
+          const [item] = arr.splice(from, 1);
+          arr.splice(idx, 0, item);
+          setAudioFiles(arr);
+          dragRef.current = null;
+        };
+
+        return (
+          <>
+            <Field d={d} set={set} label={fl('Contexto Asterisk', 'contextName')} k="contextName" placeholder="orpen-ivr-home" />
+            <Field d={d} set={set} label={fl('WaitExten (seg)', 'waitExten')} k="waitExten" type="number" />
+
+            {/* ── Áudios do menu (Background em sequência) ── */}
+            <div style={{ margin: '14px 0 6px', fontSize: 10, color: 'var(--neon-dim)', letterSpacing: 1 }}>
+              ▌ÁUDIOS DO MENU (em sequência)
             </div>
-          ))}
-          <button className="btn-neon" style={{ width: '100%', padding: '4px 8px', marginTop: 4 }}
-            onClick={() => set('digits', [...(d.digits || []), { id: String((d.digits || []).length + 1), label: 'Nova opção' }])}>
-            + ADICIONAR DÍGITO
-          </button>
+            {audioFiles.map((fname, idx) => (
+              <div
+                key={idx}
+                draggable
+                onDragStart={(e) => handleAudioDragStart(e, idx)}
+                onDragOver={(e) => e.preventDefault()}
+                onDrop={(e) => handleAudioDrop(e, idx)}
+                style={{ display: 'flex', gap: 4, marginBottom: 4, alignItems: 'center', cursor: 'grab' }}
+              >
+                <span style={{ fontSize: 12, color: 'var(--neon-dim)', cursor: 'grab', userSelect: 'none', flexShrink: 0 }}>⠿</span>
+                <span style={{ fontSize: 10, color: 'var(--neon-dim)', width: 14, textAlign: 'right', flexShrink: 0 }}>{idx + 1}.</span>
+                <input
+                  className="term-input"
+                  style={{ flex: 1 }}
+                  value={fname}
+                  placeholder="nome-do-audio"
+                  onChange={(e) => {
+                    const arr = [...audioFiles];
+                    arr[idx] = e.target.value;
+                    setAudioFiles(arr);
+                  }}
+                />
+                <button
+                  type="button"
+                  className="btn-neon btn-danger"
+                  style={{ padding: '3px 7px', flexShrink: 0 }}
+                  aria-label={`Remover áudio ${idx + 1}`}
+                  onClick={() => setAudioFiles(audioFiles.filter((_, i) => i !== idx))}
+                >
+                  ×
+                </button>
+              </div>
+            ))}
+            <button
+              type="button"
+              className="btn-neon"
+              style={{ width: '100%', padding: '4px 8px', marginTop: 2, marginBottom: 8 }}
+              onClick={() => setAudioFiles([...audioFiles, ''])}
+            >
+              + adicionar áudio
+            </button>
 
-          <div style={{ margin: '14px 0 6px', fontSize: 10, color: 'var(--neon-dim)', letterSpacing: 1 }}>
-            ▌FALLBACK (i / t)
-          </div>
-          <Field d={d} set={set} label="Macro Invalid"  k="invalidMacro" />
-          <Field d={d} set={set} label="Macro Timeout"  k="timeoutMacro" />
-          <Field d={d} set={set} label="Áudio invalid"  k="invalidSound" />
-          <Field d={d} set={set} label="Max tentativas" k="maxRetry" type="number" />
-          <Field d={d} set={set} label="Goto após retry" k="retryGoto" />
-        </>
-      )}
+            {/* ── Dígitos DTMF ── */}
+            <div style={{ margin: '14px 0 6px', fontSize: 10, color: 'var(--neon-dim)', letterSpacing: 1 }}>
+              ▌DÍGITOS (DTMF)
+            </div>
+            {(d.digits || []).map((dig, idx) => {
+              const hasActions = Array.isArray(dig.actions) && dig.actions.length > 0;
+              return (
+                <div key={dig.id} style={{ marginBottom: 8 }}>
+                  <div style={{ display: 'flex', gap: 6, alignItems: 'center' }}>
+                    <input className="term-input" style={{ width: 46, textAlign: 'center' }}
+                      value={dig.id}
+                      onChange={(e) => {
+                        const nd = [...d.digits];
+                        nd[idx] = { ...dig, id: e.target.value };
+                        set('digits', nd);
+                      }}
+                    />
+                    <input className="term-input" style={{ flex: 1 }}
+                      value={dig.label}
+                      onChange={(e) => {
+                        const nd = [...d.digits];
+                        nd[idx] = { ...dig, label: e.target.value };
+                        set('digits', nd);
+                      }}
+                    />
+                    <button type="button" className="btn-neon btn-danger" style={{ padding: '4px 8px' }}
+                      aria-label={`Remover dígito ${dig.id}`}
+                      onClick={() => set('digits', d.digits.filter((_, i) => i !== idx))}>
+                      ×
+                    </button>
+                  </div>
+                  {hasActions && (
+                    <div style={{ marginTop: 4, paddingLeft: 52, fontSize: 9, color: 'var(--neon-dim)', lineHeight: 1.7 }}>
+                      {dig.actions.map((a, ai) => (
+                        <div key={ai} style={{ display: 'flex', gap: 4 }}>
+                          <span style={{ color: 'var(--neon)' }}>{ai + 1}.</span>
+                          <span style={{ color: '#fff' }}>{a.type}</span>
+                          <span style={{ opacity: 0.6 }}>
+                            {Object.values(a.data || {}).filter(Boolean).join(' ').slice(0, 40)}
+                          </span>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              );
+            })}
+            <button type="button" className="btn-neon" style={{ width: '100%', padding: '4px 8px', marginTop: 4 }}
+              onClick={() => set('digits', [...(d.digits || []), {
+                id: String((d.digits || []).length + 1),
+                label: 'Nova opção',
+                comment: null,
+                actions: [],
+                finalDestination: null,
+              }])}>
+              + ADICIONAR DÍGITO
+            </button>
+
+            <div style={{ margin: '14px 0 6px', fontSize: 10, color: 'var(--neon-dim)', letterSpacing: 1 }}>
+              ▌FALLBACK (i / t)
+            </div>
+            <Field d={d} set={set} label="Macro Invalid"  k="invalidMacro" />
+            <Field d={d} set={set} label="Macro Timeout"  k="timeoutMacro" />
+            <Field d={d} set={set} label="Áudio invalid"  k="invalidSound" />
+            <Field d={d} set={set} label="Max tentativas" k="maxRetry" type="number" />
+            <Field d={d} set={set} label="Goto após retry" k="retryGoto" />
+          </>
+        );
+      })()}
 
       {/* ── TIME ── */}
       {node.type === 'time' && (() => {

@@ -35,3 +35,6 @@ lerna-debug.log*
 # Claude Code local
 .claude/skills/
 .claude/settings.local.json
+
+# Artefatos de testes (screenshots, relatórios Playwright)
+test-results/

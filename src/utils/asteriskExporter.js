@@ -234,7 +234,9 @@ function generateDialplanFromContexts(nodes, edges, findNode, outEdges, options 
   {
     const standaloneConfig = nodes.find((n) => n.type === 'config' && !n.parentNode);
 
-    if (standaloneConfig) {
+    // _isRealGlobalConfig === false significa que o arquivo não tem bloco de config separado —
+    // o primeiro contexto Asterisk É o entry point. Não emitir [orpen-ivr-XXXX] redundante.
+    if (standaloneConfig && standaloneConfig.data._isRealGlobalConfig !== false) {
       // Encontra o primeiro ContextNode conectado diretamente ao GlobalConfig
       // (ctxNodes já está ordenado por `order`, então `find` retorna o mais prioritário)
       const cfgConnectedCtxNode = ctxNodes.find((ctx) =>
@@ -592,7 +594,19 @@ function generateDialplanFromContexts(nodes, edges, findNode, outEdges, options 
             const logIvrLbl = dig.logIvrLabel || `${ctxName}-op-${dig.id}`;
             emit(`exten => ${dig.id},n,Macro(logIvr,ENTER_CONTEXT,${logIvrLbl})`);
             for (const action of (dig.actions || [])) {
-              const ln = actionLine({ type: action.type, data: action.data });
+              // BUG 5: GotoIfTime (type='time') não está em actionLine — emite diretamente
+              let ln = null;
+              if (action.type === 'time') {
+                const dest = (action.data.trueContext || '').trim();
+                if (dest) {
+                  const spec    = buildTimeExport(action.data);
+                  const dstExt  = (action.data.trueExtension || '').trim() || 's';
+                  const dstPri  = (action.data.truePriority  || '').trim() || '1';
+                  ln = `GotoIfTime(${spec}?${dest},${dstExt},${dstPri})`;
+                }
+              } else {
+                ln = actionLine({ type: action.type, data: action.data });
+              }
               if (ln) emit(`exten => ${dig.id},n,${ln}`);
             }
             const fd = dig.finalDestination;
@@ -627,24 +641,59 @@ function generateDialplanFromContexts(nodes, edges, findNode, outEdges, options 
           emitDigit(dig.id, findNode(e.target));
         }
 
+        // ── Helper: emite actions de uma opção i/t respeitando GotoIfTime ───────
+        const emitOptActions = (opt, extId) => {
+          let pri1 = true;
+          for (const action of (opt.actions || [])) {
+            let ln = null;
+            if (action.type === 'time') {
+              // BUG 5: GotoIfTime dentro de opção DTMF
+              const dest = (action.data.trueContext || '').trim();
+              if (dest) {
+                const spec   = buildTimeExport(action.data);
+                const dstExt = (action.data.trueExtension || '').trim() || 's';
+                const dstPri = (action.data.truePriority  || '').trim() || '1';
+                ln = `GotoIfTime(${spec}?${dest},${dstExt},${dstPri})`;
+              }
+            } else {
+              ln = actionLine({ type: action.type, data: action.data });
+            }
+            if (ln) { emit(`exten => ${extId},${pri1 ? '1' : 'n'},${ln}`); pri1 = false; }
+          }
+          return !pri1; // true se emitiu pelo menos uma linha
+        };
+
+        // ── Helper: emite Goto com aridade correta (BUG 7 i/t + BUG 4) ────────
+        const emitGotoAridade = (fd, extId) => {
+          if (!fd) return false;
+          if (fd.type === 'context') {
+            const argCount = fd.argCount || 3;
+            if (argCount === 1)      emit(`exten => ${extId},n,Goto(${fd.contextName})`);
+            else if (argCount === 2) emit(`exten => ${extId},n,Goto(${fd.contextName},${fd.ext})`);
+            else                     emit(`exten => ${extId},n,Goto(${fd.contextName},${fd.ext || 's'},${fd.pri || '1'})`);
+            return true;
+          }
+          if (fd.type === 'queue') { emit(`exten => ${extId},n,Goto(${fd.ctx},${fd.ext},${fd.pri})`); return true; }
+          if (fd.type === 'dial')  { emit(`exten => ${extId},n,Dial(${fd.target}${fd.timeout ? ',' + fd.timeout : ''})`); return true; }
+          if (fd.type === 'hangup'){ emit(`exten => ${extId},n,Hangup(${fd.causeCode || ''})`); return true; }
+          return false;
+        };
+
         // ── Opção i (inválido) ───────────────────────────────────────────────
         const iOpt = m.data.invalidOption;
         const ei   = handleEdge('i');
         const hasStoredI = iOpt && (iOpt.actions?.length > 0 || iOpt.finalDestination != null);
         if (hasStoredI) {
           if (iOpt.comment) emit(`;${iOpt.comment}`);
-          for (const action of (iOpt.actions || [])) {
-            const ln = actionLine({ type: action.type, data: action.data });
-            if (ln) emit(`exten => i,${iOpt.actions.indexOf(action) === 0 ? '1' : 'n'},${ln}`);
-          }
+          emitOptActions(iOpt, 'i');
           const ifd = iOpt.finalDestination;
-          if (ifd?.type === 'context') emit(`exten => i,n,Goto(${ifd.contextName},${ifd.ext || 's'},${ifd.pri || '1'})`);
-          else if (ifd?.type === 'queue') emit(`exten => i,n,Goto(${ifd.ctx},${ifd.ext},${ifd.pri})`);
-          else emit(`exten => i,n,Goto(${ctxName},s,${menuLabel})`);
+          // BUG 7/4: emite Goto com aridade correta; fallback ao menu se sem destino
+          if (!emitGotoAridade(ifd, 'i')) emit(`exten => i,n,Goto(${ctxName},s,${menuLabel})`);
         } else if (ei) {
           emitDigit('i', findNode(ei.target));
         } else {
-          const inv = (m.data.invalidMacro || 'macro-menu-invalid-orpen-home').replace(/^macro-/, '');
+          // BUG 4: usa invalidMacroName (nome exato sem replace) se disponível
+          const inv = m.data.invalidMacroName || (m.data.invalidMacro || 'macro-menu-invalid-orpen-home').replace(/^macro-/, '');
           emit(`exten => i,1,Macro(${inv})`);
           emit(`exten => i,n,Goto(${ctxName},s,${menuLabel})`);
         }
@@ -655,18 +704,15 @@ function generateDialplanFromContexts(nodes, edges, findNode, outEdges, options 
         const hasStoredT = tOpt && (tOpt.actions?.length > 0 || tOpt.finalDestination != null);
         if (hasStoredT) {
           if (tOpt.comment) emit(`;${tOpt.comment}`);
-          for (const action of (tOpt.actions || [])) {
-            const ln = actionLine({ type: action.type, data: action.data });
-            if (ln) emit(`exten => t,${tOpt.actions.indexOf(action) === 0 ? '1' : 'n'},${ln}`);
-          }
+          emitOptActions(tOpt, 't');
           const tfd = tOpt.finalDestination;
-          if (tfd?.type === 'context') emit(`exten => t,n,Goto(${tfd.contextName},${tfd.ext || 's'},${tfd.pri || '1'})`);
-          else if (tfd?.type === 'queue') emit(`exten => t,n,Goto(${tfd.ctx},${tfd.ext},${tfd.pri})`);
-          else emit(`exten => t,n,Goto(${ctxName},s,${menuLabel})`);
+          // BUG 7/4: emite Goto com aridade correta; fallback ao menu se sem destino
+          if (!emitGotoAridade(tfd, 't')) emit(`exten => t,n,Goto(${ctxName},s,${menuLabel})`);
         } else if (et) {
           emitDigit('t', findNode(et.target));
         } else {
-          const tmo = (m.data.timeoutMacro || 'macro-menu-timeout-orpen-home').replace(/^macro-/, '');
+          // BUG 4: usa timeoutMacroName (nome exato sem replace) se disponível
+          const tmo = m.data.timeoutMacroName || (m.data.timeoutMacro || 'macro-menu-timeout-orpen-home').replace(/^macro-/, '');
           emit(`exten => t,1,Macro(${tmo})`);
           emit(`exten => t,n,Goto(${ctxName},s,${menuLabel})`);
         }

@@ -308,7 +308,29 @@ function appToNodeData(application, args, hasParens = true) {
 // ── Extração de GlobalConfig ─────────────────────────────────────────────────
 
 /**
+ * Returns true only if this context is a real GlobalConfig setup context —
+ * i.e., it explicitly defines SOUND_PATH or AGI_PATH.
+ * Contexts that merely set __IVR without defining paths are real IVR entry
+ * contexts that should be treated as regular ContextNodes.
+ *
+ * @param {import('./confMapper.js').RawContext|null} ctx
+ * @returns {boolean}
+ */
+function isGlobalConfigCtx(ctx) {
+  if (!ctx) return false;
+  for (const ext of ctx.extensions) {
+    const cmd = ext.application.toLowerCase();
+    if (cmd === 'set') {
+      if (/^SOUND_PATH=/i.test(ext.args)) return true;
+      if (/^AGI_PATH=/i.test(ext.args))   return true;
+    }
+  }
+  return false;
+}
+
+/**
  * Scans the first context's extensions for config fields.
+ * Only called when isGlobalConfigCtx() returns true.
  * @param {import('./confMapper.js').RawContext} ctx
  * @returns {GlobalConfig}
  */
@@ -337,6 +359,8 @@ function extractGlobalConfig(ctx) {
 /**
  * Returns true if this node data corresponds to a known global config line
  * that matches the extracted GlobalConfig values.
+ * Only returns true when the globalConfig actually has non-empty values —
+ * prevents false positives when globalConfig is empty (non-GlobalConfig first context).
  * @param {Object} nd
  * @param {GlobalConfig} globalConfig
  * @returns {boolean}
@@ -344,11 +368,11 @@ function extractGlobalConfig(ctx) {
 function isGlobalLine(nd, globalConfig) {
   if (!nd?._configField) return false;
   switch (nd._configField) {
-    case 'ivr':          return nd._configVal === globalConfig.ivr;
-    case 'numberDialed': return true;
-    case 'soundPath':    return nd._configVal === globalConfig.soundPath;
-    case 'agiPath':      return nd._configVal === globalConfig.agiPath;
-    case 'language':     return nd._configVal === globalConfig.language;
+    case 'ivr':          return globalConfig.ivr          !== '' && nd._configVal === globalConfig.ivr;
+    case 'numberDialed': return globalConfig.numberDialed === true;
+    case 'soundPath':    return globalConfig.soundPath    !== '' && nd._configVal === globalConfig.soundPath;
+    case 'agiPath':      return globalConfig.agiPath      !== '' && nd._configVal === globalConfig.agiPath;
+    case 'language':     return globalConfig.language     !== '' && nd._configVal === globalConfig.language;
     default:             return false;
   }
 }
@@ -557,24 +581,45 @@ function resolveContext(rawCtx, globalConfig, isFirstContext) {
       dtmfMap.set(block.digit, block);
     }
 
-    // Absorb WaitExten do FINAL de childNodes
-    let menuWaitExten = 4;
-    if (childNodes.length > 0 && childNodes[childNodes.length - 1].type === 'waitexten') {
-      const removed = childNodes.pop();
-      menuWaitExten = removed.data?.seconds ?? 4;
+    // Absorb WaitExten + Backgrounds do FINAL de childNodes.
+    //
+    // Atenção: alguns .conf têm um `exten => s,n,Hangup` DEPOIS do WaitExten
+    // (como fallthrough da sequência 's' ao final das opções DTMF).
+    // Esse Hangup fica no FINAL de childNodes e deve ser PRESERVADO — apenas
+    // pulamos por cima dele para encontrar o WaitExten abaixo.
+    //
+    // Tipos "terminais de fim de bloco" que podem aparecer depois do WaitExten:
+    const TAIL_SKIP_TYPES = new Set(['hangup', 'return', 'include', 'raw']);
+
+    // Encontra o índice do WaitExten mais próximo do final (ignorando tail-skip)
+    let waitExtenIdx = -1;
+    for (let i = childNodes.length - 1; i >= 0; i--) {
+      const t = childNodes[i].type;
+      if (t === 'waitexten') { waitExtenIdx = i; break; }
+      if (!TAIL_SKIP_TYPES.has(t)) break; // parou em algo que não é skip → não tem WaitExten
     }
 
-    // BUG 7: Absorb apenas backgrounds rotulados como 'menu' (ou sem rótulo)
-    // Backgrounds com outros rótulos (ex: 'bv' para anúncio antes do menu) ficam como standalone
+    let menuWaitExten = 4;
+    if (waitExtenIdx >= 0) {
+      menuWaitExten = childNodes[waitExtenIdx].data?.seconds ?? 4;
+      childNodes.splice(waitExtenIdx, 1); // remove sem alterar posição dos outros
+    }
+
+    // BUG 7: Absorb apenas backgrounds rotulados como 'menu' (ou sem rótulo).
+    // Backgrounds com outros rótulos (ex: 'bv' para anúncio antes do menu) ficam como standalone.
+    // Trabalhamos do final para cima, da mesma forma, ignorando tail-skip types.
     const audioFiles = [];
-    while (childNodes.length > 0 && childNodes[childNodes.length - 1].type === 'background') {
-      const lastBg = childNodes[childNodes.length - 1];
-      const bgLabel = lastBg.data._label || null;
-      // Para quando encontra um background que não é o áudio do menu
-      if (bgLabel !== null && bgLabel !== 'menu') break;
-      const removed = childNodes.pop();
-      const fnames = removed.data?.filenames || [removed.data?.filename || ''];
+    for (let i = childNodes.length - 1; i >= 0; i--) {
+      const node = childNodes[i];
+      if (node.type !== 'background') {
+        if (TAIL_SKIP_TYPES.has(node.type)) continue; // pula hangup/include no final
+        break;
+      }
+      const bgLabel = node.data._label || null;
+      if (bgLabel !== null && bgLabel !== 'menu') break; // background standalone — para
+      const fnames = node.data?.filenames || [node.data?.filename || ''];
       audioFiles.unshift(...fnames);
+      childNodes.splice(i, 1); // remove o background absorvido
     }
     if (audioFiles.length === 0) audioFiles.push('boas-vindas');
 
@@ -639,20 +684,22 @@ function resolveContext(rawCtx, globalConfig, isFirstContext) {
     childNodes.push({
       type: 'menu',
       data: {
-        contextName:   rawCtx.name,
+        contextName:      rawCtx.name,
         audioFiles,
-        greeting:      audioFiles[0] || 'boas-vindas', // compat legado
-        waitExten:     menuWaitExten,
-        waitSeconds:   menuWaitExten,
-        digits:        menuDigits,
+        greeting:         audioFiles[0] || 'boas-vindas', // compat legado
+        waitExten:        menuWaitExten,
+        waitSeconds:      menuWaitExten,
+        digits:           menuDigits,
         invalidMacro,
         timeoutMacro,
+        invalidMacroName: invalidMacro,  // nome exato preservado (sem replace)
+        timeoutMacroName: timeoutMacro,  // nome exato preservado (sem replace)
         invalidOption,
         timeoutOption,
-        maxRetry:      2,
-        retryGoto:     '',
-        invalidSound:  '',
-        _dtmfGotos:    dtmfGotos,
+        maxRetry:         2,
+        retryGoto:        '',
+        invalidSound:     '',
+        _dtmfGotos:       dtmfGotos,
       },
       _menuNodeMarker: true,
     });
@@ -751,8 +798,13 @@ export function resolve(rawContexts) {
     };
   }
 
-  // Extract GlobalConfig from the first context
-  const globalConfig = extractGlobalConfig(rawContexts[0]);
+  // Detect whether the first context is a real GlobalConfig (defines SOUND_PATH or AGI_PATH).
+  // Contexts that only set __IVR (like [ura-principal-sac]) are regular IVR entry contexts,
+  // not setup-only blocks — they must NOT be treated as GlobalConfig.
+  const isRealGlobalConfig = isGlobalConfigCtx(rawContexts[0]);
+  const globalConfig = isRealGlobalConfig
+    ? extractGlobalConfig(rawContexts[0])
+    : { ivr: '', soundPath: '', agiPath: '', language: '', comment: '', numberDialed: false, logIvr: false };
 
   /** @type {ResolvedContext[]} */
   const resolvedContexts = [];
@@ -768,7 +820,9 @@ export function resolve(rawContexts) {
   for (let i = 0; i < rawContexts.length; i++) {
     const rawCtx = rawContexts[i];
     const isMacro = /^macro-/i.test(rawCtx.name);
-    const { childNodes, dtmfGotos, directives } = resolveContext(rawCtx, globalConfig, i === 0);
+    // isFirstContext: only true when the first context IS a real GlobalConfig setup block.
+    // Otherwise all contexts are treated as regular ContextNodes (no lines skipped).
+    const { childNodes, dtmfGotos, directives } = resolveContext(rawCtx, globalConfig, isRealGlobalConfig && i === 0);
 
     // Count stats
     for (const n of childNodes) {
@@ -812,6 +866,7 @@ export function resolve(rawContexts) {
 
   return {
     globalConfig,
+    isRealGlobalConfig, // true when first context defines SOUND_PATH/AGI_PATH
     suggestedName,
     contexts: resolvedContexts,
     crossRefs,

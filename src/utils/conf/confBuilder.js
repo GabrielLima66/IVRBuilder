@@ -39,7 +39,7 @@ function edgeAppearance(color) {
  * @returns {{ nodes: Object[], edges: Object[] }}
  */
 export function build(graph, layout) {
-  const { globalConfig, contexts, crossRefs } = graph;
+  const { globalConfig, contexts, crossRefs, isRealGlobalConfig } = graph;
   const { configPosition, contextLayouts }    = layout;
 
   /** @type {Object[]} */
@@ -70,14 +70,17 @@ export function build(graph, layout) {
     type:     'config',
     position: configPosition,
     data: {
-      ivr:          globalConfig.ivr          || '0000',
-      soundPath:    globalConfig.soundPath     || '',
-      agiPath:      globalConfig.agiPath       || '',
-      language:     globalConfig.language      || 'pt_BR',
-      comment:      globalConfig.comment       || '',
-      numberDialed: globalConfig.numberDialed  || false,
-      logIvr:       globalConfig.logIvr        || false,
-      customerAgi:  false,
+      ivr:                 globalConfig.ivr          || '0000',
+      soundPath:           globalConfig.soundPath     || '',
+      agiPath:             globalConfig.agiPath       || '',
+      language:            globalConfig.language      || 'pt_BR',
+      comment:             globalConfig.comment       || '',
+      numberDialed:        globalConfig.numberDialed  || false,
+      logIvr:              globalConfig.logIvr        || false,
+      customerAgi:         false,
+      // false = primeiro contexto é real contexto IVR, não bloco de config.
+      // O compilador usa isso para suprimir a emissão do bloco [orpen-ivr-XXXX].
+      _isRealGlobalConfig: isRealGlobalConfig !== false,
     },
   });
 
@@ -202,7 +205,10 @@ export function build(graph, layout) {
   }
 
   // ── Edge GlobalConfig → first ContextNode ─────────────────────────────────
-  if (firstCtxId) {
+  // Criada apenas quando o primeiro contexto era realmente um GlobalConfig (tem SOUND_PATH/AGI_PATH).
+  // Quando o arquivo não tem bloco de config separado (ex: [ura-principal-sac] é o próprio entry),
+  // não criamos a edge — o compilador não deve emitir [orpen-ivr-XXXX] redundante.
+  if (firstCtxId && isRealGlobalConfig !== false) {
     edges.push({
       id:           `e-cfg-${firstCtxId}`,
       source:       configId,

@@ -68,9 +68,10 @@ function toCmdFull(application, args) {
  *
  * @param {string} application
  * @param {string} args
+ * @param {boolean} [hasParens=true]  se a chamada original tinha parênteses (ex: bare Hangup sem ())
  * @returns {Object|null}
  */
-function appToNodeData(application, args) {
+function appToNodeData(application, args, hasParens = true) {
   const cmd    = application.toLowerCase();
   const params = args;
 
@@ -79,7 +80,7 @@ function appToNodeData(application, args) {
       return { type: 'answer', data: {} };
 
     case 'hangup':
-      return { type: 'hangup', data: { causeCode: params || '' } };
+      return { type: 'hangup', data: { causeCode: params || '', hasParens } };
 
     case 'wait': {
       const s = parseFloat(params) || 1;
@@ -185,8 +186,10 @@ function appToNodeData(application, args) {
 
     case 'agi': {
       const parts  = params.split(',');
-      const script = (parts[0] || '').split('/').pop();
-      return { type: 'agi', data: { script, params: parts.slice(1).filter(Boolean), label: '' } };
+      // BUG 1: preserva o path completo SEM adicionar ${AGI_PATH}/ e SEM strip de prefixo
+      const script = (parts[0] || '').trim();
+      // BUG 1: preserva capitalização original da aplicação (Agi vs AGI)
+      return { type: 'agi', data: { script, originalCasing: application, params: parts.slice(1).filter(Boolean), label: '' } };
     }
 
     case 'macro': {
@@ -395,6 +398,7 @@ function isTerminalApp(application) {
 
 /**
  * Constrói um objeto `finalDestination` a partir da linha terminal de uma opção DTMF.
+ * BUG 4: preserva aridade original do Goto (argCount).
  * @param {string} application
  * @param {string} args
  * @returns {{ type: string, [key: string]: unknown }|null}
@@ -403,14 +407,15 @@ function buildFinalDest(application, args) {
   const cmd = application.toLowerCase();
   if (cmd === 'goto') {
     const parts = args.split(',');
+    const argCount = parts.length;        // BUG 4: preserva aridade (1, 2 ou 3)
     const ctx = (parts[0] || '').trim();
-    const ext = (parts[1] || 's').trim();
-    const pri = (parts[2] || '1').trim();
+    const ext = argCount >= 2 ? (parts[1] || '').trim() : '';
+    const pri = argCount >= 3 ? (parts[2] || '').trim() : '';
     // Heurística fila: contexto contém "queue" ou "fila" + extensão numérica de 3-6 dígitos
-    if (/queue|fila/i.test(ctx) && /^\d{3,6}$/.test(ext)) {
+    if (argCount >= 2 && /queue|fila/i.test(ctx) && /^\d{3,6}$/.test(ext)) {
       return { type: 'queue', ctx, ext, pri };
     }
-    return { type: 'context', contextName: ctx, ext, pri };
+    return { type: 'context', contextName: ctx, ext, pri, argCount };
   }
   if (cmd === 'dial') {
     const parts = args.split(',');
@@ -425,13 +430,15 @@ function buildFinalDest(application, args) {
 /**
  * Classifica as linhas de um bloco DTMF em `actions[]` + `finalDestination`.
  * Boilerplate ignorado: Macro(sayDigit,...) e Macro(logIvr,ENTER_CONTEXT,...).
+ * BUG 2: captura o label original do Macro(logIvr,ENTER_CONTEXT,label).
  *
  * @param {import('../conf/confMapper.js').RawDtmfLine[]} lines
- * @returns {{ actions: Array<{type:string, data:Object}>, finalDest: Object|null }}
+ * @returns {{ actions: Array<{type:string, data:Object}>, finalDest: Object|null, logIvrLabel: string|null }}
  */
 function processOptionLines(lines) {
   const actions = [];
   let finalDest = null;
+  let logIvrLabel = null;   // BUG 2
 
   for (const line of lines) {
     const cmd = line.application.toLowerCase();
@@ -440,8 +447,12 @@ function processOptionLines(lines) {
     if (cmd === 'macro') {
       const macroName = line.args.split(',')[0].toLowerCase().trim();
       if (macroName === 'saydigit' || macroName === 'saydigits') continue;
-      // Ignora Macro(logIvr,ENTER_CONTEXT,...) (logIvr com contexto)
-      if (macroName === 'logivr' && /ENTER_CONTEXT/i.test(line.args)) continue;
+      // BUG 2: ignora Macro(logIvr,ENTER_CONTEXT,...) mas salva o label original
+      if (macroName === 'logivr' && /ENTER_CONTEXT/i.test(line.args)) {
+        const logIvrParts = line.args.split(',');
+        if (logIvrParts.length >= 3) logIvrLabel = logIvrParts[2].trim() || null;
+        continue;
+      }
     }
 
     // Linha terminal: termina a sequência de ações da opção
@@ -451,7 +462,7 @@ function processOptionLines(lines) {
     }
 
     // Linha de ação intermediária
-    const nd = appToNodeData(line.application, line.args);
+    const nd = appToNodeData(line.application, line.args, line.hasParens ?? true);
     if (!nd) continue;
 
     if (nd._configField) {
@@ -462,7 +473,7 @@ function processOptionLines(lines) {
     }
   }
 
-  return { actions, finalDest };
+  return { actions, finalDest, logIvrLabel };
 }
 
 // ── Résolution d'un contexte ─────────────────────────────────────────────────
@@ -492,14 +503,13 @@ function resolveContext(rawCtx, globalConfig, isFirstContext) {
 
   // ── 2. Process sequential 's' extensions ────────────────────────────────
   for (const ext of rawCtx.extensions) {
-    const nd = appToNodeData(ext.application, ext.args);
+    const nd = appToNodeData(ext.application, ext.args, ext.hasParens ?? true);
     if (!nd) continue;
 
     // Skip global config lines that match the extracted GlobalConfig
     if (nd._configField) {
       if (isGlobalLine(nd, globalConfig)) continue;
       // Different value → emit as explicit Set node
-      const assignment = `${ext.application.replace(/^Set$/i, '')}(${ext.args})`.replace(/^Set\(/i, '').replace(/\)$/, '');
       childNodes.push({ type: 'set', data: { assignment: ext.args, label: '' } });
       continue;
     }
@@ -519,7 +529,11 @@ function resolveContext(rawCtx, globalConfig, isFirstContext) {
       continue;
     }
 
-    childNodes.push({ type: nd.type, data: nd.data || {} });
+    // BUG 7: preserva o label da extensão no data do nó (usado para distinguir
+    // Background standalone de Background de menu no passo 4)
+    const nodeData = { ...nd.data };
+    if (ext.label) nodeData._label = ext.label;
+    childNodes.push({ type: nd.type, data: nodeData });
   }
 
   // ── 3. Process commented extensions ────────────────────────────────────
@@ -550,9 +564,14 @@ function resolveContext(rawCtx, globalConfig, isFirstContext) {
       menuWaitExten = removed.data?.seconds ?? 4;
     }
 
-    // Absorb TODOS os Background do FINAL de childNodes (múltiplos arquivos via & ou nós separados)
+    // BUG 7: Absorb apenas backgrounds rotulados como 'menu' (ou sem rótulo)
+    // Backgrounds com outros rótulos (ex: 'bv' para anúncio antes do menu) ficam como standalone
     const audioFiles = [];
     while (childNodes.length > 0 && childNodes[childNodes.length - 1].type === 'background') {
+      const lastBg = childNodes[childNodes.length - 1];
+      const bgLabel = lastBg.data._label || null;
+      // Para quando encontra um background que não é o áudio do menu
+      if (bgLabel !== null && bgLabel !== 'menu') break;
       const removed = childNodes.pop();
       const fnames = removed.data?.filenames || [removed.data?.filename || ''];
       audioFiles.unshift(...fnames);
@@ -566,7 +585,7 @@ function resolveContext(rawCtx, globalConfig, isFirstContext) {
     for (const dig of DIGIT_ORDER) {
       if (!dtmfMap.has(dig)) continue;
       const block = dtmfMap.get(dig);
-      const { actions, finalDest } = processOptionLines(block.lines);
+      const { actions, finalDest, logIvrLabel } = processOptionLines(block.lines); // BUG 2
 
       if (finalDest?.type === 'context') dtmfGotos[dig] = finalDest.contextName;
       else if (finalDest?.type === 'queue') dtmfGotos[dig] = finalDest.ctx;
@@ -577,6 +596,7 @@ function resolveContext(rawCtx, globalConfig, isFirstContext) {
         comment:          block.comment || null,
         actions,
         finalDestination: finalDest,
+        logIvrLabel:      logIvrLabel || null,   // BUG 2: label original do Macro(logIvr,...)
       });
     }
 
@@ -589,12 +609,12 @@ function resolveContext(rawCtx, globalConfig, isFirstContext) {
     for (const ext of ['i', 't']) {
       if (!dtmfMap.has(ext)) continue;
       const block = dtmfMap.get(ext);
-      const { actions, finalDest } = processOptionLines(block.lines);
+      const { actions, finalDest, logIvrLabel } = processOptionLines(block.lines); // BUG 2
 
       if (finalDest?.type === 'context') dtmfGotos[ext] = finalDest.contextName;
       else if (finalDest?.type === 'queue') dtmfGotos[ext] = finalDest.ctx;
 
-      const optObj = { comment: block.comment || null, actions, finalDestination: finalDest };
+      const optObj = { comment: block.comment || null, actions, finalDestination: finalDest, logIvrLabel: logIvrLabel || null };
 
       if (ext === 'i') {
         invalidOption = optObj;

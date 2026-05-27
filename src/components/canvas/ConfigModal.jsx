@@ -199,7 +199,9 @@ const ColorThemeRow = memo(function ColorThemeRow() {
               onClick={() => setConfig('colorTheme', key)}
               style={{
                 background:   isActive ? accent : 'transparent',
-                border:       `1px solid ${isActive ? accent : 'var(--line)'}`,
+                borderTop:    `1px solid ${isActive ? accent : 'var(--line)'}`,
+                borderBottom: `1px solid ${isActive ? accent : 'var(--line)'}`,
+                borderLeft:   `1px solid ${isActive ? accent : 'var(--line)'}`,
                 borderRight:  borderRight !== undefined ? borderRight : `1px solid ${isActive ? accent : 'var(--line)'}`,
                 color:        isActive ? '#000' : 'var(--neon-dim)',
                 opacity:      isActive ? 1 : 0.65,

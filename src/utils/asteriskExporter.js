@@ -213,6 +213,9 @@ function generateDialplanFromContexts(nodes, edges, findNode, outEdges, options 
     return chain;
   }
 
+  // Set de contextos que serão inline no bloco GlobalConfig (BUG 8: não exportados separadamente)
+  const absorbedCtxIds = new Set();
+
   // ── Bloco do GlobalConfigNode ────────────────────────────────────────────────
   //
   // O GlobalConfigNode SEMPRE gera seu próprio bloco [orpen-ivr-{IVR}], separado
@@ -243,7 +246,7 @@ function generateDialplanFromContexts(nodes, edges, findNode, outEdges, options 
 
       if (cfgConnectedCtxNode) {
         // ── CASO A: GlobalConfigNode → ContextNode ───────────────────────────
-        // Gera bloco próprio com config + Goto automático + Hangup + include.
+        const firstCtxName = cfgConnectedCtxNode.data.contextName || 'orpen-ivr-home';
 
         emit(`[${ENTRY_CTX}]`);
 
@@ -256,12 +259,47 @@ function generateDialplanFromContexts(nodes, edges, findNode, outEdges, options 
           cfgLineIdx++;
         }
 
-        // Goto automático para o primeiro ContextNode conectado
-        const firstCtxName = cfgConnectedCtxNode.data.contextName || 'orpen-ivr-home';
-        const gotoPri = cfgLineIdx === 0 ? '1' : 'n';
-        emit(`exten => s,${gotoPri},Goto(${firstCtxName},s,1)`);
-        emit(`exten => s,n,Hangup()`);
-        emit(`include => hangup-ivr`);
+        if (ENTRY_CTX !== firstCtxName) {
+          // Caso normal: GlobalConfig aponta para um ContextNode diferente
+          const gotoPri = cfgLineIdx === 0 ? '1' : 'n';
+          emit(`exten => s,${gotoPri},Goto(${firstCtxName},s,1)`);
+          emit(`exten => s,n,Hangup()`);
+          emit(`include => hangup-ivr`);
+        } else {
+          // BUG 8: o ContextNode conectado TEM O MESMO NOME do bloco de entrada
+          // (acontece quando o .conf original usa [orpen-ivr-XXXX] como contexto de IVR real)
+          // Inlineia os filhos desse ContextNode aqui e suprime o bloco duplicado.
+          absorbedCtxIds.add(cfgConnectedCtxNode.id);
+          const entryChildren  = nodes.filter((n) => n.parentNode === cfgConnectedCtxNode.id);
+          const entryChain     = getExecChain(cfgConnectedCtxNode, entryChildren);
+          const entryIncludes  = [];
+          const entryChainClean = entryChain.filter((c) => {
+            if (c.type === 'include') {
+              const ln = actionLine(c);
+              if (ln) entryIncludes.push(ln);
+              return false;
+            }
+            return true;
+          });
+          for (const c of entryChainClean) {
+            const lns = linesForChild(c);
+            const nodeLbl = ACTION_META[c.type]?.supportsLabel ? (c.data.label || '').trim() : '';
+            lns.forEach((l, i) => {
+              if (!l) return;
+              if (/^include\s*=>/i.test(l) || l.startsWith(';')) {
+                emit(l);
+              } else {
+                const pri = cfgLineIdx === 0 ? '1' : 'n';
+                const lbl = i === 0 && nodeLbl ? `(${nodeLbl})` : '';
+                emit(`exten => s,${pri}${lbl},${l}`);
+                cfgLineIdx++;
+              }
+            });
+          }
+          for (const incl of entryIncludes) {
+            emit(incl);
+          }
+        }
         sep();
 
       } else {
@@ -394,6 +432,9 @@ function generateDialplanFromContexts(nodes, edges, findNode, outEdges, options 
 
   // ── Itera contextos ──────────────────────────────────────────────────────
   for (const ctx of ctxNodes) {
+    // BUG 8: pula contextos já emitidos inline no bloco GlobalConfig
+    if (absorbedCtxIds.has(ctx.id)) continue;
+
     const ctxName  = ctx.data.contextName || 'orpen-ivr-contexto';
     const children = nodes.filter((n) => n.parentNode === ctx.id);
     const chainRaw = getExecChain(ctx, children);
@@ -547,14 +588,24 @@ function generateDialplanFromContexts(nodes, edges, findNode, outEdges, options 
           if (hasStoredData) {
             if (dig.comment) emit(`;${dig.comment}`);
             emit(`exten => ${dig.id},1,Macro(sayDigit,\${EXTEN})`);
-            emit(`exten => ${dig.id},n,Macro(logIvr,ENTER_CONTEXT,${ctxName}-op-${dig.id})`);
+            // BUG 2: usa logIvrLabel original preservado no import; gera um padrão se ausente
+            const logIvrLbl = dig.logIvrLabel || `${ctxName}-op-${dig.id}`;
+            emit(`exten => ${dig.id},n,Macro(logIvr,ENTER_CONTEXT,${logIvrLbl})`);
             for (const action of (dig.actions || [])) {
               const ln = actionLine({ type: action.type, data: action.data });
               if (ln) emit(`exten => ${dig.id},n,${ln}`);
             }
             const fd = dig.finalDestination;
             if (fd?.type === 'context') {
-              emit(`exten => ${dig.id},n,Goto(${fd.contextName},${fd.ext || 's'},${fd.pri || '1'})`);
+              // BUG 4: preserva aridade original do Goto
+              const argCount = fd.argCount || 3;
+              if (argCount === 1) {
+                emit(`exten => ${dig.id},n,Goto(${fd.contextName})`);
+              } else if (argCount === 2) {
+                emit(`exten => ${dig.id},n,Goto(${fd.contextName},${fd.ext})`);
+              } else {
+                emit(`exten => ${dig.id},n,Goto(${fd.contextName},${fd.ext || 's'},${fd.pri || '1'})`);
+              }
             } else if (fd?.type === 'queue') {
               emit(`exten => ${dig.id},n,Goto(${fd.ctx},${fd.ext},${fd.pri})`);
             } else if (fd?.type === 'dial') {

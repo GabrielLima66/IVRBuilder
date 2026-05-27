@@ -232,18 +232,27 @@ export function actionLine(n) {
     }
     case 'return':
       return d.value ? `Return(${d.value})` : `Return()`;
-    case 'hangup':
-      return d.causeCode ? `Hangup(${d.causeCode})` : `Hangup()`;
+    case 'hangup': {
+      // BUG 5: preserva forma com ou sem parênteses (hasParens detectado no parser)
+      const hasP = d.hasParens !== false; // default true para nós criados manualmente
+      if (d.causeCode) return `Hangup(${d.causeCode})`;
+      return hasP ? `Hangup()` : `Hangup`;
+    }
     case 'gotoif': {
       const trueDest  = (d.trueDestination  || '').trim();
       const falseDest = (d.falseDestination || '').trim();
-      return `GotoIf($[${d.expression || ''}]?${trueDest}:${falseDest})`;
+      // BUG 6: omite ":" quando não há destino_falso — evita GotoIf(...?dest:) inválido
+      const falseStr  = falseDest ? `:${falseDest}` : '';
+      return `GotoIf($[${d.expression || ''}]?${trueDest}${falseStr})`;
     }
     case 'set':
       return `Set(${d.assignment || ''})`;
     case 'agi': {
-      const params = resolveParams(d.params, d.args);
-      return `AGI(\${AGI_PATH}/${d.script || ''}${params ? ',' + params : ''})`;
+      // BUG 1: usa originalCasing (preservado no import) ou 'Agi' como padrão
+      // BUG 1: emite o script LITERALMENTE — sem prefixo ${AGI_PATH}/
+      const params  = resolveParams(d.params, d.args);
+      const casing  = d.originalCasing || 'Agi';
+      return `${casing}(${d.script || ''}${params ? ',' + params : ''})`;
     }
     case 'macro': {
       const params = resolveParams(d.params, d.args);

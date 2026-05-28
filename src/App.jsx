@@ -18,7 +18,8 @@ import { buildNode } from './utils/buildNode';
 import { generateDialplan } from './utils/asteriskExporter';
 import { ACTION_META } from './utils/actionMeta';
 import { uid } from './utils/common';
-import { arrangeContextNodes } from './utils/arrangeContextNodes';
+import { arrangeContextNodes, ARRANGE_GAP_H } from './utils/arrangeContextNodes';
+import { CTX_MIN_W } from './utils/contextDimensions';
 import { generateUniqueContextName } from './utils/contextUtils';
 import { applyContextRename } from './utils/renamePropagator';
 import { isSemanticHandle } from './utils/edgeUtils';
@@ -41,10 +42,27 @@ import AlignmentGuides from './components/canvas/AlignmentGuides';
 import ContextOrderOverlay from './components/canvas/ContextOrderOverlay';
 import ExportOrderPanel from './components/canvas/ExportOrderPanel';
 
+/** Verifica sobreposição entre dois retângulos alinhados aos eixos */
+function rectsOverlap(ax, ay, aw, ah, bx, by, bw, bh) {
+  return ax < bx + bw && ax + aw > bx && ay < by + bh && ay + ah > by;
+}
+
+/** Retorna {w, h} de um nó — RF medido tem prioridade sobre style */
+function nodeSz(n) {
+  return {
+    w: n.width  || n.style?.width  || CTX_MIN_W,
+    h: n.height || n.style?.height || 60,
+  };
+}
+
 // Ambos os tipos usam EdgeWithWaypoints:
 // 'floating' — floating handles + offset elástico + desvio automático de obstáculos
 // 'smoothstep' — posições fixas de handle (ctx-start, d-*) sem offset
 const edgeTypes = { floating: EdgeWithWaypoints, smoothstep: EdgeWithWaypoints };
+
+// Mapeamento estático de estilo de edge configurável → tipo do React Flow.
+// Hoisted fora do componente: objeto estático criado uma única vez.
+const EDGE_STYLE_MAP = { smooth: 'smoothstep', straight: 'straight', step: 'step' };
 
 // ─────────────────────────────────────────────────────────────────────────────
 // CANVAS — estado global do grafo + lógica de DnD / reparenting
@@ -125,6 +143,46 @@ function Canvas({ initialFlow, projectName, projectCreatedAt, currentProjectId, 
 
   // Timer de debounce para remoção da transition de arranjo
   const arrangeTimerRef = useRef(null);
+  // Timer para remoção da transition de resolução de colisão
+  const collideTimerRef = useRef(null);
+  // ID do ContextNode sob o drag (mostra borda laranja nele)
+  const [dragConflictId, setDragConflictId] = useState(null);
+
+  // ── Auto-arranjo horizontal de ContextNodes ──────────────────────────────
+  // Declarado cedo para estar disponível em todos os callbacks que o referenciam
+  // nas suas listas de deps (onDrop, deleteNode, patchNodeData, expandDigitToContext).
+  // Depende apenas de setNodes (estável) e arrangeTimerRef (ref) — sem deps voláteis.
+  const runAutoArrange = useCallback((forceAll = false) => {
+    setNodes((ns) => {
+      const updates = arrangeContextNodes(ns, { forceAll });
+      if (!updates.length) return ns;
+      const posMap = new Map(updates.map((u) => [u.id, u.position]));
+      return ns.map((n) => {
+        const pos = posMap.get(n.id);
+        if (!pos) return n;
+        return {
+          ...n,
+          position: pos,
+          style:    { ...(n.style || {}), transition: 'transform 300ms ease' },
+          data:     forceAll
+            ? { ...n.data, manuallyPositioned: false }
+            : n.data,
+        };
+      });
+    });
+
+    // Remove a transition após a animação para não interferir com drags futuros
+    if (arrangeTimerRef.current) clearTimeout(arrangeTimerRef.current);
+    arrangeTimerRef.current = setTimeout(() => {
+      setNodes((ns) =>
+        ns.map((n) => {
+          if (n.type !== 'context' || !n.style?.transition) return n;
+          const { transition, ...restStyle } = n.style;
+          return { ...n, style: Object.keys(restStyle).length ? restStyle : undefined };
+        })
+      );
+    }, 350);
+  }, [setNodes]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // ── Refs sincronizadas — leitura estável do estado atual sem dep em callbacks ─
   // Permite que onConnect, handleEdgesChange, computeActiveFromNode etc. leiam o
@@ -514,15 +572,57 @@ function Canvas({ initialFlow, projectName, projectCreatedAt, currentProjectId, 
       })
     );
 
-    // ContextNode arrastado manualmente → marca como posicionado pelo usuário
+    // ContextNode arrastado: resolve colisão se necessário, marca manuallyPositioned
     if (draggedNode.type === 'context') {
-      setNodes((ns) =>
-        ns.map((n) =>
-          n.id === draggedNode.id
-            ? { ...n, data: { ...n.data, manuallyPositioned: true } }
-            : n
-        )
-      );
+      setDragConflictId(null);
+
+      const { w: dw, h: dh } = nodeSz(draggedNode);
+
+      // Procura ContextNode colidindo com a posição final do nó arrastado
+      const conflictCtx = nodesRef.current.find((n) => {
+        if (n.type !== 'context' || n.id === draggedNode.id || n.parentNode) return false;
+        const { w: nw, h: nh } = nodeSz(n);
+        return rectsOverlap(
+          draggedNode.position.x, draggedNode.position.y, dw, dh,
+          n.position.x,           n.position.y,           nw, nh
+        );
+      });
+
+      if (conflictCtx) {
+        // Determina lado: o nó arrastado foi para a direita ou esquerda do centro do conflito
+        const { w: cw } = nodeSz(conflictCtx);
+        const conflictCenterX = conflictCtx.position.x + cw / 2;
+        const draggedCenterX  = draggedNode.position.x + dw / 2;
+        const goRight         = draggedCenterX >= conflictCenterX;
+        const newX            = goRight
+          ? conflictCtx.position.x + cw + ARRANGE_GAP_H
+          : conflictCtx.position.x - dw - ARRANGE_GAP_H;
+
+        setNodes((ns) =>
+          ns.map((n) => n.id !== draggedNode.id ? n : {
+            ...n,
+            position: { x: newX, y: draggedNode.position.y },
+            style:    { ...(n.style || {}), transition: 'transform 200ms ease' },
+            data:     { ...n.data, manuallyPositioned: true },
+          })
+        );
+
+        if (collideTimerRef.current) clearTimeout(collideTimerRef.current);
+        collideTimerRef.current = setTimeout(() => {
+          setNodes((ns) => ns.map((n) => {
+            if (n.id !== draggedNode.id || !n.style?.transition) return n;
+            const { transition, ...rest } = n.style;
+            return { ...n, style: Object.keys(rest).length ? rest : undefined };
+          }));
+        }, 250);
+      } else {
+        setNodes((ns) =>
+          ns.map((n) => n.id !== draggedNode.id ? n : {
+            ...n,
+            data: { ...n.data, manuallyPositioned: true },
+          })
+        );
+      }
       return;
     }
 
@@ -713,6 +813,22 @@ function Canvas({ initialFlow, projectName, projectCreatedAt, currentProjectId, 
     onNodeDragStop: alignDragStop,
   } = useAlignmentGuides(nodes, setNodes, config.smartGuides);
 
+  // Wrapper de onNodeDrag: alignment guides + detecção visual de colisão de ContextNodes
+  const handleNodeDrag = useCallback((event, draggedNode) => {
+    onNodeDrag(event, draggedNode); // smart guides existentes
+    if (draggedNode.type !== 'context') return;
+    const { w: dw, h: dh } = nodeSz(draggedNode);
+    const conflict = nodesRef.current.find((n) => {
+      if (n.type !== 'context' || n.id === draggedNode.id || n.parentNode) return false;
+      const { w: nw, h: nh } = nodeSz(n);
+      return rectsOverlap(
+        draggedNode.position.x, draggedNode.position.y, dw, dh,
+        n.position.x,           n.position.y,           nw, nh
+      );
+    });
+    setDragConflictId(conflict?.id ?? null);
+  }, [onNodeDrag]); // nodesRef é estável — sem dep volátil
+
   // mousePos e seus callbacks foram movidos para dentro do ContextOrderOverlay.
   // O componente lê o mouse diretamente via wrapperRef, evitando que o Canvas
   // todo re-renderize a cada movimento do mouse.
@@ -768,41 +884,6 @@ function Canvas({ initialFlow, projectName, projectCreatedAt, currentProjectId, 
   const onDragReorder = useCallback((ctxId, nodeId, targetIndex) => {
     onMoveTo(ctxId, nodeId, targetIndex);
   }, [onMoveTo]);
-
-  // ── Auto-arranjo horizontal de ContextNodes ──────────────────────────────
-  // Aplica posições calculadas por arrangeContextNodes() com animação suave.
-  // forceAll=true: ignora data.manuallyPositioned (botão "⟳ ORGANIZAR").
-  const runAutoArrange = useCallback((forceAll = false) => {
-    setNodes((ns) => {
-      const updates = arrangeContextNodes(ns, { forceAll });
-      if (!updates.length) return ns;
-      const posMap = new Map(updates.map((u) => [u.id, u.position]));
-      return ns.map((n) => {
-        const pos = posMap.get(n.id);
-        if (!pos) return n;
-        return {
-          ...n,
-          position: pos,
-          style:    { ...(n.style || {}), transition: 'transform 300ms ease' },
-          data:     forceAll
-            ? { ...n.data, manuallyPositioned: false }
-            : n.data,
-        };
-      });
-    });
-
-    // Remove a transition após a animação para não interferir com drags futuros
-    if (arrangeTimerRef.current) clearTimeout(arrangeTimerRef.current);
-    arrangeTimerRef.current = setTimeout(() => {
-      setNodes((ns) =>
-        ns.map((n) => {
-          if (n.type !== 'context' || !n.style?.transition) return n;
-          const { transition, ...restStyle } = n.style;
-          return { ...n, style: Object.keys(restStyle).length ? restStyle : undefined };
-        })
-      );
-    }, 350);
-  }, [setNodes]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // ── Expandir opção DTMF para ContextNode independente ────────────────────
   const expandDigitToContext = useCallback((menuNodeId, digitId) => {
@@ -1141,14 +1222,19 @@ function Canvas({ initialFlow, projectName, projectCreatedAt, currentProjectId, 
   // não persiste nos nodes reais nem dispara autosave.
   const nodesWithSel = useMemo(
     () => nodes.map((n) => {
-      const navHl = highlightedCtxId && n.id === highlightedCtxId;
+      const navHl    = highlightedCtxId && n.id === highlightedCtxId;
+      const conflict = dragConflictId   && n.id === dragConflictId;
+      let extra = {};
+      if (navHl)    extra._navHighlight  = true;
+      if (conflict) extra._dragConflict  = true;
+      const hasExtra = navHl || conflict;
       return {
         ...n,
         selected: n.id === selectedId,
-        ...(navHl ? { data: { ...n.data, _navHighlight: true } } : {}),
+        ...(hasExtra ? { data: { ...n.data, ...extra } } : {}),
       };
     }),
-    [nodes, selectedId, highlightedCtxId]
+    [nodes, selectedId, highlightedCtxId, dragConflictId]
   );
 
   const selectedNode = useMemo(
@@ -1167,12 +1253,9 @@ function Canvas({ initialFlow, projectName, projectCreatedAt, currentProjectId, 
     );
   }, [neonColor]); // eslint-disable-line react-hooks/exhaustive-deps
 
-  // Mapa de estilo de edge configurável → tipo do React Flow
-  const edgeStyleMap = { smooth: 'smoothstep', straight: 'straight', step: 'step' };
-
   // defaultEdgeOptions reativo ao tema e ao estilo configurado
   const defaultEdgeOpts = useMemo(() => ({
-    type: edgeStyleMap[config.edgeStyle] || 'smoothstep',
+    type: EDGE_STYLE_MAP[config.edgeStyle] || 'smoothstep',
     style: { stroke: neonColor, strokeWidth: 1.5 },
     markerEnd: { type: MarkerType.ArrowClosed, color: neonColor },
     focusable: true,
@@ -1347,7 +1430,7 @@ function Canvas({ initialFlow, projectName, projectCreatedAt, currentProjectId, 
           onEdgeClick={onEdgeClick}
           onPaneClick={onPaneClick}
           onNodeDragStart={onNodeDragStart}
-          onNodeDrag={onNodeDrag}
+          onNodeDrag={handleNodeDrag}
           onNodeDragStop={onNodeDragStop}
           onEdgeContextMenu={onEdgeContextMenu}
           onNodeContextMenu={onNodeContextMenu}
@@ -1358,7 +1441,7 @@ function Canvas({ initialFlow, projectName, projectCreatedAt, currentProjectId, 
           edgesFocusable
           elementsSelectable
           multiSelectionKeyCode={['Meta', 'Control']}
-          connectionLineType={edgeStyleMap[config.edgeStyle] === 'straight' ? 'straight' : config.edgeStyle === 'step' ? 'step' : 'smoothstep'}
+          connectionLineType={EDGE_STYLE_MAP[config.edgeStyle] === 'straight' ? 'straight' : config.edgeStyle === 'step' ? 'step' : 'smoothstep'}
           defaultEdgeOptions={defaultEdgeOpts}
           snapToGrid={config.snapToGrid}
           snapGrid={[config.gridSize || 16, config.gridSize || 16]}

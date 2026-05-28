@@ -153,7 +153,9 @@ const ContextNode = memo(({ id, data, selected }) => {
   const accentActiveGlow = data.isMacro ? 'rgba(0,212,255,0.65)' : 'rgba(0,255,65,0.65)';
 
   // Destaque de navegação: injetado transitoriamente via nodesWithSel (não persiste)
-  const isNavHighlight = !!data._navHighlight;
+  const isNavHighlight  = !!data._navHighlight;
+  // Indicador de colisão de drag: injetado transitoriamente via nodesWithSel
+  const isDragConflict  = !!data._dragConflict;
 
   return (
     <div
@@ -173,6 +175,11 @@ const ContextNode = memo(({ id, data, selected }) => {
         ...(isConnectedActive && !isDraft && {
           '--node-active-color': accentActive,
           '--node-active-glow': accentActiveGlow,
+        }),
+        // Borda laranja durante drag de colisão — sinal visual de "não pode largar aqui"
+        ...(isDragConflict && {
+          borderColor: '#ff8c00',
+          boxShadow:   '0 0 10px rgba(255,140,0,0.55)',
         }),
       }}
     >

@@ -40,8 +40,11 @@ const MenuNode = memo(({ id, data, selected }) => {
   const menuActions         = useMenuActions();
   const rfInstance          = useReactFlow();
 
-  const [expandedDigits, setExpandedDigits] = useState(new Set());
-  const [hoveredDigitId, setHoveredDigitId] = useState(null);
+  // Todos os hooks antes de qualquer early return — Rules of Hooks
+  const [expandedDigits,    setExpandedDigits]    = useState(new Set());
+  const [hoveredDigitId,    setHoveredDigitId]    = useState(null);
+  const [collapseConfirmId, setCollapseConfirmId] = useState(null);
+  const [collapseIsModified, setCollapseIsModified] = useState(false);
 
   useEffect(() => {
     updateNodeInternals(id);
@@ -55,6 +58,7 @@ const MenuNode = memo(({ id, data, selected }) => {
     });
   };
 
+  // Centraliza o canvas no ContextNode expandido
   const navigateToCtx = (ctxId) => {
     const nodes   = rfInstance.getNodes();
     const ctxNode = nodes.find((n) => n.id === ctxId);
@@ -67,9 +71,37 @@ const MenuNode = memo(({ id, data, selected }) => {
     );
   };
 
+  // ── EXPANDIR ─────────────────────────────────────────────────────────────
   const handleExpand = (e, digitId) => {
     e.stopPropagation();
     menuActions?.expandDigitToContext(id, digitId);
+  };
+
+  // ── RECOLHER: inicia confirmação inline ──────────────────────────────────
+  const handleCollapseRequest = (e, digitId) => {
+    e.stopPropagation();
+    const digit   = (data.digits || []).find((d) => d.id === digitId);
+    const ctxId   = digit?.expandedToContextId;
+    const nodes   = rfInstance.getNodes();
+    const ctxNode = nodes.find((n) => n.id === ctxId);
+    const current  = ctxNode?.data.childOrder?.length ?? 0;
+    const original = digit?.expandedChildCount ?? 0;
+    setCollapseIsModified(current !== original);
+    setCollapseConfirmId(digitId);
+  };
+
+  // Confirma o recolher
+  const handleCollapseConfirm = (e, digitId) => {
+    e.stopPropagation();
+    menuActions?.collapseDigitContext(id, digitId);
+    setCollapseConfirmId(null);
+    setHoveredDigitId(null);
+  };
+
+  // Cancela o recolher
+  const handleCollapseCancel = (e) => {
+    e.stopPropagation();
+    setCollapseConfirmId(null);
   };
 
   const audioFiles = Array.isArray(data.audioFiles) && data.audioFiles.length > 0
@@ -92,6 +124,7 @@ const MenuNode = memo(({ id, data, selected }) => {
       </div>
 
       <div className="rcx-node-body">
+        {/* Linha de áudio */}
         <div className="rcx-node-row">
           <span className="k">audio</span>
           <span className="v" style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
@@ -118,17 +151,20 @@ const MenuNode = memo(({ id, data, selected }) => {
           <span className="v">{data.waitExten || data.waitSeconds || 4}s</span>
         </div>
 
+        {/* Bloco DTMF */}
         <div style={{ marginTop: 6, marginLeft: -10, marginRight: -10 }}>
           {digits.map((d) => {
             const hasActions      = Array.isArray(d.actions) && d.actions.length > 0;
             const isExpandedInline = expandedDigits.has(d.id);
             const isExpandedToCtx = !!d.expandedToContextId;
             const isHovered       = hoveredDigitId === d.id;
+            const isConfirming    = collapseConfirmId === d.id;
             const dLabel          = d.comment || d.label || `Opcao ${d.id}`;
             const dDest           = destLabel(d.finalDestination);
 
             return (
               <div key={d.id} style={{ position: 'relative' }}>
+                {/* Linha principal */}
                 <div
                   className="digit-row"
                   style={{
@@ -138,12 +174,16 @@ const MenuNode = memo(({ id, data, selected }) => {
                     minHeight: 26,
                   }}
                   onMouseEnter={() => setHoveredDigitId(d.id)}
-                  onMouseLeave={() => setHoveredDigitId(null)}
+                  onMouseLeave={() => {
+                    // Mantém hover enquanto confirmação estiver aberta para este dígito
+                    if (collapseConfirmId !== d.id) setHoveredDigitId(null);
+                  }}
                   onClick={(e) => {
                     e.stopPropagation();
                     if (!isExpandedToCtx && hasActions) toggleDigit(d.id);
                   }}
                 >
+                  {/* Esquerda: badge + label */}
                   <span style={{ display: 'flex', alignItems: 'center', gap: 4, overflow: 'hidden', minWidth: 0 }}>
                     <span className="badge" style={{ marginRight: 4, flexShrink: 0 }}>{d.id}</span>
                     <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
@@ -151,27 +191,45 @@ const MenuNode = memo(({ id, data, selected }) => {
                     </span>
                   </span>
 
+                  {/* Direita */}
                   <span style={{ display: 'flex', alignItems: 'center', gap: 3, flexShrink: 0, maxWidth: 130 }}>
                     {isExpandedToCtx ? (
-                      /* Link clicável para o contexto expandido */
-                      <button
-                        type="button"
-                        onClick={(e) => { e.stopPropagation(); navigateToCtx(d.expandedToContextId); }}
-                        title={`Ir para ${d.expandedToContextName}`}
-                        style={{
-                          background: 'none', border: 'none', cursor: 'pointer',
-                          fontSize: 9, color: 'var(--neon)', fontFamily: 'inherit',
-                          letterSpacing: 0.3, padding: 0,
-                          display: 'flex', alignItems: 'center', gap: 2,
-                          maxWidth: 115, overflow: 'hidden',
-                        }}
-                      >
-                        <span style={{ color: 'var(--neon-dim)', flexShrink: 0 }}>→</span>
-                        <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-                          {d.expandedToContextName}
-                        </span>
-                        <span style={{ flexShrink: 0 }}>⤢</span>
-                      </button>
+                      <>
+                        {/* Link para o ContextNode */}
+                        <button
+                          type="button"
+                          onClick={(e) => { e.stopPropagation(); navigateToCtx(d.expandedToContextId); }}
+                          title={`Ir para ${d.expandedToContextName}`}
+                          style={{
+                            background: 'none', border: 'none', cursor: 'pointer',
+                            fontSize: 9, color: 'var(--neon)', fontFamily: 'inherit',
+                            letterSpacing: 0.3, padding: 0,
+                            display: 'flex', alignItems: 'center', gap: 2,
+                            maxWidth: isHovered && !isConfirming ? 70 : 115,
+                            overflow: 'hidden',
+                          }}
+                        >
+                          <span style={{ color: 'var(--neon-dim)', flexShrink: 0 }}>→</span>
+                          <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                            {d.expandedToContextName}
+                          </span>
+                          <span style={{ flexShrink: 0 }}>⤢</span>
+                        </button>
+
+                        {/* Botão RECOLHER */}
+                        {isHovered && !isConfirming && (
+                          <button
+                            type="button"
+                            onClick={(e) => handleCollapseRequest(e, d.id)}
+                            aria-label={`Recolher contexto da opção ${d.id}`}
+                            style={ACTION_BTN}
+                            onMouseEnter={(e) => { e.currentTarget.style.opacity = '1'; }}
+                            onMouseLeave={(e) => { e.currentTarget.style.opacity = '0.7'; }}
+                          >
+                            ⤡ RECOLHER
+                          </button>
+                        )}
+                      </>
                     ) : (
                       <>
                         {!isHovered && dDest && (
@@ -201,7 +259,56 @@ const MenuNode = memo(({ id, data, selected }) => {
                   </span>
                 </div>
 
-                {/* Lista expandida inline de ações */}
+                {/* Confirmação inline de recolher */}
+                {isConfirming && isExpandedToCtx && (
+                  <div
+                    style={{
+                      paddingLeft: 16, paddingRight: 40, paddingTop: 4, paddingBottom: 6,
+                      fontSize: 9, color: 'var(--neon-dim)',
+                      background: 'rgba(0,0,0,0.25)',
+                      borderLeft: '2px solid var(--neon)',
+                      marginLeft: 10, marginBottom: 2,
+                      lineHeight: 1.7,
+                    }}
+                  >
+                    {collapseIsModified && (
+                      <div style={{ color: '#ffcc00', marginBottom: 3, lineHeight: 1.6 }}>
+                        ⚠ O contexto foi modificado. Recolher pode perder alterações feitas diretamente no contexto.
+                      </div>
+                    )}
+                    <div style={{ marginBottom: 5 }}>
+                      Recolher vai trazer as ações de volta para o menu e remover o contexto. Confirmar?
+                    </div>
+                    <div style={{ display: 'flex', gap: 6 }}>
+                      <button
+                        type="button"
+                        onClick={(e) => handleCollapseConfirm(e, d.id)}
+                        style={{
+                          ...ACTION_BTN, opacity: 1,
+                          border: '1px solid var(--neon)', padding: '1px 6px', borderRadius: 2,
+                        }}
+                        onMouseEnter={(e) => { e.currentTarget.style.background = 'var(--neon-glow-faint)'; }}
+                        onMouseLeave={(e) => { e.currentTarget.style.background = 'none'; }}
+                      >
+                        SIM
+                      </button>
+                      <button
+                        type="button"
+                        onClick={handleCollapseCancel}
+                        style={{
+                          ...ACTION_BTN, opacity: 1, color: 'var(--neon-dim)',
+                          border: '1px solid var(--line)', padding: '1px 6px', borderRadius: 2,
+                        }}
+                        onMouseEnter={(e) => { e.currentTarget.style.borderColor = 'var(--neon-dim)'; }}
+                        onMouseLeave={(e) => { e.currentTarget.style.borderColor = 'var(--line)'; }}
+                      >
+                        NÃO
+                      </button>
+                    </div>
+                  </div>
+                )}
+
+                {/* Lista inline de ações (toggle ▼/▲) */}
                 {!isExpandedToCtx && isExpandedInline && hasActions && (
                   <div style={{
                     paddingLeft: 16, paddingRight: 40, paddingBottom: 4,

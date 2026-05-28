@@ -1118,8 +1118,8 @@ function Canvas({ initialFlow, projectName, projectCreatedAt, currentProjectId, 
   }), [neonColor, config.edgeStyle]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const menuActionsValue = useMemo(
-    () => ({ expandDigitToContext }),
-    [expandDigitToContext]
+    () => ({ expandDigitToContext, collapseDigitContext }),
+    [expandDigitToContext, collapseDigitContext]
   );
 
   return (

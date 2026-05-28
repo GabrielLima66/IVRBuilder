@@ -12,13 +12,42 @@
  *  - Nós com data.manuallyPositioned=true são ignorados (a menos que forceAll=true).
  */
 
-import { CTX_MIN_W } from './contextDimensions.js';
+import { CTX_MIN_W, CTX_PAD_H, NODE_DEFAULT_WIDTH } from './contextDimensions.js';
 
 /** Gap horizontal entre ContextNodes adjacentes (px) */
 export const ARRANGE_GAP_H = 120;
 
 /** Largura estimada do GlobalConfigNode (sem style.width disponível) */
 const CONFIG_ESTIMATED_W = 260;
+
+/**
+ * Retorna a largura real de um ContextNode.
+ *
+ * Prioridade:
+ *  1. node.width  — fornecido pelo React Flow após o primeiro render
+ *  2. node.style.width — atualizado pelo useEffect do ContextNode
+ *  3. Calculado a partir dos filhos — fallback pré-render (ex: importação)
+ *  4. CTX_MIN_W — último recurso para contextos sem filhos
+ *
+ * @param {import('reactflow').Node} ctx
+ * @param {Map<string,import('reactflow').Node>} nodeById
+ * @returns {number} largura em px
+ */
+function getContextWidth(ctx, nodeById) {
+  if (ctx.width > CTX_MIN_W)        return ctx.width;
+  if (ctx.style?.width > CTX_MIN_W) return ctx.style.width;
+
+  // Pré-render: calcula a partir dos filhos (mesmo algoritmo do ContextNode.jsx)
+  const childIds = ctx.data?.childOrder || [];
+  if (!childIds.length) return CTX_MIN_W;
+
+  let maxChildW = NODE_DEFAULT_WIDTH;
+  for (const cid of childIds) {
+    const child = nodeById.get(cid);
+    if (child) maxChildW = Math.max(maxChildW, child.style?.width || child.width || NODE_DEFAULT_WIDTH);
+  }
+  return Math.max(CTX_MIN_W, maxChildW + CTX_PAD_H * 2);
+}
 
 /**
  * Calcula as posições ideais para os ContextNodes do canvas.
@@ -32,8 +61,15 @@ const CONFIG_ESTIMATED_W = 260;
 export function arrangeContextNodes(nodes, options = {}) {
   const { forceAll = false } = options;
 
-  const configNode = nodes.find((n) => n.type === 'config' && !n.parentNode);
-  const ctxNodes   = nodes.filter((n) => n.type === 'context' && !n.parentNode);
+  // O(1) node lookup — evita nodes.find() repetido dentro dos loops abaixo
+  const nodeById = new Map(nodes.map((n) => [n.id, n]));
+
+  let configNode = null;
+  const ctxNodes = [];
+  for (const n of nodes) {
+    if (n.type === 'config' && !n.parentNode) configNode = n;
+    else if (n.type === 'context' && !n.parentNode) ctxNodes.push(n);
+  }
 
   if (!ctxNodes.length) return [];
 
@@ -41,9 +77,12 @@ export function arrangeContextNodes(nodes, options = {}) {
   const configY = configNode?.position.y ?? 80;
   const targetY = configY; // todos os contextos normais no mesmo Y do config
 
-  // Separa contextos normais dos de expansão DTMF
-  const normalCtxs   = ctxNodes.filter((n) => !n.data?.expandedFrom);
-  const expandedCtxs = ctxNodes.filter((n) => !!n.data?.expandedFrom);
+  // Separa normais dos de expansão DTMF numa única passagem (js-combine-iterations)
+  const normalCtxs   = [];
+  const expandedCtxs = [];
+  for (const n of ctxNodes) {
+    if (n.data?.expandedFrom) expandedCtxs.push(n); else normalCtxs.push(n);
+  }
 
   // Ordena contextos normais por exportOrder crescente
   const sortedNormal = [...normalCtxs].sort((a, b) => {
@@ -63,8 +102,7 @@ export function arrangeContextNodes(nodes, options = {}) {
       continue;
     }
     updates.push({ id: ctx.id, position: { x: xCursor, y: targetY } });
-    const w = ctx.style?.width || ctx.width || CTX_MIN_W;
-    xCursor += w + ARRANGE_GAP_H;
+    xCursor += getContextWidth(ctx, nodeById) + ARRANGE_GAP_H;
   }
 
   // ── Contextos de expansão: à direita do contexto pai do MenuNode ──────────
@@ -72,25 +110,24 @@ export function arrangeContextNodes(nodes, options = {}) {
     if (!forceAll && ctx.data?.manuallyPositioned) continue;
 
     const menuNodeId = ctx.data.expandedFrom;
-    const menuNode   = nodes.find((n) => n.id === menuNodeId);
+    const menuNode   = nodeById.get(menuNodeId);
     if (!menuNode) continue;
 
     if (menuNode.parentNode) {
       // MenuNode está dentro de um ContextNode — posiciona à direita desse contexto
-      const parentCtx = nodes.find((n) => n.id === menuNode.parentNode);
+      const parentCtx = nodeById.get(menuNode.parentNode);
       if (!parentCtx) continue;
-      const parentW = parentCtx.style?.width || parentCtx.width || CTX_MIN_W;
       updates.push({
         id: ctx.id,
         position: {
-          x: parentCtx.position.x + parentW + ARRANGE_GAP_H,
+          x: parentCtx.position.x + getContextWidth(parentCtx, nodeById) + ARRANGE_GAP_H,
           // Y absoluto: topo do contexto pai + Y relativo do MenuNode dentro dele
           y: parentCtx.position.y + (menuNode.position.y || 0),
         },
       });
     } else {
       // MenuNode standalone — posiciona à direita dele
-      const menuW = menuNode.style?.width || menuNode.width || 250;
+      const menuW = menuNode.width || menuNode.style?.width || 250;
       updates.push({
         id: ctx.id,
         position: {

@@ -17,6 +17,7 @@ import PropertiesPanel from './components/layout/PropertiesPanel';
 import { buildNode } from './utils/buildNode';
 import { generateDialplan } from './utils/asteriskExporter';
 import { ACTION_META } from './utils/actionMeta';
+import { uid } from './utils/common';
 import { generateUniqueContextName } from './utils/contextUtils';
 import { applyContextRename } from './utils/renamePropagator';
 import { isSemanticHandle } from './utils/edgeUtils';
@@ -26,6 +27,7 @@ import { ThemeContext } from './contexts/ThemeContext';
 import { ModeContext } from './contexts/ModeContext';
 import { ConfigProvider, useConfig } from './contexts/ConfigContext';
 import ConfigModal from './components/canvas/ConfigModal';
+import { MenuActionsContext } from './contexts/MenuActionsContext';
 import HomeScreen from './screens/HomeScreen';
 import { salvarProjeto, listarProjetos } from './services/projectStorage';
 import {
@@ -744,6 +746,219 @@ function Canvas({ initialFlow, projectName, projectCreatedAt, currentProjectId, 
     onMoveTo(ctxId, nodeId, targetIndex);
   }, [onMoveTo]);
 
+  // ── Expandir opção DTMF para ContextNode independente ────────────────────
+  const expandDigitToContext = useCallback((menuNodeId, digitId) => {
+    const ns  = nodesRef.current;
+    const menuNode = ns.find((n) => n.id === menuNodeId);
+    if (!menuNode) return;
+    const digit = (menuNode.data.digits || []).find((d) => d.id === digitId);
+    if (!digit || !Array.isArray(digit.actions) || digit.actions.length === 0) return;
+
+    // Nome do contexto derivado de logIvrLabel ou fallback
+    const ctxBaseName = menuNode.data.contextName || 'orpen-ivr-menu';
+    const logIvrLbl   = digit.logIvrLabel || `${ctxBaseName}-op-${digit.id}`;
+    const prefix      = (config.contextPrefix || 'orpen-ivr').replace(/\s+/g, '-');
+    const baseName    = `${prefix}-${logIvrLbl}`;
+    const existingNames = ns.filter((n) => n.type === 'context').map((n) => n.data?.contextName || '');
+    const uniqueCtxName = generateUniqueContextName(baseName, existingNames);
+
+    const ctxId    = 'n_' + uid();
+    const childIds = [];
+    const childNodes = [];
+
+    // Cria nós filhos a partir de actions
+    for (const action of (digit.actions || [])) {
+      const childId    = 'n_' + uid();
+      const defaultNode = buildNode(action.type, { x: 20, y: 0 });
+      childIds.push(childId);
+      childNodes.push({
+        ...defaultNode,
+        id:         childId,
+        data:       { ...(defaultNode.data || {}), ...(action.data || {}) },
+        parentNode: ctxId,
+        extent:     'parent',
+        draggable:  false,
+        position:   { x: 20, y: 0 },
+      });
+    }
+
+    // Cria nó de destino a partir de finalDestination
+    if (digit.finalDestination) {
+      const fd     = digit.finalDestination;
+      const destId = 'n_' + uid();
+      let destNode = null;
+
+      if (fd.type === 'hangup') {
+        destNode = { ...buildNode('hangup', { x: 20, y: 0 }), id: destId };
+      } else if (fd.type === 'queue') {
+        destNode = {
+          ...buildNode('route', { x: 20, y: 0 }), id: destId,
+          data: { routeMode: 'fila', queue: fd.ext || fd.ctx || '', queueOptions: '', context: '', extension: 's', priority: '1' },
+        };
+      } else if (fd.type === 'context') {
+        destNode = {
+          ...buildNode('route', { x: 20, y: 0 }), id: destId,
+          data: { routeMode: 'context', queue: '', queueOptions: '', context: fd.contextName || '', extension: fd.ext || 's', priority: fd.pri || '1' },
+        };
+      } else if (fd.type === 'dial') {
+        destNode = {
+          ...buildNode('dial', { x: 20, y: 0 }), id: destId,
+          data: { destination: fd.target || '', timeout: fd.timeout || '30', options: '' },
+        };
+      } else if (fd.type === 'playback_only') {
+        destNode = {
+          ...buildNode('playback', { x: 20, y: 0 }), id: destId,
+          data: { filename: fd.filename || '', label: '' },
+        };
+      }
+
+      if (destNode) {
+        destNode.parentNode = ctxId;
+        destNode.extent     = 'parent';
+        destNode.draggable  = false;
+        destNode.position   = { x: 20, y: 0 };
+        childIds.push(destId);
+        childNodes.push(destNode);
+      }
+    }
+
+    // Posição: à direita do MenuNode, alinhado com a linha do dígito
+    const menuWidth   = (menuNode.style?.width) || (menuNode.width) || 250;
+    const digitIndex  = (menuNode.data.digits || []).findIndex((d) => d.id === digitId);
+    const ctxX        = menuNode.position.x + menuWidth + 200;
+    const ctxY        = menuNode.position.y + Math.max(0, digitIndex) * 26;
+
+    const maxOrder = ns
+      .filter((n) => n.type === 'context')
+      .reduce((mx, n) => Math.max(mx, n.data?.exportOrder ?? 0), 0);
+
+    const ctxNode = {
+      id:   ctxId,
+      type: 'context',
+      position: { x: ctxX, y: ctxY },
+      data: {
+        contextName: uniqueCtxName,
+        childOrder:  childIds,
+        exportOrder: maxOrder + 1,
+        isDraft:     false,
+      },
+      style:  { width: 320, height: 54 },
+      zIndex: -1,
+    };
+
+    const newEdge = {
+      id:           'e_' + uid(),
+      source:       menuNodeId,
+      sourceHandle: `d-${digitId}`,
+      target:       ctxId,
+      targetHandle: 'ctx-in',
+      type:         'floating',
+      data:         { offsetX: 0, offsetY: 0 },
+      animated:     false,
+      style:        { stroke: neonColor, strokeWidth: 1.5 },
+      markerEnd:    { type: MarkerType.ArrowClosed, color: neonColor },
+    };
+
+    setNodes((prev) => {
+      const updated = prev.map((n) => {
+        if (n.id !== menuNodeId) return n;
+        return {
+          ...n,
+          data: {
+            ...n.data,
+            digits: n.data.digits.map((d) => {
+              if (d.id !== digitId) return d;
+              return {
+                ...d,
+                actions:              [],
+                finalDestination:     null,
+                expandedToContextId:  ctxId,
+                expandedToContextName: uniqueCtxName,
+                expandedChildCount:   childIds.length,
+              };
+            }),
+          },
+        };
+      });
+      // ContextNode primeiro (pai antes dos filhos), depois filhos
+      return [ctxNode, ...updated, ...childNodes];
+    });
+
+    setEdges((es) => {
+      const filtered = es.filter((e) => !(e.source === menuNodeId && e.sourceHandle === `d-${digitId}`));
+      return [...filtered, newEdge];
+    });
+  }, [setNodes, setEdges, neonColor, config]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  // ── Recolher ContextNode de volta para opção DTMF ────────────────────────
+  const collapseDigitContext = useCallback((menuNodeId, digitId) => {
+    const ns = nodesRef.current;
+    const menuNode = ns.find((n) => n.id === menuNodeId);
+    if (!menuNode) return;
+    const digit = (menuNode.data.digits || []).find((d) => d.id === digitId);
+    if (!digit?.expandedToContextId) return;
+
+    const ctxId  = digit.expandedToContextId;
+    const ctxNode = ns.find((n) => n.id === ctxId);
+
+    // Reconstrói actions e finalDestination a partir dos filhos
+    const actions = [];
+    let finalDestination = null;
+
+    if (ctxNode) {
+      const childIds = ctxNode.data.childOrder || [];
+      for (const cid of childIds) {
+        const child = ns.find((n) => n.id === cid);
+        if (!child) continue;
+
+        if (child.type === 'hangup') {
+          finalDestination = { type: 'hangup' };
+        } else if (child.type === 'route') {
+          const m = child.data.routeMode || 'macro';
+          if (m === 'fila') {
+            finalDestination = { type: 'queue', ext: child.data.queue || '', ctx: child.data.queue || '' };
+          } else if (m === 'macro') {
+            finalDestination = { type: 'context', contextName: 'orpen-ivr-transfer' };
+          } else {
+            finalDestination = {
+              type: 'context',
+              contextName: child.data.context || '',
+              ext: child.data.extension || 's',
+              pri: child.data.priority || '1',
+            };
+          }
+        } else if (child.type === 'dial') {
+          finalDestination = { type: 'dial', target: child.data.destination || '' };
+        } else {
+          actions.push({ type: child.type, data: { ...child.data } });
+        }
+      }
+    }
+
+    const childIdsToRemove = ctxNode ? new Set([ctxId, ...(ctxNode.data.childOrder || [])]) : new Set([ctxId]);
+
+    setNodes((prev) =>
+      prev
+        .filter((n) => !childIdsToRemove.has(n.id))
+        .map((n) => {
+          if (n.id !== menuNodeId) return n;
+          return {
+            ...n,
+            data: {
+              ...n.data,
+              digits: n.data.digits.map((d) => {
+                if (d.id !== digitId) return d;
+                const { expandedToContextId, expandedToContextName, expandedChildCount, ...rest } = d;
+                return { ...rest, actions, finalDestination };
+              }),
+            },
+          };
+        })
+    );
+
+    setEdges((es) => es.filter((e) => !(e.source === menuNodeId && e.sourceHandle === `d-${digitId}`)));
+  }, [setNodes, setEdges]);
+
   // ── Context menu de clique direito em nó ─────────────────────────────────
   const [nodeMenu, setNodeMenu] = useState(null); // { x, y, nodeId }
 
@@ -902,7 +1117,13 @@ function Canvas({ initialFlow, projectName, projectCreatedAt, currentProjectId, 
     selectable: true,
   }), [neonColor, config.edgeStyle]); // eslint-disable-line react-hooks/exhaustive-deps
 
+  const menuActionsValue = useMemo(
+    () => ({ expandDigitToContext }),
+    [expandDigitToContext]
+  );
+
   return (
+    <MenuActionsContext.Provider value={menuActionsValue}>
     <ModeContext.Provider value={mode}>
     <ThemeContext.Provider value={effectiveTheme}>
     <ActiveSelectionContext.Provider value={activeSelectionValue}>
@@ -1479,6 +1700,7 @@ function Canvas({ initialFlow, projectName, projectCreatedAt, currentProjectId, 
     </ActiveSelectionContext.Provider>
     </ThemeContext.Provider>
     </ModeContext.Provider>
+    </MenuActionsContext.Provider>
   );
 }
 

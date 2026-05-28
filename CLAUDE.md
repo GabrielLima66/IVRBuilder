@@ -1,3 +1,69 @@
+## PRINCÍPIOS DE COMPORTAMENTO
+
+Diretrizes para reduzir erros comuns de LLM em tarefas de código. Estas regras têm precedência sobre qualquer instrução de tarefa específica.
+
+**Tradeoff:** estas diretrizes priorizam cautela sobre velocidade. Para tarefas triviais, use o bom senso.
+
+### 1. Pensar Antes de Codar
+
+**Não assuma. Não esconda confusão. Mostre os tradeoffs.**
+
+Antes de implementar qualquer coisa:
+- Declare suas suposições explicitamente. Se incerto, pergunte.
+- Se existirem múltiplas interpretações, apresente-as — não escolha silenciosamente.
+- Se uma abordagem mais simples existir, diga. Questione quando necessário.
+- Se algo estiver confuso, pare. Nomeie o que está confuso. Pergunte.
+
+### 2. Simplicidade Primeiro
+
+**O mínimo de código que resolve o problema. Nada especulativo.**
+
+- Sem features além do que foi pedido.
+- Sem abstrações para código de uso único.
+- Sem "flexibilidade" ou "configurabilidade" que não foi solicitada.
+- Sem tratamento de erros para cenários impossíveis.
+- Se você escrever 200 linhas e poderia ser 50, reescreva.
+
+Pergunta de controle: "Um engenheiro sênior diria que isso está complicado demais?" Se sim, simplifique.
+
+### 3. Mudanças Cirúrgicas
+
+**Toque apenas no que for necessário. Limpe apenas a sua própria bagunça.**
+
+Ao editar código existente:
+- Não "melhore" código adjacente, comentários ou formatação.
+- Não refatore coisas que não estão quebradas.
+- Mantenha o estilo existente, mesmo que você faria diferente.
+- Se notar código morto não relacionado, mencione — não delete.
+
+Quando suas mudanças criarem órfãos:
+- Remova imports/variáveis/funções que AS SUAS mudanças tornaram não utilizados.
+- Não remova código morto pré-existente a menos que seja solicitado.
+
+Teste: cada linha alterada deve traçar diretamente à solicitação do usuário.
+
+### 4. Execução Orientada a Objetivos
+
+**Defina critérios de sucesso. Itere até verificar.**
+
+Transforme tarefas em objetivos verificáveis:
+- "Adicionar validação" → "Escrever testes para entradas inválidas, depois fazê-los passar"
+- "Corrigir o bug" → "Escrever um teste que reproduz o bug, depois fazê-lo passar"
+- "Refatorar X" → "Garantir que os testes passem antes e depois"
+
+Para tarefas de múltiplos passos, declare um plano breve:
+1. [Passo] → verificar: [checagem]
+2. [Passo] → verificar: [checagem]
+3. [Passo] → verificar: [checagem]
+
+Critérios de sucesso fortes permitem iterar de forma independente. Critérios fracos ("fazer funcionar") exigem clarificação constante.
+
+---
+
+## PROJETO: ORPEN URA BUILDER
+
+---
+
 # Orpen URA Builder
 Editor visual de dialplan Asterisk (extensions.conf) via canvas drag-and-drop. Cada nó representa uma instrução/bloco; edges representam fluxo de execução. Gera .conf válido via compilador interno.
 
@@ -292,6 +358,9 @@ pathD = `M ${sx} ${sy} C ${sx+80} ${sy}, ${tx-80} ${ty}, ${tx} ${ty}`
 | MenuNode dígitos padrão (`DEFAULT_DIGITS`) | `[{id:'1',label:'Opcao 1'}, ..., {id:'4',label:'Opcao 4'}]` |
 | ContextNode `order` | `''` (sem ordem definida — campo legado, não determina mais sequência) |
 | ContextNode `childOrder` | `[]` (ids dos filhos em ordem de execução) |
+| ContextNode `expandedFrom` | `undefined` — quando presente, contém o ID do MenuNode de origem (expansão DTMF); o auto-arranjo posiciona esses contextos à direita do contexto pai do MenuNode, alinhados verticalmente |
+| ContextNode `manuallyPositioned` | `false` — setado `true` quando o usuário arrasta o nó; o auto-arranjo ignora nós com `true` exceto quando `forceAll=true` (botão ⟳ ORGANIZAR) |
+| Auto-arranjo `GAP_H` | `120px` (`ARRANGE_GAP_H` em arrangeContextNodes.js) |
 | ContextNode largura mínima | `320px` (CTX_MIN_W em ContextNode.jsx) |
 | ContextNode padding filhos | `20px` lateral + `20px` inferior (CTX_PAD_H, CTX_PAD_BOTTOM) |
 | ContextNode altura header | `34px` (CTX_HEADER_H — constante exportada de ContextNode.jsx) |

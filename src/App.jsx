@@ -18,6 +18,7 @@ import { buildNode } from './utils/buildNode';
 import { generateDialplan } from './utils/asteriskExporter';
 import { ACTION_META } from './utils/actionMeta';
 import { uid } from './utils/common';
+import { arrangeContextNodes } from './utils/arrangeContextNodes';
 import { generateUniqueContextName } from './utils/contextUtils';
 import { applyContextRename } from './utils/renamePropagator';
 import { isSemanticHandle } from './utils/edgeUtils';
@@ -121,6 +122,9 @@ function Canvas({ initialFlow, projectName, projectCreatedAt, currentProjectId, 
 
   const [nodes, setNodes, onNodesChange] = useNodesState(initNodes);
   const [edges, setEdges, onEdgesChange] = useEdgesState(initEdges);
+
+  // Timer de debounce para remoção da transition de arranjo
+  const arrangeTimerRef = useRef(null);
 
   // ── Refs sincronizadas — leitura estável do estado atual sem dep em callbacks ─
   // Permite que onConnect, handleEdgesChange, computeActiveFromNode etc. leiam o
@@ -480,7 +484,10 @@ function Canvas({ initialFlow, projectName, projectCreatedAt, currentProjectId, 
     setNodes((ns) =>
       newNode.type === 'context' ? [newNode, ...ns] : [...ns, newNode]
     );
-  }, [rfInstance, nodes, setNodes]);
+
+    // Novo ContextNode: reorganiza para encaixar na sequência
+    if (type === 'context') runAutoArrange();
+  }, [rfInstance, nodes, setNodes, runAutoArrange]);
 
   // ── Re-parenting ao arrastar nó existente ─────────────────────────────────
   const onNodeDragStop = useCallback((event, draggedNode) => {
@@ -507,8 +514,17 @@ function Canvas({ initialFlow, projectName, projectCreatedAt, currentProjectId, 
       })
     );
 
-    // Re-parenting apenas para nós não-contexto
-    if (draggedNode.type === 'context') return;
+    // ContextNode arrastado manualmente → marca como posicionado pelo usuário
+    if (draggedNode.type === 'context') {
+      setNodes((ns) =>
+        ns.map((n) =>
+          n.id === draggedNode.id
+            ? { ...n, data: { ...n.data, manuallyPositioned: true } }
+            : n
+        )
+      );
+      return;
+    }
 
     let absX = draggedNode.position.x;
     let absY = draggedNode.position.y;
@@ -618,7 +634,9 @@ function Canvas({ initialFlow, projectName, projectCreatedAt, currentProjectId, 
     setNodes((ns) =>
       ns.map((n) => (n.id === id ? { ...n, data: { ...n.data, ...dataPatch } } : n))
     );
-  }, [setNodes]);
+    // Reorganiza quando exportOrder é alterado (muda a sequência horizontal)
+    if ('exportOrder' in dataPatch) runAutoArrange();
+  }, [setNodes, runAutoArrange]);
 
   const patchNodeStyle = useCallback((id, stylePatch) => {
     setNodes((ns) =>
@@ -639,6 +657,8 @@ function Canvas({ initialFlow, projectName, projectCreatedAt, currentProjectId, 
 
   // ── Deleção ───────────────────────────────────────────────────────────────
   const deleteNode = useCallback((id) => {
+    const isContext = nodesRef.current.find((n) => n.id === id)?.type === 'context';
+
     setNodes((ns) =>
       ns
         .filter((n) => n.id !== id)
@@ -652,7 +672,10 @@ function Canvas({ initialFlow, projectName, projectCreatedAt, currentProjectId, 
     );
     setEdges((es) => es.filter((e) => e.source !== id && e.target !== id));
     setSelectedId(null);
-  }, [setNodes, setEdges]);
+
+    // Reorganiza para fechar o gap deixado pelo contexto excluído
+    if (isContext) runAutoArrange();
+  }, [setNodes, setEdges, runAutoArrange]);
 
   // ── Toggle comentado (DESATIVAR / ATIVAR) ─────────────────────────────────
   const toggleComment = useCallback((id) => {
@@ -746,6 +769,41 @@ function Canvas({ initialFlow, projectName, projectCreatedAt, currentProjectId, 
     onMoveTo(ctxId, nodeId, targetIndex);
   }, [onMoveTo]);
 
+  // ── Auto-arranjo horizontal de ContextNodes ──────────────────────────────
+  // Aplica posições calculadas por arrangeContextNodes() com animação suave.
+  // forceAll=true: ignora data.manuallyPositioned (botão "⟳ ORGANIZAR").
+  const runAutoArrange = useCallback((forceAll = false) => {
+    setNodes((ns) => {
+      const updates = arrangeContextNodes(ns, { forceAll });
+      if (!updates.length) return ns;
+      const posMap = new Map(updates.map((u) => [u.id, u.position]));
+      return ns.map((n) => {
+        const pos = posMap.get(n.id);
+        if (!pos) return n;
+        return {
+          ...n,
+          position: pos,
+          style:    { ...(n.style || {}), transition: 'transform 300ms ease' },
+          data:     forceAll
+            ? { ...n.data, manuallyPositioned: false }
+            : n.data,
+        };
+      });
+    });
+
+    // Remove a transition após a animação para não interferir com drags futuros
+    if (arrangeTimerRef.current) clearTimeout(arrangeTimerRef.current);
+    arrangeTimerRef.current = setTimeout(() => {
+      setNodes((ns) =>
+        ns.map((n) => {
+          if (n.type !== 'context' || !n.style?.transition) return n;
+          const { transition, ...restStyle } = n.style;
+          return { ...n, style: Object.keys(restStyle).length ? restStyle : undefined };
+        })
+      );
+    }, 350);
+  }, [setNodes]); // eslint-disable-line react-hooks/exhaustive-deps
+
   // ── Expandir opção DTMF para ContextNode independente ────────────────────
   const expandDigitToContext = useCallback((menuNodeId, digitId) => {
     const ns  = nodesRef.current;
@@ -837,10 +895,11 @@ function Canvas({ initialFlow, projectName, projectCreatedAt, currentProjectId, 
       type: 'context',
       position: { x: ctxX, y: ctxY },
       data: {
-        contextName: uniqueCtxName,
-        childOrder:  childIds,
-        exportOrder: maxOrder + 1,
-        isDraft:     false,
+        contextName:  uniqueCtxName,
+        childOrder:   childIds,
+        exportOrder:  maxOrder + 1,
+        isDraft:      false,
+        expandedFrom: menuNodeId, // âncora para o auto-arranjo de expansão
       },
       style:  { width: 320, height: 54 },
       zIndex: -1,
@@ -888,7 +947,10 @@ function Canvas({ initialFlow, projectName, projectCreatedAt, currentProjectId, 
       const filtered = es.filter((e) => !(e.source === menuNodeId && e.sourceHandle === `d-${digitId}`));
       return [...filtered, newEdge];
     });
-  }, [setNodes, setEdges, neonColor, config]); // eslint-disable-line react-hooks/exhaustive-deps
+
+    // Reposiciona o novo contexto de expansão alinhado ao MenuNode de origem
+    runAutoArrange();
+  }, [setNodes, setEdges, neonColor, config, runAutoArrange]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // ── Recolher ContextNode de volta para opção DTMF ────────────────────────
   const collapseDigitContext = useCallback((menuNodeId, digitId) => {
@@ -1190,6 +1252,25 @@ function Canvas({ initialFlow, projectName, projectCreatedAt, currentProjectId, 
             }}
           >
             ⊞ ORDEM
+          </button>
+          <span style={{ color: 'var(--line)' }}>│</span>
+          {/* Botão de reorganização de contextos */}
+          <button
+            type="button"
+            onClick={() => runAutoArrange(true)}
+            title="Reorganizar todos os contextos em linha horizontal"
+            style={{
+              background: 'transparent',
+              border: '1px solid var(--line)',
+              color: 'var(--neon-dim)',
+              fontFamily: 'inherit', fontSize: 9, letterSpacing: 1,
+              padding: '1px 7px', cursor: 'pointer', borderRadius: 2,
+              transition: 'all 0.15s',
+            }}
+            onMouseEnter={(e) => { e.currentTarget.style.borderColor = 'var(--neon)'; e.currentTarget.style.color = 'var(--neon)'; }}
+            onMouseLeave={(e) => { e.currentTarget.style.borderColor = 'var(--line)'; e.currentTarget.style.color = 'var(--neon-dim)'; }}
+          >
+            ⟳ ORGANIZAR
           </button>
           <span style={{ color: 'var(--line)' }}>│</span>
           {/* Botão de configurações */}
@@ -1855,14 +1936,23 @@ export default function App() {
   // Layout já foi aplicado dentro de handleImportConf — aqui apenas cria o projeto.
   const handleConfImportConfirm = useCallback(async (name) => {
     if (!confImportData) return;
-    const now     = new Date().toISOString();
+    const now = new Date().toISOString();
+
+    // Aplica auto-arranjo nos nós importados (forceAll — sem manuallyPositioned ainda)
+    const arranged = arrangeContextNodes(confImportData.nodes, { forceAll: true });
+    const posMap   = new Map(arranged.map((u) => [u.id, u.position]));
+    const arrangedNodes = confImportData.nodes.map((n) => {
+      const pos = posMap.get(n.id);
+      return pos ? { ...n, position: pos } : n;
+    });
+
     const project = {
       id:              Date.now().toString(),
       name,
       dataCriacao:     now,
       dataModificacao: now,
       flow: {
-        nodes:    confImportData.nodes,
+        nodes:    arrangedNodes,
         edges:    confImportData.edges,
         viewport: confImportData.viewport || { x: 0, y: 0, zoom: 0.7 },
       },

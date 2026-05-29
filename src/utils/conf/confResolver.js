@@ -609,6 +609,7 @@ function resolveContext(rawCtx, globalConfig, isFirstContext) {
     // Backgrounds com outros rótulos (ex: 'bv' para anúncio antes do menu) ficam como standalone.
     // Trabalhamos do final para cima, da mesma forma, ignorando tail-skip types.
     const audioFiles = [];
+    let absorbedBgLabel = null; // label do primeiro Background absorvido (exec order)
     for (let i = childNodes.length - 1; i >= 0; i--) {
       const node = childNodes[i];
       if (node.type !== 'background') {
@@ -619,6 +620,9 @@ function resolveContext(rawCtx, globalConfig, isFirstContext) {
       if (bgLabel !== null && bgLabel !== 'menu') break; // background standalone — para
       const fnames = node.data?.filenames || [node.data?.filename || ''];
       audioFiles.unshift(...fnames);
+      // Captura o label do Background — o mais antigo (primeiro em exec order)
+      // é o último que encontramos no loop reverso, então sobrescrevemos sempre
+      if (bgLabel) absorbedBgLabel = bgLabel;
       childNodes.splice(i, 1); // remove o background absorvido
     }
     if (audioFiles.length === 0) audioFiles.push('boas-vindas');
@@ -687,6 +691,7 @@ function resolveContext(rawCtx, globalConfig, isFirstContext) {
         contextName:      rawCtx.name,
         audioFiles,
         greeting:         audioFiles[0] || 'boas-vindas', // compat legado
+        label:            absorbedBgLabel || 'menu',       // label do Background absorvido
         waitExten:        menuWaitExten,
         waitSeconds:      menuWaitExten,
         digits:           menuDigits,

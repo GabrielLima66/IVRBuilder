@@ -1262,9 +1262,101 @@ function Canvas({ initialFlow, projectName, projectCreatedAt, currentProjectId, 
     selectable: true,
   }), [neonColor, config.edgeStyle]); // eslint-disable-line react-hooks/exhaustive-deps
 
+  // Atualiza o label de um dígito inline (chamado pelo MenuNode ao editar inline)
+  const updateDigitLabel = useCallback((menuNodeId, digitId, newLabel) => {
+    setNodes((ns) =>
+      ns.map((n) => {
+        if (n.id !== menuNodeId) return n;
+        return {
+          ...n,
+          data: {
+            ...n.data,
+            digits: n.data.digits.map((d) =>
+              d.id !== digitId ? d : { ...d, label: newLabel, comment: newLabel }
+            ),
+          },
+        };
+      })
+    );
+  }, [setNodes]);
+
+  // Cria um ContextNode vazio e conecta ao handle d-{digitId} do menu
+  const createContextForNewDigit = useCallback((menuNodeId, digitId) => {
+    const ns = nodesRef.current;
+    const menuNode = ns.find((n) => n.id === menuNodeId);
+    if (!menuNode) return;
+
+    const prefix  = (config.contextPrefix || 'orpen-ivr').replace(/\s+/g, '-');
+    const ctxBase = menuNode.data.contextName || 'menu';
+    const baseName = `${prefix}-${ctxBase.replace(/^(orpen-ivr-|rcx-ivr-)/, '')}-op-${digitId}`;
+    const existing = ns.filter((n) => n.type === 'context').map((n) => n.data?.contextName || '');
+    const uniqueName = generateUniqueContextName(baseName, existing);
+
+    const menuW   = menuNode.width || menuNode.style?.width || 250;
+    const ctxX    = menuNode.position.x + menuW + 200;
+    const ctxY    = menuNode.position.y + (menuNode.data.digits || []).findIndex((d) => d.id === digitId) * 60;
+    const maxOrder = ns.filter((n) => n.type === 'context').reduce((mx, n) => Math.max(mx, n.data?.exportOrder ?? 0), 0);
+
+    const ctxId  = 'n_' + uid();
+    const ctxNode = {
+      id:   ctxId,
+      type: 'context',
+      position: { x: ctxX, y: ctxY },
+      data: {
+        contextName:   uniqueName,
+        childOrder:    [],
+        exportOrder:   maxOrder + 1,
+        isDraft:       false,
+        expandedFrom:  menuNodeId,
+        expandedDigit: digitId,
+      },
+      style:  { width: 320, height: 54 },
+      zIndex: -1,
+    };
+
+    setNodes((prev) => {
+      const updated = prev.map((n) => {
+        if (n.id !== menuNodeId) return n;
+        return {
+          ...n,
+          data: {
+            ...n.data,
+            digits: n.data.digits.map((d) =>
+              d.id !== digitId ? d : {
+                ...d,
+                expandedToContextId:   ctxId,
+                expandedToContextName: uniqueName,
+                expandedChildCount:    0,
+              }
+            ),
+          },
+        };
+      });
+      return [ctxNode, ...updated];
+    });
+
+    setEdges((es) => {
+      const filtered = es.filter((e) => !(e.source === menuNodeId && e.sourceHandle === `d-${digitId}`));
+      return [...filtered, {
+        id:           'e_' + uid(),
+        source:       menuNodeId,
+        sourceHandle: `d-${digitId}`,
+        target:       ctxId,
+        targetHandle: 'ctx-in',
+        type:         'floating',
+        data:         { offsetX: 0, offsetY: 0 },
+        animated:     false,
+        style:        { stroke: neonColor, strokeWidth: 1.5 },
+        markerEnd:    { type: MarkerType.ArrowClosed, color: neonColor },
+      }];
+    });
+
+    runAutoArrange();
+  }, [setNodes, setEdges, neonColor, config, runAutoArrange]); // eslint-disable-line react-hooks/exhaustive-deps
+
   const menuActionsValue = useMemo(
-    () => ({ expandDigitToContext, collapseDigitContext }),
-    [expandDigitToContext, collapseDigitContext]
+    () => ({ expandDigitToContext, collapseDigitContext, updateDigitLabel, createContextForNewDigit }),
+    [expandDigitToContext, collapseDigitContext, updateDigitLabel, createContextForNewDigit]
   );
 
   return (
@@ -1569,6 +1661,7 @@ function Canvas({ initialFlow, projectName, projectCreatedAt, currentProjectId, 
         syncTrueContext={syncTrueContext}
         propagateContextRename={propagateContextRename}
         onContextNavigate={onContextNavigate}
+        createContextForNewDigit={createContextForNewDigit}
       />
 
       {/* ── Context menu de edge (botão direito) ─────────────────────────── */}

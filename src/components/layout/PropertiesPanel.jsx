@@ -160,7 +160,7 @@ const MonthPicker = memo(function MonthPicker({ selected, onChange }) {
 // Extraído do PropertiesPanel para que useRef seja chamado incondicionalmente
 // (Rules of Hooks — não pode ficar dentro de IIFE condicional).
 
-const MenuPropertiesPanel = memo(function MenuPropertiesPanel({ d, set, fl, onAudioFilesChange, onLabelChange }) {
+const MenuPropertiesPanel = memo(function MenuPropertiesPanel({ d, set, fl, onAudioFilesChange, onLabelChange, onAddDigit }) {
   // dragRef DEVE ficar aqui (nível do componente), nunca dentro de condicional
   const dragRef = useRef(null);
 
@@ -292,16 +292,8 @@ const MenuPropertiesPanel = memo(function MenuPropertiesPanel({ d, set, fl, onAu
               </button>
             </div>
             {hasActions && (
-              <div style={{ marginTop: 4, paddingLeft: 52, fontSize: 9, color: 'var(--neon-dim)', lineHeight: 1.7 }}>
-                {dig.actions.map((a, ai) => (
-                  <div key={ai} style={{ display: 'flex', gap: 4 }}>
-                    <span style={{ color: 'var(--neon)' }}>{ai + 1}.</span>
-                    <span style={{ color: '#fff' }}>{a.type}</span>
-                    <span style={{ opacity: 0.6 }}>
-                      {Object.values(a.data || {}).filter(Boolean).join(' ').slice(0, 40)}
-                    </span>
-                  </div>
-                ))}
+              <div style={{ marginTop: 3, paddingLeft: 52, fontSize: 9, color: 'var(--neon-dim)' }}>
+                {dig.actions.length} ação(ões) — veja no ContextNode conectado
               </div>
             )}
           </div>
@@ -329,13 +321,18 @@ const MenuPropertiesPanel = memo(function MenuPropertiesPanel({ d, set, fl, onAu
                     className="btn-neon"
                     style={{ padding: '3px 10px', fontSize: 11, letterSpacing: 1, minWidth: 36 }}
                     aria-label={`Adicionar dígito ${dig}`}
-                    onClick={() => set('digits', [...(d.digits || []), {
-                      id:               dig,
-                      label:            defaultLabel,
-                      comment:          null,
-                      actions:          [],
-                      finalDestination: null,
-                    }])}
+                    onClick={() => {
+                      // Adiciona o dígito ao data do nó
+                      set('digits', [...(d.digits || []), {
+                        id:               dig,
+                        label:            defaultLabel,
+                        comment:          null,
+                        actions:          [],
+                        finalDestination: null,
+                      }]);
+                      // Cria o ContextNode vazio e conecta via edge (onAddDigit é fornecido pelo Canvas)
+                      onAddDigit?.(dig);
+                    }}
                   >
                     {dig}
                   </button>
@@ -362,7 +359,7 @@ const MenuPropertiesPanel = memo(function MenuPropertiesPanel({ d, set, fl, onAu
 
 // ─── Painel principal ─────────────────────────────────────────────────────────
 
-export default function PropertiesPanel({ node, updateNodeData, deleteNode, toggleComment, patchNodeStyle, syncTrueContext, propagateContextRename, nodes = [], onContextNavigate }) {
+export default function PropertiesPanel({ node, updateNodeData, deleteNode, toggleComment, patchNodeStyle, syncTrueContext, propagateContextRename, nodes = [], onContextNavigate, createContextForNewDigit }) {
   // Armazena o nome do contexto no momento do foco (para detectar rename via painel)
   const ctxNameOnFocus = useRef('');
   const [ctxNameDup, setCtxNameDup] = useState(false);
@@ -530,6 +527,7 @@ export default function PropertiesPanel({ node, updateNodeData, deleteNode, togg
           onAudioFilesChange={(newFiles) =>
             updateNodeData(node.id, { ...d, audioFiles: newFiles, greeting: newFiles[0] || '' })
           }
+          onAddDigit={(digitId) => createContextForNewDigit?.(node.id, digitId)}
           onLabelChange={(newLabel) => {
             const oldLabel = (d.label ?? 'menu').trim();
             // Propaga rename do label nos finalDestinations das opções i e t

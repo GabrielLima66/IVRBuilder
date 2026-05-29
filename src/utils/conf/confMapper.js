@@ -75,6 +75,7 @@ export function map(tokens) {
           label: token.label,
           application: token.application,
           args: token.args,
+          inlineComment: token.inlineComment || null,
           lineNumber: token.lineNumber,
         });
         break;
@@ -82,8 +83,9 @@ export function map(tokens) {
       case 'extension_dtmf':
         if (!current) break;
         getDtmfBlock(token.digit).lines.push({
+          priority:    token.priority,
           application: token.application,
-          args: token.args,
+          args:        token.args,
         });
         break;
 

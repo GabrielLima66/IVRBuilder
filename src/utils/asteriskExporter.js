@@ -72,7 +72,11 @@ function generateDialplanFromContexts(nodes, edges, findNode, outEdges, options 
   function linesForChild(n) {
     if (!n) return [];
     if (n.data?._commented) return n.data._origLine ? [n.data._origLine] : [];
-    if (ACTION_META[n.type]) return [actionLine(n)].filter(Boolean);
+    if (ACTION_META[n.type]) {
+      const line = actionLine(n);
+      if (!line) return [];
+      return [n.data?.inlineComment ? `${line}  ${n.data.inlineComment}` : line];
+    }
 
     switch (n.type) {
       case 'config': {
@@ -310,7 +314,7 @@ function generateDialplanFromContexts(nodes, edges, findNode, outEdges, options 
           if (c.type === 'menu') {
             scMenus.push(c);
             const menuLabel = (c.data.label || '').trim() || 'menu';
-            scSeq.push({ line: `Background(\${SOUND_PATH}/${c.data.greeting || '1-bem-vindo'})`, label: menuLabel });
+            scSeq.push({ line: `Background(${c.data.greeting || '1-bem-vindo'})`, label: menuLabel });
             scSeq.push({ line: `WaitExten(${c.data.waitExten || 4})` });
           } else {
             const lns = linesForChild(c);
@@ -365,6 +369,8 @@ function generateDialplanFromContexts(nodes, edges, findNode, outEdges, options 
           const ei = getDigEdge('i');
           if (ei) {
             emitDigSC('i', findNode(ei.target));
+          } else if (m.data.rawILines && m.data.rawILines.length) {
+            for (const l of m.data.rawILines) emit(`exten => i,${l.priority},${l.application}(${l.args})`);
           } else {
             const inv = (m.data.invalidMacro || 'macro-menu-invalid-orpen-home').replace(/^macro-/, '');
             emit(`exten => i,1,Macro(${inv})`);
@@ -373,6 +379,8 @@ function generateDialplanFromContexts(nodes, edges, findNode, outEdges, options 
           const et = getDigEdge('t');
           if (et) {
             emitDigSC('t', findNode(et.target));
+          } else if (m.data.rawTLines && m.data.rawTLines.length) {
+            for (const l of m.data.rawTLines) emit(`exten => t,${l.priority},${l.application}(${l.args})`);
           } else {
             const tmo = (m.data.timeoutMacro || 'macro-menu-timeout-orpen-home').replace(/^macro-/, '');
             emit(`exten => t,1,Macro(${tmo})`);
@@ -434,7 +442,7 @@ function generateDialplanFromContexts(nodes, edges, findNode, outEdges, options 
         // MenuNode → Background + WaitExten + marcador atômico (DTMF emitido inline)
         const menuLabel = (c.data.label || '').trim() || 'menu';
         sSeq.push({
-          line: `Background(\${SOUND_PATH}/${c.data.greeting || '1-bem-vindo'})`,
+          line: `Background(${c.data.greeting || '1-bem-vindo'})`,
           label: menuLabel,
         });
         sSeq.push({ line: `WaitExten(${c.data.waitExten || 4})` });
@@ -528,6 +536,10 @@ function generateDialplanFromContexts(nodes, edges, findNode, outEdges, options 
         const ei = handleEdge('i');
         if (ei) {
           emitDigit('i', findNode(ei.target));
+        } else if (m.data.rawILines && m.data.rawILines.length) {
+          for (const l of m.data.rawILines) {
+            emit(`exten => i,${l.priority},${l.application}(${l.args})`);
+          }
         } else {
           const inv = (m.data.invalidMacro || 'macro-menu-invalid-orpen-home').replace(/^macro-/, '');
           emit(`exten => i,1,Macro(${inv})`);
@@ -536,6 +548,10 @@ function generateDialplanFromContexts(nodes, edges, findNode, outEdges, options 
         const et = handleEdge('t');
         if (et) {
           emitDigit('t', findNode(et.target));
+        } else if (m.data.rawTLines && m.data.rawTLines.length) {
+          for (const l of m.data.rawTLines) {
+            emit(`exten => t,${l.priority},${l.application}(${l.args})`);
+          }
         } else {
           const tmo = (m.data.timeoutMacro || 'macro-menu-timeout-orpen-home').replace(/^macro-/, '');
           emit(`exten => t,1,Macro(${tmo})`);
@@ -700,7 +716,7 @@ function generateDialplanLegacy(nodes, edges, findNode, outEdges) {
     emitS(`Macro(logIvr,ENTER_IVR)`);
     emitS(`Set(CHANNEL(language)=pt_BR)`);
     emitS(`Noop(## URA ${IVR} :: ${CTX} ##)`);
-    emit(`exten => s,n(menu),Background(\${SOUND_PATH}/${m.data.greeting || '1-bem-vindo'})`);
+    emit(`exten => s,n(menu),Background(${m.data.greeting || '1-bem-vindo'})`);
     emitS(`WaitExten(${m.data.waitExten || 4})`);
     sep();
 

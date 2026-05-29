@@ -268,9 +268,9 @@ export function actionLine(n) {
     case 'waitexten':
       return `WaitExten(${d.seconds ?? 4})`;
     case 'playback':
-      return `Playback(\${SOUND_PATH}/${d.filename || ''})`;
+      return `Playback(${d.filename || ''})`;
     case 'background':
-      return `Background(\${SOUND_PATH}/${d.filename || ''})`;
+      return `Background(${d.filename || ''})`;
     default:
       return null;
   }

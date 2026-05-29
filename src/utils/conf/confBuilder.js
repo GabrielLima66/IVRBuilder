@@ -142,8 +142,8 @@ export function build(graph, layout) {
       nodes.push(nodeObj);
       childNodeIds.push(nid);
 
-      // Only include in sequential order if not a macro-for-i/t stray node
-      if (!childSpec._dtmfMacroFor) {
+      // Only include in sequential order if not a dtmf-linked stray node
+      if (!childSpec._dtmfMacroFor && !childSpec._dtmfDirectFor) {
         sequential.push(nid);
       }
     }
@@ -171,19 +171,19 @@ export function build(graph, layout) {
       });
     }
 
-    // Add edges from menu d-i/d-t to their macro child nodes
+    // Add edges from menu d-i/d-t/d-N to their linked child nodes (macros for i/t, routes for Queue digits)
     for (let ni = 0; ni < ctx.childNodes.length; ni++) {
       const childSpec = ctx.childNodes[ni];
       if (!childSpec._menuNodeMarker) continue;
 
       const menuNid = nodeIdByIdx[ni];
 
-      // Find the macro nodes immediately after the menu node
       for (let mi = ni + 1; mi < ctx.childNodes.length; mi++) {
         const macroSpec = ctx.childNodes[mi];
-        if (!macroSpec._dtmfMacroFor) continue;
+        if (!macroSpec._dtmfMacroFor && !macroSpec._dtmfDirectFor) continue;
         const macroNid  = nodeIdByIdx[mi];
-        const digit     = macroSpec._dtmfMacroFor; // 'i' or 't'
+        const digit     = macroSpec._dtmfMacroFor || macroSpec._dtmfDirectFor;
+        const app       = macroSpec._dtmfMacroFor ? EDGE_ORANGE : EDGE_GREEN;
 
         edges.push({
           id:           `e-ref-${uid()}`,
@@ -193,7 +193,7 @@ export function build(graph, layout) {
           targetHandle: 'in',
           type:         'floating',
           data:         { offsetX: 0, offsetY: 0 },
-          ...EDGE_ORANGE,
+          ...app,
         });
       }
     }

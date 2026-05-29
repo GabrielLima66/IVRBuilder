@@ -93,15 +93,13 @@ function appToNodeData(application, args) {
     case 'noop':
       return { type: 'noop', data: { text: params, label: '' } };
 
-    case 'playback': {
-      const fname = params.split('/').pop();
-      return { type: 'playback', data: { filename: fname, label: '' } };
-    }
+    case 'playback':
+      // Store the full path as-is — exporter emits Playback(filename) without adding ${SOUND_PATH}/
+      return { type: 'playback', data: { filename: params, label: '' } };
 
-    case 'background': {
-      const fname = params.split('/').pop();
-      return { type: 'background', data: { filename: fname, label: '' } };
-    }
+    case 'background':
+      // Store the full path as-is — exporter emits Background(filename) without adding ${SOUND_PATH}/
+      return { type: 'background', data: { filename: params, label: '' } };
 
     case 'gotoiftime': {
       const qi = params.indexOf('?');
@@ -376,14 +374,17 @@ function resolveContext(rawCtx, globalConfig, isFirstContext) {
       continue;
     }
 
-    childNodes.push({ type: nd.type, data: nd.data || {} });
+    childNodes.push({
+      type: nd.type,
+      data: ext.inlineComment ? { ...nd.data, inlineComment: ext.inlineComment } : (nd.data || {}),
+    });
   }
 
   // ── 3. Process commented extensions ────────────────────────────────────
   for (const rawLine of rawCtx.commentedLines) {
     const resolved = resolveCommentedLine(rawLine);
-    // Reconstruct the original commented line for _origLine
-    const origLine = `;exten => ${rawLine}`;
+    // rawLine from the lexer already contains 'exten => ...', so just prepend ';'
+    const origLine = `;${rawLine}`;
     childNodes.push({
       type: resolved.type,
       data: resolved.data,
@@ -400,17 +401,20 @@ function resolveContext(rawCtx, globalConfig, isFirstContext) {
     }
 
     // Absorb WaitExten and Background from the END of childNodes (before dtmf)
-    // These are embedded into the MenuNode
+    // These are embedded into the MenuNode ONLY when both are present (Background → WaitExten → DTMF).
+    // A standalone Background followed by Goto (no WaitExten, no DTMF) must NOT be absorbed.
     let menuWaitExten = 4;
     let greeting = '';
 
     // Remove trailing waitexten node if present
+    let foundWaitExten = false;
     if (childNodes.length > 0 && childNodes[childNodes.length - 1].type === 'waitexten') {
       const removed = childNodes.pop();
       menuWaitExten = removed.data?.seconds ?? 4;
+      foundWaitExten = true;
     }
-    // Remove trailing background node if present
-    if (childNodes.length > 0 && childNodes[childNodes.length - 1].type === 'background') {
+    // Remove trailing background node only if WaitExten was also absorbed
+    if (foundWaitExten && childNodes.length > 0 && childNodes[childNodes.length - 1].type === 'background') {
       const removed = childNodes.pop();
       greeting = removed.data?.filename || '';
     }
@@ -419,28 +423,52 @@ function resolveContext(rawCtx, globalConfig, isFirstContext) {
     const DIGIT_ORDER = ['1', '2', '3', '4', '5', '6', '7', '8', '9', '0'];
     const menuDigits = [];
 
+    // Process 'i' and 't' extensions
+    let invalidMacro = '';
+    let timeoutMacro = '';
+    /** @type {ResolvedNodeData[]} child nodes to append after MenuNode (macros for i/t, routes for Queue digits) */
+    const macroChildNodes = [];
+
     for (const dig of DIGIT_ORDER) {
       if (!dtmfMap.has(dig)) continue;
       const lines = dtmfMap.get(dig);
       const gotoLine = lines.find((l) => /^Goto$/i.test(l.application));
+      const queueLine = lines.find((l) => /^Queue$/i.test(l.application));
       if (gotoLine) {
         const ctxTarget = gotoLine.args.split(',')[0];
         if (ctxTarget) dtmfGotos[dig] = ctxTarget;
+      } else if (queueLine) {
+        const parts = queueLine.args.split(',');
+        macroChildNodes.push({
+          type: 'route',
+          data: {
+            routeMode:    'fila',
+            queue:        parts[0] || '',
+            queueOptions: parts.slice(1).join(',') || '',
+            context: '', extension: 's', priority: '1',
+          },
+          _dtmfDirectFor: dig,
+        });
       }
       menuDigits.push({ id: dig, label: `Opcao ${dig}` });
     }
 
-    // Process 'i' and 't' extensions
-    let invalidMacro = '';
-    let timeoutMacro = '';
-    /** @type {ResolvedNodeData[]} macro nodes to append after MenuNode */
-    const macroChildNodes = [];
-    /** @type {Array<{digit: string, targetIdx: number}>} edges from menu d-x to macro node */
-    const macroEdgeSpecs = [];
+    // rawILines/rawTLines store the original DTMF lines for i/t with their priorities.
+    // Used by the exporter as fallback when no edge is resolved for these handles.
+    const rawILines = (dtmfMap.get('i') || []).map((l) => ({
+      priority:    l.priority || '1',
+      application: l.application,
+      args:        l.args,
+    }));
+    const rawTLines = (dtmfMap.get('t') || []).map((l) => ({
+      priority:    l.priority || '1',
+      application: l.application,
+      args:        l.args,
+    }));
 
     for (const ext of ['i', 't']) {
       if (!dtmfMap.has(ext)) continue;
-      const lines = dtmfMap.get(ext);
+      const lines     = dtmfMap.get(ext);
       const macroLine = lines.find((l) => /^Macro$/i.test(l.application));
       const gotoLine  = lines.find((l) => /^Goto$/i.test(l.application));
 
@@ -450,7 +478,6 @@ function resolveContext(rawCtx, globalConfig, isFirstContext) {
         if (ext === 'i') invalidMacro = name;
         else             timeoutMacro = name;
 
-        const macroNodeIdx = childNodes.length + 1 + macroChildNodes.length; // tentative
         macroChildNodes.push({
           type: 'macro',
           data: { name, params: parts.slice(1).filter(Boolean), label: '' },
@@ -476,6 +503,10 @@ function resolveContext(rawCtx, globalConfig, isFirstContext) {
         retryGoto:    '',
         invalidSound: '',
         _dtmfGotos:   dtmfGotos,
+        // Preserve original i/t lines (with priorities) for round-trip fidelity.
+        // Used by the exporter when no resolved edge exists for d-i / d-t.
+        ...(rawILines.length ? { rawILines } : {}),
+        ...(rawTLines.length ? { rawTLines } : {}),
       },
       _menuNodeMarker: true,
     });

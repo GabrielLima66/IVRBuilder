@@ -41,6 +41,8 @@ function getOrderedContexts(nodes) {
 function generateDialplanFromContexts(nodes, edges, findNode, outEdges, options = {}) {
   const includeSectionComments = options.includeSectionComments !== false;
   const ctxNodes = getOrderedContexts(nodes);
+  // O(1) context lookup by name — used in label-reference validation (inside loops)
+  const contextByName = new Map(ctxNodes.map((n) => [n.data.contextName, n]));
 
   const lines = [];
   const emit    = (l) => lines.push(l);
@@ -99,7 +101,7 @@ function generateDialplanFromContexts(nodes, edges, findNode, outEdges, options 
           for (let i = 0; i < edges.length; i++) {
             const ed = edges[i];
             if (ed.source !== n.id) continue;
-            const tgt = nodes.find((x) => x.id === ed.target); // findNode direto no array
+            const tgt = findNode(ed.target);
             if (tgt && tgt.type === 'context' && tgt.data && tgt.data.contextName) {
               dest = tgt.data.contextName.trim();
               if (dest) break;
@@ -338,7 +340,7 @@ function generateDialplanFromContexts(nodes, edges, findNode, outEdges, options 
           if (!hasDest) {
             for (const ed of edges) {
               if (ed.source !== c.id) continue;
-              const tgt = nodes.find((x) => x.id === ed.target);
+              const tgt = findNode(ed.target);
               if (tgt && tgt.type === 'context') { hasDest = tgt.data.contextName || ''; break; }
             }
           }
@@ -351,7 +353,7 @@ function generateDialplanFromContexts(nodes, edges, findNode, outEdges, options 
         for (const c of scChain) {
           if (c.type === 'menu') {
             scMenus.push(c);
-            const menuLabel = (c.data.label || '').trim() || 'menu';
+            const menuLabel = (c.data.label != null ? c.data.label : 'menu').trim();
             const scAudioFiles = Array.isArray(c.data.audioFiles) && c.data.audioFiles.length > 0
               ? c.data.audioFiles
               : [c.data.greeting || '1-bem-vindo'];
@@ -492,7 +494,7 @@ function generateDialplanFromContexts(nodes, edges, findNode, outEdges, options 
 
       if (c.type === 'menu') {
         // MenuNode → Background (múltiplos arquivos via &) + WaitExten + marcador atômico
-        const menuLabel = (c.data.label || '').trim() || 'menu';
+        const menuLabel = (c.data.label != null ? c.data.label : 'menu').trim();
         // Constrói a linha Background com audioFiles (suporta múltiplos via &)
         const audioFiles = Array.isArray(c.data.audioFiles) && c.data.audioFiles.length > 0
           ? c.data.audioFiles
@@ -523,7 +525,7 @@ function generateDialplanFromContexts(nodes, edges, findNode, outEdges, options 
         const [destCtxName, , labelOrPri] = parts;
         const trimmed = (labelOrPri || '').trim();
         if (!trimmed || /^\d+$/.test(trimmed)) return; // é prioridade numérica
-        const ctxNode = nodes.find((n) => n.type === 'context' && n.data.contextName === destCtxName.trim());
+        const ctxNode = contextByName.get(destCtxName.trim());
         if (!ctxNode) return; // contexto não mapeado no canvas
         const hasLabel = nodes.some(
           (n) => n.parentNode === ctxNode.id && ACTION_META[n.type]?.supportsLabel && (n.data.label || '').trim() === trimmed
@@ -548,7 +550,9 @@ function generateDialplanFromContexts(nodes, edges, findNode, outEdges, options 
       // Emite TODAS as extensões DTMF de um menu imediatamente (bloco atômico).
       // Chamado pelo marcador { menuFlush } no meio do sSeq.
       const emitMenuDtmf = (m) => {
-        const menuLabel = (m.data.label || '').trim() || 'menu';
+        const menuLabel    = (m.data.label != null ? m.data.label : 'menu').trim();
+        // Quando label está vazio, o Goto de retorno usa prioridade 1 (sem label)
+        const menuGotoPri  = menuLabel || '1';
         const digits    = m.data.digits || [];
 
         const handleEdge = (digitId) =>
@@ -688,14 +692,14 @@ function generateDialplanFromContexts(nodes, edges, findNode, outEdges, options 
           emitOptActions(iOpt, 'i');
           const ifd = iOpt.finalDestination;
           // BUG 7/4: emite Goto com aridade correta; fallback ao menu se sem destino
-          if (!emitGotoAridade(ifd, 'i')) emit(`exten => i,n,Goto(${ctxName},s,${menuLabel})`);
+          if (!emitGotoAridade(ifd, 'i')) emit(`exten => i,n,Goto(${ctxName},s,${menuGotoPri})`);
         } else if (ei) {
           emitDigit('i', findNode(ei.target));
         } else {
           // BUG 4: usa invalidMacroName (nome exato sem replace) se disponível
           const inv = m.data.invalidMacroName || (m.data.invalidMacro || 'macro-menu-invalid-orpen-home').replace(/^macro-/, '');
           emit(`exten => i,1,Macro(${inv})`);
-          emit(`exten => i,n,Goto(${ctxName},s,${menuLabel})`);
+          emit(`exten => i,n,Goto(${ctxName},s,${menuGotoPri})`);
         }
 
         // ── Opção t (timeout) ────────────────────────────────────────────────
@@ -707,14 +711,14 @@ function generateDialplanFromContexts(nodes, edges, findNode, outEdges, options 
           emitOptActions(tOpt, 't');
           const tfd = tOpt.finalDestination;
           // BUG 7/4: emite Goto com aridade correta; fallback ao menu se sem destino
-          if (!emitGotoAridade(tfd, 't')) emit(`exten => t,n,Goto(${ctxName},s,${menuLabel})`);
+          if (!emitGotoAridade(tfd, 't')) emit(`exten => t,n,Goto(${ctxName},s,${menuGotoPri})`);
         } else if (et) {
           emitDigit('t', findNode(et.target));
         } else {
           // BUG 4: usa timeoutMacroName (nome exato sem replace) se disponível
           const tmo = m.data.timeoutMacroName || (m.data.timeoutMacro || 'macro-menu-timeout-orpen-home').replace(/^macro-/, '');
           emit(`exten => t,1,Macro(${tmo})`);
-          emit(`exten => t,n,Goto(${ctxName},s,${menuLabel})`);
+          emit(`exten => t,n,Goto(${ctxName},s,${menuGotoPri})`);
         }
       };
 
@@ -820,7 +824,7 @@ function generateDialplanLegacy(nodes, edges, findNode, outEdges) {
         for (let i = 0; i < edges.length; i++) {
           const ed = edges[i];
           if (ed.source !== t.id) continue;
-          const tgt = nodes.find((x) => x.id === ed.target);
+          const tgt = findNode(ed.target);
           if (tgt && tgt.type === 'context' && tgt.data && tgt.data.contextName) {
             dest = tgt.data.contextName.trim();
             if (dest) break;
@@ -1019,9 +1023,20 @@ function generateDialplanLegacy(nodes, edges, findNode, outEdges) {
  * @param {{ includeSectionComments?: boolean }} [options]
  */
 export function generateDialplan(nodes, edges, options = {}) {
-  const findNode = (id) => nodes.find((n) => n.id === id);
-  const outEdges = (id, handle) =>
-    edges.filter((e) => e.source === id && (handle ? e.sourceHandle === handle : true));
+  // O(1) node lookup — replaces O(n) nodes.find() across all inner loops
+  const nodeById = new Map(nodes.map((n) => [n.id, n]));
+  const findNode = (id) => nodeById.get(id);
+
+  // O(k) edge lookup per source — replaces O(m) edges.filter() per call
+  const edgesBySource = new Map();
+  for (const e of edges) {
+    const list = edgesBySource.get(e.source);
+    if (list) list.push(e); else edgesBySource.set(e.source, [e]);
+  }
+  const outEdges = (id, handle) => {
+    const list = edgesBySource.get(id) || [];
+    return handle ? list.filter((e) => e.sourceHandle === handle) : list;
+  };
 
   if (nodes.some((n) => n.type === 'context')) {
     return generateDialplanFromContexts(nodes, edges, findNode, outEdges, options);

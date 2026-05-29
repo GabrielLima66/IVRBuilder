@@ -46,6 +46,7 @@ export const NODE_MODE_CONFIG = {
     dica:          'Configure o áudio do menu e as ações para cada tecla que o cliente pode pressionar (1, 2, 3...)',
     campos: {
       contextName: 'Nome do contexto deste menu',
+      label:       'Label do menu (ponto de re-entrada)',
       greeting:    'Arquivo de áudio do menu',
       waitExten:   'Tempo de espera (segundos)',
       invalidMacro:'Ação para tecla inválida',

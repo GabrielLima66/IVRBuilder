@@ -45,6 +45,7 @@ export function buildNode(type, position) {
             actions:          [],
             finalDestination: null,
           })),
+          label:         'menu',               // label da linha Background — ponto de re-entrada (ex: Goto(ctx,s,menu))
           invalidMacro:  'macro-menu-invalid-orpen-home',
           timeoutMacro:  'macro-menu-timeout-orpen-home',
           invalidOption: null,

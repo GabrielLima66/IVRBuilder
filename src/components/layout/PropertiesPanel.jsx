@@ -160,7 +160,7 @@ const MonthPicker = memo(function MonthPicker({ selected, onChange }) {
 // Extraído do PropertiesPanel para que useRef seja chamado incondicionalmente
 // (Rules of Hooks — não pode ficar dentro de IIFE condicional).
 
-const MenuPropertiesPanel = memo(function MenuPropertiesPanel({ d, set, fl, onAudioFilesChange }) {
+const MenuPropertiesPanel = memo(function MenuPropertiesPanel({ d, set, fl, onAudioFilesChange, onLabelChange }) {
   // dragRef DEVE ficar aqui (nível do componente), nunca dentro de condicional
   const dragRef = useRef(null);
 
@@ -195,6 +195,24 @@ const MenuPropertiesPanel = memo(function MenuPropertiesPanel({ d, set, fl, onAu
     <>
       <Field d={d} set={set} label={fl('Contexto Asterisk', 'contextName')} k="contextName" placeholder="orpen-ivr-home" />
       <Field d={d} set={set} label={fl('WaitExten (seg)', 'waitExten')} k="waitExten" type="number" />
+
+      {/* ── Label do menu (ponto de re-entrada via Goto) ── */}
+      <div style={{ marginBottom: 10 }}>
+        <label className="term-label">{fl('Label do menu (ex: menu)', 'label')}</label>
+        <input
+          className="term-input"
+          value={d.label ?? 'menu'}
+          placeholder="menu"
+          onChange={(e) => {
+            const v = e.target.value.replace(/[^a-z0-9-]/g, '');
+            if (onLabelChange) onLabelChange(v);
+            else set('label', v);
+          }}
+        />
+        <div style={{ fontSize: 9, color: 'var(--neon-dim)', marginTop: 2, lineHeight: 1.5 }}>
+          Gera: <code style={{ color: '#fff' }}>exten =&gt; s,n({d.label || 'menu'}),Background(...)</code>
+        </div>
+      </div>
 
       {/* ── Áudios do menu (Background em sequência) ── */}
       <div style={{ margin: '14px 0 6px', fontSize: 10, color: 'var(--neon-dim)', letterSpacing: 1 }}>
@@ -512,6 +530,28 @@ export default function PropertiesPanel({ node, updateNodeData, deleteNode, togg
           onAudioFilesChange={(newFiles) =>
             updateNodeData(node.id, { ...d, audioFiles: newFiles, greeting: newFiles[0] || '' })
           }
+          onLabelChange={(newLabel) => {
+            const oldLabel = (d.label ?? 'menu').trim();
+            // Propaga rename do label nos finalDestinations das opções i e t
+            const propagateFd = (fd) => {
+              if (!fd || fd.type !== 'context') return fd;
+              // Goto(s,oldLabel) — re-entrada no menu (argCount=2)
+              if (fd.contextName === 's' && fd.ext === oldLabel) return { ...fd, ext: newLabel };
+              // Goto(ctx,s,oldLabel) — re-entrada com 3 partes (argCount=3)
+              if (fd.pri === oldLabel) return { ...fd, pri: newLabel };
+              return fd;
+            };
+            updateNodeData(node.id, {
+              ...d,
+              label: newLabel,
+              invalidOption: d.invalidOption
+                ? { ...d.invalidOption, finalDestination: propagateFd(d.invalidOption?.finalDestination) }
+                : d.invalidOption,
+              timeoutOption: d.timeoutOption
+                ? { ...d.timeoutOption, finalDestination: propagateFd(d.timeoutOption?.finalDestination) }
+                : d.timeoutOption,
+            });
+          }}
         />
       )}
 

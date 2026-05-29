@@ -289,16 +289,44 @@ const MenuPropertiesPanel = memo(function MenuPropertiesPanel({ d, set, fl, onAu
           </div>
         );
       })}
-      <button type="button" className="btn-neon" style={{ width: '100%', padding: '4px 8px', marginTop: 4 }}
-        onClick={() => set('digits', [...(d.digits || []), {
-          id: String((d.digits || []).length + 1),
-          label: 'Nova opção',
-          comment: null,
-          actions: [],
-          finalDestination: null,
-        }])}>
-        + ADICIONAR DÍGITO
-      </button>
+      {/* Seletor de dígitos — exibe 1-9 e 0, clicáveis quando ainda não adicionados */}
+      {(function renderDigitPicker() {
+        const usedIds  = new Set((d.digits || []).map((dd) => dd.id));
+        const ALL_DTMF = ['1','2','3','4','5','6','7','8','9','0'];
+        const available = ALL_DTMF.filter((dig) => !usedIds.has(dig));
+        if (!available.length) return null;
+        return (
+          <div style={{ marginTop: 6, marginBottom: 8 }}>
+            <div style={{ fontSize: 9, color: 'var(--neon-dim)', letterSpacing: 1, marginBottom: 5 }}>
+              + ADICIONAR DÍGITO
+            </div>
+            <div style={{ display: 'flex', flexWrap: 'wrap', gap: 4 }}>
+              {ALL_DTMF.map((dig) => {
+                if (usedIds.has(dig)) return null;
+                const defaultLabel = dig === '0' ? 'Falar c/ atendente' : `Opcao ${dig}`;
+                return (
+                  <button
+                    key={dig}
+                    type="button"
+                    className="btn-neon"
+                    style={{ padding: '3px 10px', fontSize: 11, letterSpacing: 1, minWidth: 36 }}
+                    aria-label={`Adicionar dígito ${dig}`}
+                    onClick={() => set('digits', [...(d.digits || []), {
+                      id:               dig,
+                      label:            defaultLabel,
+                      comment:          null,
+                      actions:          [],
+                      finalDestination: null,
+                    }])}
+                  >
+                    {dig}
+                  </button>
+                );
+              })}
+            </div>
+          </div>
+        );
+      })()}
 
       <div style={{ margin: '14px 0 6px', fontSize: 10, color: 'var(--neon-dim)', letterSpacing: 1 }}>
         ▌FALLBACK (i / t)

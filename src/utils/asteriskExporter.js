@@ -23,7 +23,8 @@ function isSeqEdge(e, curNode) {
 // ─────────────────────────────────────────────────────────────────────────────
 function getOrderedContexts(nodes) {
   return nodes
-    .filter((n) => n.type === 'context' && !n.data?.isDraft)
+    // Exclui virtual contexts (expandedFrom): suas linhas são injetadas inline pelo compilador
+    .filter((n) => n.type === 'context' && !n.data?.isDraft && !n.data?.expandedFrom)
     .sort((a, b) => {
       // exportOrder explícito tem prioridade; fallback para Infinity (vai ao final)
       const ao = (a.data?.exportOrder != null && a.data.exportOrder !== '')
@@ -129,6 +130,10 @@ function generateDialplanFromContexts(nodes, edges, findNode, outEdges, options 
             `Goto(orpen-ivr-transfer,s,1)`,
           ];
         }
+        // _argCount preserva a aridade original do Goto (1, 2 ou 3 partes)
+        const ac = n.data._argCount;
+        if (ac === 1) return [`Goto(${n.data.context || ''})`];
+        if (ac === 2) return [`Goto(${n.data.context || ''},${n.data.extension || 's'})`];
         return [`Goto(${n.data.context || ''},${n.data.extension || 's'},${n.data.priority || '1'})`];
       }
       case 'commented':
@@ -585,6 +590,26 @@ function generateDialplanFromContexts(nodes, edges, findNode, outEdges, options 
           return false;
         };
 
+        // ── Helper: injeta virtual context inline (sem bloco [nome] próprio) ────
+        // Emite Macro(sayDigit) + Macro(logIvr) + linhas dos filhos como exten => extId,N,...
+        const emitVirtualCtxInline = (virtualCtx, extId, logIvrLabel) => {
+          const childIds  = virtualCtx.data.childOrder || [];
+          const children  = childIds.map((cid) => findNode(cid)).filter(Boolean);
+          if (!children.length) return; // contexto vazio — não emite boilerplate
+          let pri1 = true;
+          const emitLn = (line) => {
+            if (!line) return;
+            emit(`exten => ${extId},${pri1 ? '1' : 'n'},${line}`);
+            pri1 = false;
+          };
+          emitLn(`Macro(sayDigit,\${EXTEN})`);
+          const logLbl = logIvrLabel || `${ctxName}-op-${extId}`;
+          emitLn(`Macro(logIvr,ENTER_CONTEXT,${logLbl})`);
+          for (const child of children) {
+            for (const ln of linesForChild(child)) emitLn(ln);
+          }
+        };
+
         for (const dig of digits) {
           // ── Modo rico: usa actions[] e finalDestination stored no dig (importação) ──
           const hasStoredData = Array.isArray(dig.actions)
@@ -642,7 +667,13 @@ function generateDialplanFromContexts(nodes, edges, findNode, outEdges, options 
           // ── Modo legado: segue edges do canvas ──────────────────────────────
           const e = handleEdge(dig.id);
           if (!e) continue;
-          emitDigit(dig.id, findNode(e.target));
+          const eTgt = findNode(e.target);
+          // Virtual context: injeta linhas inline (não emite [bloco] próprio)
+          if (eTgt?.type === 'context' && eTgt.data?.expandedFrom === m.id) {
+            emitVirtualCtxInline(eTgt, dig.id, dig.logIvrLabel);
+          } else {
+            emitDigit(dig.id, eTgt);
+          }
         }
 
         // ── Helper: emite actions de uma opção i/t respeitando GotoIfTime ───────
@@ -694,7 +725,12 @@ function generateDialplanFromContexts(nodes, edges, findNode, outEdges, options 
           // BUG 7/4: emite Goto com aridade correta; fallback ao menu se sem destino
           if (!emitGotoAridade(ifd, 'i')) emit(`exten => i,n,Goto(${ctxName},s,${menuGotoPri})`);
         } else if (ei) {
-          emitDigit('i', findNode(ei.target));
+          const eiTgt = findNode(ei.target);
+          if (eiTgt?.type === 'context' && eiTgt.data?.expandedFrom === m.id) {
+            emitVirtualCtxInline(eiTgt, 'i', iOpt?.logIvrLabel);
+          } else {
+            emitDigit('i', eiTgt);
+          }
         } else {
           // BUG 4: usa invalidMacroName (nome exato sem replace) se disponível
           const inv = m.data.invalidMacroName || (m.data.invalidMacro || 'macro-menu-invalid-orpen-home').replace(/^macro-/, '');
@@ -713,7 +749,12 @@ function generateDialplanFromContexts(nodes, edges, findNode, outEdges, options 
           // BUG 7/4: emite Goto com aridade correta; fallback ao menu se sem destino
           if (!emitGotoAridade(tfd, 't')) emit(`exten => t,n,Goto(${ctxName},s,${menuGotoPri})`);
         } else if (et) {
-          emitDigit('t', findNode(et.target));
+          const etTgt = findNode(et.target);
+          if (etTgt?.type === 'context' && etTgt.data?.expandedFrom === m.id) {
+            emitVirtualCtxInline(etTgt, 't', tOpt?.logIvrLabel);
+          } else {
+            emitDigit('t', etTgt);
+          }
         } else {
           // BUG 4: usa timeoutMacroName (nome exato sem replace) se disponível
           const tmo = m.data.timeoutMacroName || (m.data.timeoutMacro || 'macro-menu-timeout-orpen-home').replace(/^macro-/, '');

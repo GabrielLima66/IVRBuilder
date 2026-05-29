@@ -160,7 +160,7 @@ const MonthPicker = memo(function MonthPicker({ selected, onChange }) {
 // Extraído do PropertiesPanel para que useRef seja chamado incondicionalmente
 // (Rules of Hooks — não pode ficar dentro de IIFE condicional).
 
-const MenuPropertiesPanel = memo(function MenuPropertiesPanel({ d, set, fl }) {
+const MenuPropertiesPanel = memo(function MenuPropertiesPanel({ d, set, fl, onAudioFilesChange }) {
   // dragRef DEVE ficar aqui (nível do componente), nunca dentro de condicional
   const dragRef = useRef(null);
 
@@ -168,10 +168,13 @@ const MenuPropertiesPanel = memo(function MenuPropertiesPanel({ d, set, fl }) {
     ? d.audioFiles
     : [d.greeting || '1-bem-vindo'];
 
-  const setAudioFiles = (newFiles) => {
+  // onAudioFilesChange faz uma única chamada atômica a updateNodeData,
+  // evitando o bug de stale closure que ocorre ao chamar set() duas vezes
+  // em sequência (a segunda sobrescrevia a primeira com os dados antigos).
+  const setAudioFiles = onAudioFilesChange ?? ((newFiles) => {
     set('audioFiles', newFiles);
-    set('greeting', newFiles[0] || ''); // mantém compat legado
-  };
+    set('greeting', newFiles[0] || '');
+  });
 
   const handleAudioDragStart = (e, idx) => {
     dragRef.current = idx;
@@ -474,7 +477,14 @@ export default function PropertiesPanel({ node, updateNodeData, deleteNode, togg
 
       {/* ── MENU ── */}
       {node.type === 'menu' && (
-        <MenuPropertiesPanel d={d} set={set} fl={fl} />
+        <MenuPropertiesPanel
+          d={d}
+          set={set}
+          fl={fl}
+          onAudioFilesChange={(newFiles) =>
+            updateNodeData(node.id, { ...d, audioFiles: newFiles, greeting: newFiles[0] || '' })
+          }
+        />
       )}
 
       {/* ── TIME ── */}

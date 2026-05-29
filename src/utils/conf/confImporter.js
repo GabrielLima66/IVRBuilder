@@ -26,6 +26,7 @@ import { map }             from './confMapper.js';
 import { resolve }         from './confResolver.js';
 import { calculateLayout } from './confLayout.js';
 import { build }           from './confBuilder.js';
+import { expandDtmfOptions } from '../expandDtmfOptions.js';
 import { generateDialplan } from '../asteriskExporter.js';
 import { resetUnknownCommands, getUnknownCommands } from './unknownCommandsLog.js';
 
@@ -52,7 +53,12 @@ export function importConf(rawContent) {
   const layout = calculateLayout(graph);
 
   // ── Fase 5: Builder ────────────────────────────────────────────────────────
-  const { nodes, edges, contextNameRenames = [] } = build(graph, layout);
+  const { nodes: builtNodes, edges: builtEdges, contextNameRenames = [] } = build(graph, layout);
+
+  // ── Fase 6: Expansão DTMF ─────────────────────────────────────────────────
+  // Cada opção DTMF (ações inline) vira um ContextNode virtual independente.
+  // O compilador injeta as linhas desses contextos inline no bloco do pai.
+  const { nodes, edges } = expandDtmfOptions(builtNodes, builtEdges);
   const flowState = { nodes, edges };
 
   // ── Round-trip validation ──────────────────────────────────────────────────

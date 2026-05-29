@@ -1,12 +1,19 @@
 /**
  * expandDtmfOptions.js — Fase 6 do pipeline de importação.
  *
- * Converte automaticamente cada opção DTMF de um MenuNode em um ContextNode
- * independente no canvas ("virtual context"). Esses contextos têm o campo
- * data.expandedFrom = menuNodeId, o que instrui o compilador a injetar suas
- * linhas inline no bloco do contexto pai, sem emitir um [bloco] próprio.
+ * Aplica a regra seletiva inline vs ContextNode para cada opção DTMF:
  *
- * A função é pura: recebe nodes + edges e retorna { nodes, edges } atualizados.
+ *  INLINE (opção simples) — actions[] vazio ou só ações de roteamento:
+ *    Só Goto / Queue / Dial / Hangup / Macro de fallback → mantém finalDestination
+ *    no MenuNode e deixa o compilador emitir diretamente.
+ *
+ *  CONTEXTNODE (opção complexa) — 1+ ação real em actions[]:
+ *    Set, AGI, Playback, Background, ExecIfTime, GotoIfTime, SIPAddHeader → cria
+ *    um ContextNode virtual com data.expandedFrom = menuNodeId.
+ *    O compilador injeta as linhas desse contexto inline no bloco do pai.
+ *
+ * Macro(sayDigit) e Macro(logIvr,ENTER_CONTEXT) NÃO chegam aqui —
+ * já foram filtrados pelo confResolver.processOptionLines.
  */
 
 import { uid }                     from './common.js';
@@ -24,6 +31,26 @@ const EDGE_GREEN = {
 
 /** Largura dos nós filhos dentro dos virtual contexts */
 const CHILD_W = 280;
+
+/**
+ * Tipos de ação que tornam uma opção DTMF "complexa", exigindo ContextNode.
+ * Macros de boilerplate (sayDigit, logIvr) já foram filtrados pelo resolver.
+ * Ações de roteamento puro (route/hangup/dial/macro-de-fallback) NÃO contam.
+ */
+const REAL_ACTION_TYPES = new Set([
+  'set', 'agi', 'playback', 'background', 'execiftime', 'time', 'sipaddheader',
+]);
+
+/**
+ * Retorna true se a lista de ações contém pelo menos uma ação "real"
+ * (transformativa, que não é apenas roteamento de destino).
+ *
+ * @param {Array<{type: string}>} actions
+ * @returns {boolean}
+ */
+function isComplexOption(actions) {
+  return (actions || []).some((a) => REAL_ACTION_TYPES.has(a.type));
+}
 
 // ── Helpers de construção de nós filhos ──────────────────────────────────────
 
@@ -49,29 +76,27 @@ function buildChildNodeFromFinalDest(fd, ctxId) {
   if (fd.type === 'hangup') {
     return {
       ...buildNode('hangup', { x: 20, y: 0 }),
-      id:         childId,
-      data:       { causeCode: fd.causeCode || '' },
+      id: childId, data: { causeCode: fd.causeCode || '' },
       parentNode: ctxId, extent: 'parent', draggable: false,
-      position:   { x: 20, y: 0 }, style: { width: CHILD_W },
+      position: { x: 20, y: 0 }, style: { width: CHILD_W },
     };
   }
 
   if (fd.type === 'queue') {
     return {
       ...buildNode('route', { x: 20, y: 0 }),
-      id:         childId,
-      data:       { routeMode: 'fila', queue: fd.ext || fd.ctx || '', queueOptions: '', context: '', extension: 's', priority: '1' },
+      id: childId,
+      data: { routeMode: 'fila', queue: fd.ext || fd.ctx || '', queueOptions: '', context: '', extension: 's', priority: '1' },
       parentNode: ctxId, extent: 'parent', draggable: false,
-      position:   { x: 20, y: 0 }, style: { width: CHILD_W },
+      position: { x: 20, y: 0 }, style: { width: CHILD_W },
     };
   }
 
   if (fd.type === 'context') {
-    // Preserva argCount para round-trip de fidelidade
     return {
       ...buildNode('route', { x: 20, y: 0 }),
-      id:         childId,
-      data:       {
+      id: childId,
+      data: {
         routeMode: 'context', queue: '', queueOptions: '',
         context:   fd.contextName || '',
         extension: fd.ext || 's',
@@ -79,27 +104,27 @@ function buildChildNodeFromFinalDest(fd, ctxId) {
         _argCount: fd.argCount || 3,
       },
       parentNode: ctxId, extent: 'parent', draggable: false,
-      position:   { x: 20, y: 0 }, style: { width: CHILD_W },
+      position: { x: 20, y: 0 }, style: { width: CHILD_W },
     };
   }
 
   if (fd.type === 'dial') {
     return {
       ...buildNode('dial', { x: 20, y: 0 }),
-      id:         childId,
-      data:       { destination: fd.target || '', timeout: fd.timeout || '30', options: '' },
+      id: childId,
+      data: { destination: fd.target || '', timeout: fd.timeout || '30', options: '' },
       parentNode: ctxId, extent: 'parent', draggable: false,
-      position:   { x: 20, y: 0 }, style: { width: CHILD_W },
+      position: { x: 20, y: 0 }, style: { width: CHILD_W },
     };
   }
 
   if (fd.type === 'playback_only') {
     return {
       ...buildNode('playback', { x: 20, y: 0 }),
-      id:         childId,
-      data:       { filename: fd.filename || '', label: '' },
+      id: childId,
+      data: { filename: fd.filename || '', label: '' },
       parentNode: ctxId, extent: 'parent', draggable: false,
-      position:   { x: 20, y: 0 }, style: { width: CHILD_W },
+      position: { x: 20, y: 0 }, style: { width: CHILD_W },
     };
   }
 
@@ -109,7 +134,6 @@ function buildChildNodeFromFinalDest(fd, ctxId) {
 // ── Criação de um virtual context ─────────────────────────────────────────────
 
 function createVirtualCtx(menuNodeId, extId, actions, finalDest, logIvrLabel, parentCtxName, existingCtxNames, exportOrder) {
-  // Nome derivado de logIvrLabel ou fallback ctxName-op-digit
   const cleanParent = (parentCtxName || 'menu').replace(/^(orpen-ivr-|rcx-ivr-)/, '');
   const lbl         = logIvrLabel || `${cleanParent}-op-${extId}`;
   const baseName    = `${DTMF_CTX_PREFIX}-${lbl}`;
@@ -137,12 +161,12 @@ function createVirtualCtx(menuNodeId, extId, actions, finalDest, logIvrLabel, pa
     type:     'context',
     position: { x: 0, y: 0 }, // arrangeContextNodes reposiciona via expandedFrom
     data: {
-      contextName: uniqueName,
+      contextName:   uniqueName,
       childOrder,
       exportOrder,
-      isDraft:     false,
-      expandedFrom:  menuNodeId,  // instrui o compilador a injetar inline
-      expandedDigit: extId,       // dígito da opção ('1','2','i','t', etc.)
+      isDraft:       false,
+      expandedFrom:  menuNodeId,
+      expandedDigit: extId,
     },
     style:  { width: 320, height: 54 },
     zIndex: -1,
@@ -154,7 +178,7 @@ function createVirtualCtx(menuNodeId, extId, actions, finalDest, logIvrLabel, pa
 // ── Entry point ───────────────────────────────────────────────────────────────
 
 /**
- * Expande todas as opções DTMF de todos os MenuNodes em ContextNodes virtuais.
+ * Aplica a regra seletiva inline vs ContextNode para todas as opções DTMF.
  *
  * Chamada após a Fase 5 (build) do pipeline de importação.
  *
@@ -166,7 +190,6 @@ export function expandDtmfOptions(nodes, edges) {
   const resNodes = [...nodes];
   const resEdges = [...edges];
 
-  // Nomes existentes — crescem a cada virtual context criado
   const existingCtxNames = nodes
     .filter((n) => n.type === 'context')
     .map((n) => n.data?.contextName || '');
@@ -177,26 +200,26 @@ export function expandDtmfOptions(nodes, edges) {
     const parentCtxName = menuNode.data?.contextName || '';
     let optIdx = 0;
 
-    // exportOrder base para os novos virtual contexts
-    const maxOrder = resNodes
+    const maxOrderBase = () => resNodes
       .filter((n) => n.type === 'context')
       .reduce((mx, n) => Math.max(mx, n.data?.exportOrder ?? 0), 0);
 
-    // ── Expande cada dígito numérico ──────────────────────────────────────────
+    // ── Expande cada dígito numérico (somente se complexo) ────────────────────
     const newDigits = (menuNode.data?.digits || []).map((d) => {
-      const hasContent = (Array.isArray(d.actions) && d.actions.length > 0) || d.finalDestination != null;
-      if (!hasContent || d.expandedToContextId) return d; // já expandido ou vazio
+      if (d.expandedToContextId) return d; // já expandido (sessão anterior)
+
+      const complex = isComplexOption(d.actions);
+      if (!complex) return d; // opção simples → fica inline, preserva finalDestination
 
       const { ctxNode, childNodes, uniqueName } = createVirtualCtx(
         menuNode.id, d.id, d.actions, d.finalDestination, d.logIvrLabel,
-        parentCtxName, existingCtxNames, maxOrder + ++optIdx,
+        parentCtxName, existingCtxNames, maxOrderBase() + ++optIdx,
       );
 
-      // Remove edge existente para este handle (cross-ref de _dtmfGotos)
+      // Remove cross-ref existente para este handle (substituído pela edge ao virtual ctx)
       const oldIdx = resEdges.findIndex((e) => e.source === menuNode.id && e.sourceHandle === `d-${d.id}`);
       if (oldIdx >= 0) resEdges.splice(oldIdx, 1);
 
-      // Nova edge: menu d-{digit} → virtual context ctx-in
       resEdges.push({
         id:           `e-ref-${uid()}`,
         source:       menuNode.id,
@@ -209,28 +232,26 @@ export function expandDtmfOptions(nodes, edges) {
         ...EDGE_GREEN,
       });
 
-      // Pai antes dos filhos (regra CLAUDE.md)
       resNodes.push(ctxNode);
       for (const child of childNodes) resNodes.push(child);
 
       return {
         ...d,
-        actions:             [],
-        finalDestination:    null,
+        actions:               [],
+        finalDestination:      null,
         expandedToContextId:   ctxNode.id,
         expandedToContextName: uniqueName,
         expandedChildCount:    childNodes.length,
       };
     });
 
-    // ── Expande invalidOption → d-i ───────────────────────────────────────────
+    // ── invalidOption → d-i (somente se complexa) ────────────────────────────
     let newInvalidOption = menuNode.data?.invalidOption ?? null;
     const iOpt = menuNode.data?.invalidOption;
-    if (iOpt && ((Array.isArray(iOpt.actions) && iOpt.actions.length > 0) || iOpt.finalDestination != null)) {
-      const maxOrder2 = resNodes.filter((n) => n.type === 'context').reduce((mx, n) => Math.max(mx, n.data?.exportOrder ?? 0), 0);
+    if (iOpt && isComplexOption(iOpt.actions)) {
       const { ctxNode, childNodes } = createVirtualCtx(
         menuNode.id, 'i', iOpt.actions, iOpt.finalDestination, iOpt.logIvrLabel,
-        parentCtxName, existingCtxNames, maxOrder2 + ++optIdx,
+        parentCtxName, existingCtxNames, maxOrderBase() + ++optIdx,
       );
       const oldIdx = resEdges.findIndex((e) => e.source === menuNode.id && e.sourceHandle === 'd-i');
       if (oldIdx >= 0) resEdges.splice(oldIdx, 1);
@@ -244,14 +265,13 @@ export function expandDtmfOptions(nodes, edges) {
       newInvalidOption = { ...iOpt, actions: [], finalDestination: null };
     }
 
-    // ── Expande timeoutOption → d-t ───────────────────────────────────────────
+    // ── timeoutOption → d-t (somente se complexa) ────────────────────────────
     let newTimeoutOption = menuNode.data?.timeoutOption ?? null;
     const tOpt = menuNode.data?.timeoutOption;
-    if (tOpt && ((Array.isArray(tOpt.actions) && tOpt.actions.length > 0) || tOpt.finalDestination != null)) {
-      const maxOrder3 = resNodes.filter((n) => n.type === 'context').reduce((mx, n) => Math.max(mx, n.data?.exportOrder ?? 0), 0);
+    if (tOpt && isComplexOption(tOpt.actions)) {
       const { ctxNode, childNodes } = createVirtualCtx(
         menuNode.id, 't', tOpt.actions, tOpt.finalDestination, tOpt.logIvrLabel,
-        parentCtxName, existingCtxNames, maxOrder3 + ++optIdx,
+        parentCtxName, existingCtxNames, maxOrderBase() + ++optIdx,
       );
       const oldIdx = resEdges.findIndex((e) => e.source === menuNode.id && e.sourceHandle === 'd-t');
       if (oldIdx >= 0) resEdges.splice(oldIdx, 1);

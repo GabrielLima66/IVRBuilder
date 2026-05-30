@@ -86,7 +86,7 @@ const IntegrationNode = memo(({ id, data, selected }) => {
           </div>
         )}
         {!agiScript && variables.length === 0 && (
-          <div style={{ fontSize: 9, color: '#555', fontStyle: 'italic' }}>
+          <div style={{ fontSize: 9, color: 'var(--node-hint-color)', fontStyle: 'italic' }}>
             configure as propriedades →
           </div>
         )}

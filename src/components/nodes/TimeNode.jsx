@@ -107,7 +107,7 @@ const TimeNode = memo(({ id, data, selected }) => {
             → SE VERDADEIRO
           </div>
           <span style={{
-            color: trueCtx ? '#ffcc00' : '#555',
+            color: trueCtx ? '#ffcc00' : 'var(--panel-hint-color)',
             fontStyle: trueCtx ? 'normal' : 'italic',
           }}>
             {trueCtx || '(sem destino)'}

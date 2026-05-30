@@ -234,10 +234,10 @@ body.mode-amigavel .term-label {
 
 /* PRO — tema Orpen (roxo/violeta): labels em violeta dessaturado, valores em branco suave */
 html[data-theme="orpen"] {
-  --field-label:      #9d4edd;   /* violeta dessaturado — label dos campos */
+  --field-label:      #a855f7;   /* violeta médio — 4.91:1 no painel Orpen */
   --field-value:      #e0e0e0;   /* branco suave — valor dos campos (máx contraste) */
-  --node-hint-color:  #6a3d9e;   /* violeta escuro — dicas abaixo dos campos */
-  --panel-hint-color: #6a3d9e;   /* violeta escuro — dica no painel de propriedades */
+  --node-hint-color:  #7c5cb5;   /* violeta dessaturado — 3.74:1 no painel Orpen */
+  --panel-hint-color: #7c5cb5;   /* violeta dessaturado — 3.74:1 no painel Orpen */
 }
 
 /* PRO — tema Dark (VS Code): valores em branco suave */
@@ -364,7 +364,7 @@ body::before {
   display: block;
   font-size: 10px;
   letter-spacing: 1px;
-  color: var(--neon-dim);
+  color: var(--field-label);
   margin-bottom: 3px;
   text-transform: uppercase;
   transition: color 0.2s;

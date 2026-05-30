@@ -1,4 +1,4 @@
-﻿import React, { useState, useCallback, useRef, useMemo, useEffect, memo } from 'react';
+import React, { useState, useCallback, useRef, useMemo, useEffect, memo } from 'react';
 import ReactFlow, {
   Background,
   Controls,
@@ -40,47 +40,47 @@ import ContextOrderOverlay from './components/canvas/ContextOrderOverlay';
 import ExportOrderPanel from './components/canvas/ExportOrderPanel';
 
 // Ambos os tipos usam EdgeWithWaypoints:
-// 'floating' â€” floating handles + offset elÃ¡stico + desvio automÃ¡tico de obstÃ¡culos
-// 'smoothstep' â€” posiÃ§Ãµes fixas de handle (ctx-start, d-*) sem offset
+// 'floating' — floating handles + offset elástico + desvio automático de obstáculos
+// 'smoothstep' — posições fixas de handle (ctx-start, d-*) sem offset
 const edgeTypes = { floating: EdgeWithWaypoints, smoothstep: EdgeWithWaypoints };
 
-// â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
-// CANVAS â€” estado global do grafo + lÃ³gica de DnD / reparenting
-// Props de projeto (opcionais): permitem integraÃ§Ã£o com HomeScreen.
-// â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+// ─────────────────────────────────────────────────────────────────────────────
+// CANVAS — estado global do grafo + lógica de DnD / reparenting
+// Props de projeto (opcionais): permitem integração com HomeScreen.
+// ─────────────────────────────────────────────────────────────────────────────
 function Canvas({ initialFlow, projectName, projectCreatedAt, currentProjectId, onGoBack, onProjectSaved, isReviewMode, onReviewConfirm, onReviewCancel }) {
-  // LÃª configuraÃ§Ãµes do ConfigContext
+  // Lê configurações do ConfigContext
   const config = useConfig();
   const mode   = config.mode;
 
-  // Tema efetivo â€” derivado do ConfigContext; sem prop theme externo
-  // 'terminal' â†’ data-theme="matrix" (verde)
-  // 'matrix'   â†’ data-theme="orpen"  (roxo)
-  // 'dark'     â†’ data-theme="dark"   (VS Code azul)
+  // Tema efetivo — derivado do ConfigContext; sem prop theme externo
+  // 'terminal' → data-theme="matrix" (verde)
+  // 'matrix'   → data-theme="orpen"  (roxo)
+  // 'dark'     → data-theme="dark"   (VS Code azul)
   const effectiveTheme = config.colorTheme === 'dark'   ? 'dark'
                        : config.colorTheme === 'matrix' ? 'orpen'
                        : 'matrix';
 
-  // Cor principal do tema â€” usada em edges e mini-mapa (JS; nÃ£o pode usar CSS var em SVG)
+  // Cor principal do tema — usada em edges e mini-mapa (JS; não pode usar CSS var em SVG)
   const neonColor = effectiveTheme === 'orpen' ? '#c084fc'
                   : effectiveTheme === 'dark'  ? '#4fc1ff'
                   : '#00ff41';
   const wrapperRef  = useRef(null);
   const rfInstance  = useReactFlow();
 
-  // nodeTypes e edgeTypes sÃ£o constantes de mÃ³dulo â€” jÃ¡ tÃªm referÃªncia estÃ¡vel;
-  // useMemo sobre constante de mÃ³dulo seria overhead sem benefÃ­cio.
+  // nodeTypes e edgeTypes são constantes de módulo — já têm referência estável;
+  // useMemo sobre constante de módulo seria overhead sem benefício.
 
-  // NÃ³s e edges iniciais: usa o flow carregado ou inicia com config padrÃ£o.
-  // Calculados apenas uma vez no mount (o componente Ã© "keyed" por projeto).
+  // Nós e edges iniciais: usa o flow carregado ou inicia com config padrão.
+  // Calculados apenas uma vez no mount (o componente é "keyed" por projeto).
   // eslint-disable-next-line react-hooks/exhaustive-deps
   const initNodes = useMemo(() => {
     const raw = initialFlow?.nodes?.length
       ? initialFlow.nodes
       : [buildNode('config', { x: 60, y: 80 })];
 
-    // ConstrÃ³i childOrder para ContextNodes que ainda nÃ£o o possuem (projetos antigos).
-    // Ordena filhos por posiÃ§Ã£o Y, depois X â€” preserva ordem visual existente.
+    // Constrói childOrder para ContextNodes que ainda não o possuem (projetos antigos).
+    // Ordena filhos por posição Y, depois X — preserva ordem visual existente.
     const ctxIds = new Set(raw.filter((n) => n.type === 'context').map((n) => n.id));
     const byParent = {};
     for (const n of raw) {
@@ -91,7 +91,7 @@ function Canvas({ initialFlow, projectName, projectCreatedAt, currentProjectId, 
 
     return raw.map((n) => {
       if (n.type !== 'context') return n;
-      if (n.data?.childOrder) return n; // jÃ¡ possui childOrder
+      if (n.data?.childOrder) return n; // já possui childOrder
       const children = (byParent[n.id] || [])
         .slice()
         .sort((a, b) => (a.position.y - b.position.y) || (a.position.x - b.position.x));
@@ -101,16 +101,16 @@ function Canvas({ initialFlow, projectName, projectCreatedAt, currentProjectId, 
   // eslint-disable-next-line react-hooks/exhaustive-deps
   const initEdges = useMemo(() => {
     const raw = initialFlow?.edges || [];
-    // NormalizaÃ§Ã£o de edges ao carregar projeto:
-    // - ctx-start: deve ser smoothstep (fixed handle, built-in renderer Ã© OK)
+    // Normalização de edges ao carregar projeto:
+    // - ctx-start: deve ser smoothstep (fixed handle, built-in renderer é OK)
     // - d-* (DTMF): deve ser floating (EdgeWithWaypoints usa rfSourceX/Y do RF
-    //   para posiÃ§Ã£o real de cada handle, com roteamento floating no target)
+    //   para posição real de cada handle, com roteamento floating no target)
     return raw.map((e) => {
-      // ctx-start salvo como floating (legado) â†’ converte para smoothstep
+      // ctx-start salvo como floating (legado) → converte para smoothstep
       if (e.type === 'floating' && isSemanticHandle(e.sourceHandle)) {
         return { ...e, type: 'smoothstep' };
       }
-      // d-* salvo como smoothstep (sessÃ£o anterior) â†’ converte de volta para floating
+      // d-* salvo como smoothstep (sessão anterior) → converte de volta para floating
       if (e.type === 'smoothstep' && /^d-/.test(e.sourceHandle)) {
         return { ...e, type: 'floating', data: { offsetX: 0, offsetY: 0, ...(e.data || {}) } };
       }
@@ -121,20 +121,20 @@ function Canvas({ initialFlow, projectName, projectCreatedAt, currentProjectId, 
   const [nodes, setNodes, onNodesChange] = useNodesState(initNodes);
   const [edges, setEdges, onEdgesChange] = useEdgesState(initEdges);
 
-  // â”€â”€ Refs sincronizadas â€” leitura estÃ¡vel do estado atual sem dep em callbacks â”€
+  // ── Refs sincronizadas — leitura estável do estado atual sem dep em callbacks ─
   // Permite que onConnect, handleEdgesChange, computeActiveFromNode etc. leiam o
-  // valor mais recente de nodes/edges sem precisar tÃª-los no array de deps do
-  // useCallback, evitando recriaÃ§Ã£o de handlers a cada mudanÃ§a no grafo.
+  // valor mais recente de nodes/edges sem precisar tê-los no array de deps do
+  // useCallback, evitando recriação de handlers a cada mudança no grafo.
   const nodesRef = useRef(nodes);
   const edgesRef = useRef(edges);
   useEffect(() => { nodesRef.current = nodes; }, [nodes]);
   useEffect(() => { edgesRef.current = edges; }, [edges]);
 
   const [selectedId,      setSelectedId]      = useState(null);
-  // â”€â”€ SeleÃ§Ã£o visual de edges/nÃ³s vizinhos â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
-  // activeEdgeIds: edges em estado ativo (sÃ³lidas, pulsantes)
-  // activeNodeIds: nÃ³s vizinhos em estado ativo (borda pulsante)
-  // PropagaÃ§Ã£o de 1 nÃ­vel: apenas edges/nÃ³s diretamente conectados ao clicado.
+  // ── Seleção visual de edges/nós vizinhos ─────────────────────────────────
+  // activeEdgeIds: edges em estado ativo (sólidas, pulsantes)
+  // activeNodeIds: nós vizinhos em estado ativo (borda pulsante)
+  // Propagação de 1 nível: apenas edges/nós diretamente conectados ao clicado.
   const [activeEdgeIds,   setActiveEdgeIds]   = useState(() => new Set());
   const [activeNodeIds,   setActiveNodeIds]   = useState(() => new Set());
 
@@ -150,13 +150,13 @@ function Canvas({ initialFlow, projectName, projectCreatedAt, currentProjectId, 
   const [exportLayout,         setExportLayout]         = useState(null); // URALayout para download junto ao .conf
   const [showFirstExportModal, setShowFirstExportModal] = useState(false);
   const [firstExportDontShow,  setFirstExportDontShow]  = useState(false);
-  // Context menu de edge (botÃ£o direito)
+  // Context menu de edge (botão direito)
   const [edgeMenu, setEdgeMenu] = useState(null); // { x, y, edgeId }
 
-  // Nome do arquivo .conf derivado do nome do projeto â€” usado na exportaÃ§Ã£o e no layout.
+  // Nome do arquivo .conf derivado do nome do projeto — usado na exportação e no layout.
   const confFileName = projectName ? `${projectName}.conf` : 'orpen-ura-gerada.conf';
 
-  // â”€â”€ Rastreamento de alteraÃ§Ãµes + auto-save IndexedDB (debounce 2s) â”€â”€â”€â”€â”€â”€
+  // ── Rastreamento de alterações + auto-save IndexedDB (debounce 2s) ──────
   const isDirtyRef   = useRef(false);
   const skipDirtyRef = useRef(true);
   const saveTimerRef = useRef(null);
@@ -190,7 +190,7 @@ function Canvas({ initialFlow, projectName, projectCreatedAt, currentProjectId, 
           isDirtyRef.current = false;
           setSaveStatus('saved');
           setTimeout(() => setSaveStatus(null), 3000);
-          // Persiste layout na store 'layouts' (fire-and-forget, nÃ£o bloqueia o save principal)
+          // Persiste layout na store 'layouts' (fire-and-forget, não bloqueia o save principal)
           try {
             const layout = extractLayout(
               rfInstance.getNodes(),
@@ -199,22 +199,22 @@ function Canvas({ initialFlow, projectName, projectCreatedAt, currentProjectId, 
               confFileName
             );
             saveLayout(confFileName, layout).catch(() => {});
-          } catch (_) { /* layout save failure Ã© nÃ£o-crÃ­tica */ }
+          } catch (_) { /* layout save failure é não-crítica */ }
         })
         .catch(() => setSaveStatus('error'));
     }, (config.autosaveDelay || 2) * 1000);
   }, [nodes, edges]); // eslint-disable-line react-hooks/exhaustive-deps
 
-  // â”€â”€ Modal de confirmaÃ§Ã£o para voltar com alteraÃ§Ãµes nÃ£o salvas â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+  // ── Modal de confirmação para voltar com alterações não salvas ───────────
   const [showBackConfirm, setShowBackConfirm] = useState(false);
 
-  // â”€â”€ ConexÃµes â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+  // ── Conexões ──────────────────────────────────────────────────────────────
   const onConnect = useCallback((params) => {
     const { source, sourceHandle, targetHandle, target } = params;
 
-    // Handle 'true' do TimeNode â†’ direÃ§Ã£o EDGE â†’ CAMPO
+    // Handle 'true' do TimeNode → direção EDGE → CAMPO
     if (sourceHandle === 'true') {
-      // Atualiza trueContext via functional updater â€” sem dep em nodes do closure
+      // Atualiza trueContext via functional updater — sem dep em nodes do closure
       setNodes((ns) => {
         const srcNode = ns.find((n) => n.id === source);
         const tgtNode = ns.find((n) => n.id === target);
@@ -248,8 +248,8 @@ function Canvas({ initialFlow, projectName, projectCreatedAt, currentProjectId, 
       return;
     }
 
-    // Edge padrÃ£o â€” floating quando ambos os handles sÃ£o genÃ©ricos,
-    // smoothstep quando pelo menos um Ã© semanticamente posicionado.
+    // Edge padrão — floating quando ambos os handles são genéricos,
+    // smoothstep quando pelo menos um é semanticamente posicionado.
     const useFloating =
       !isSemanticHandle(sourceHandle) && !isSemanticHandle(targetHandle);
 
@@ -258,7 +258,7 @@ function Canvas({ initialFlow, projectName, projectCreatedAt, currentProjectId, 
         {
           ...params,
           type: useFloating ? 'floating' : 'smoothstep',
-          // offset inicializado em zero â†’ edge usa trajeto automÃ¡tico
+          // offset inicializado em zero → edge usa trajeto automático
           ...(useFloating ? { data: { offsetX: 0, offsetY: 0 } } : {}),
           animated: false,
           style: { stroke: neonColor, strokeWidth: 1.5 },
@@ -268,9 +268,9 @@ function Canvas({ initialFlow, projectName, projectCreatedAt, currentProjectId, 
       )
     );
 
-    // â”€â”€ Sync Goto.context quando goto conecta a um contexto â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
-    // Substitui o useEffect que varreria todos os nÃ³s; aqui sabemos exatamente
-    // qual nÃ³ mudou e qual Ã© o destino.
+    // ── Sync Goto.context quando goto conecta a um contexto ─────────────────
+    // Substitui o useEffect que varreria todos os nós; aqui sabemos exatamente
+    // qual nó mudou e qual é o destino.
     setNodes((ns) => {
       const srcNode = ns.find((n) => n.id === source);
       const tgtNode = ns.find((n) => n.id === target);
@@ -283,17 +283,17 @@ function Canvas({ initialFlow, projectName, projectCreatedAt, currentProjectId, 
       }
       return ns;
     });
-  }, [setEdges, setNodes, neonColor]); // â† nodes removido das deps
+  }, [setEdges, setNodes, neonColor]); // ← nodes removido das deps
 
-  // â”€â”€ MudanÃ§as em edges â€” detecta deleÃ§Ã£o do handle 'true' â†’ limpa campo â”€â”€â”€â”€
-  // Usa edgesRef.current (estÃ¡vel) em vez de edges no closure â€” sem dep edges.
+  // ── Mudanças em edges — detecta deleção do handle 'true' → limpa campo ────
+  // Usa edgesRef.current (estável) em vez de edges no closure — sem dep edges.
   const handleEdgesChange = useCallback((changes) => {
     for (const c of changes) {
       if (c.type === 'remove') {
         const edge    = edgesRef.current.find((e) => e.id === c.id);
         const srcNode = nodesRef.current.find((n) => n.id === edge?.source);
 
-        // Limpa trueContext quando edge do TimeNode Ã© removida
+        // Limpa trueContext quando edge do TimeNode é removida
         if (edge?.sourceHandle === 'true') {
           setNodes((ns) =>
             ns.map((n) =>
@@ -304,7 +304,7 @@ function Canvas({ initialFlow, projectName, projectCreatedAt, currentProjectId, 
           );
         }
 
-        // â”€â”€ Sync Goto.context quando edge do goto Ã© removida â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+        // ── Sync Goto.context quando edge do goto é removida ─────────────────
         if (srcNode?.type === 'goto') {
           setNodes((ns) =>
             ns.map((n) =>
@@ -319,16 +319,16 @@ function Canvas({ initialFlow, projectName, projectCreatedAt, currentProjectId, 
     // Fecha o context menu se qualquer edge foi removida
     if (changes.some((c) => c.type === 'remove')) setEdgeMenu(null);
     onEdgesChange(changes);
-  }, [onEdgesChange, setNodes]); // â† edges removido das deps
+  }, [onEdgesChange, setNodes]); // ← edges removido das deps
 
-  // â”€â”€ Context menu de botÃ£o direito em edge â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+  // ── Context menu de botão direito em edge ────────────────────────────────
   const onEdgeContextMenu = useCallback((event, edge) => {
     event.preventDefault();
     event.stopPropagation();
     setEdgeMenu({ x: event.clientX, y: event.clientY, edgeId: edge.id });
   }, []);
 
-  // Reseta o offset da edge â†’ volta ao trajeto automÃ¡tico
+  // Reseta o offset da edge → volta ao trajeto automático
   const resetEdgeOffset = useCallback((edgeId) => {
     setEdges((es) =>
       es.map((e) =>
@@ -338,7 +338,7 @@ function Canvas({ initialFlow, projectName, projectCreatedAt, currentProjectId, 
     setEdgeMenu(null);
   }, [setEdges]);
 
-  // Remove edge por ID â€” aplica o mesmo cleanup do handleEdgesChange
+  // Remove edge por ID — aplica o mesmo cleanup do handleEdgesChange
   const removeEdgeById = useCallback((edgeId) => {
     const edge    = edgesRef.current.find((e) => e.id === edgeId);
     const srcNode = nodesRef.current.find((n) => n.id === edge?.source);
@@ -360,9 +360,9 @@ function Canvas({ initialFlow, projectName, projectCreatedAt, currentProjectId, 
     }
     setEdges((es) => es.filter((e) => e.id !== edgeId));
     setEdgeMenu(null);
-  }, [setEdges, setNodes]); // â† edges removido das deps
+  }, [setEdges, setNodes]); // ← edges removido das deps
 
-  // â”€â”€ DireÃ§Ã£o CAMPO â†’ EDGE (chamado pelo PropertiesPanel no onBlur/Enter) â”€â”€â”€
+  // ── Direção CAMPO → EDGE (chamado pelo PropertiesPanel no onBlur/Enter) ───
   const syncTrueContext = useCallback((timeNodeId, trueCtx) => {
     const trimmed = (trueCtx || '').trim();
 
@@ -373,11 +373,11 @@ function Canvas({ initialFlow, projectName, projectCreatedAt, currentProjectId, 
       return;
     }
 
-    // LÃª nodesRef.current em vez de nodes do closure â€” sem dep em nodes
+    // Lê nodesRef.current em vez de nodes do closure — sem dep em nodes
     const targetCtx = nodesRef.current.find(
       (n) => n.type === 'context' && n.data.contextName === trimmed
     );
-    if (!targetCtx) return; // Texto livre sem match â€” mantÃ©m o texto, sem edge
+    if (!targetCtx) return; // Texto livre sem match — mantém o texto, sem edge
 
     setEdges((es) => {
       const filtered = es.filter(
@@ -398,14 +398,14 @@ function Canvas({ initialFlow, projectName, projectCreatedAt, currentProjectId, 
         filtered
       );
     });
-  }, [setEdges]); // â† nodes removido das deps
+  }, [setEdges]); // ← nodes removido das deps
 
   const onDragOver = useCallback((e) => {
     e.preventDefault();
     e.dataTransfer.dropEffect = 'move';
   }, []);
 
-  // â”€â”€ Helpers de posicionamento â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+  // ── Helpers de posicionamento ─────────────────────────────────────────────
   const findContextAt = (absPos, currentNodes) => {
     const ctxs = currentNodes.filter((n) => n.type === 'context');
     for (let i = ctxs.length - 1; i >= 0; i--) {
@@ -422,7 +422,7 @@ function Canvas({ initialFlow, projectName, projectCreatedAt, currentProjectId, 
     return null;
   };
 
-  // â”€â”€ Drop da sidebar para o canvas â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+  // ── Drop da sidebar para o canvas ─────────────────────────────────────────
   const onDrop = useCallback((e) => {
     e.preventDefault();
     const type = e.dataTransfer.getData('application/rcx-node');
@@ -434,18 +434,18 @@ function Canvas({ initialFlow, projectName, projectCreatedAt, currentProjectId, 
     });
 
     if (type === 'config' && nodes.some((n) => n.type === 'config')) {
-      alert('âš  JÃ¡ existe um nÃ³ de ConfiguraÃ§Ã£o. Apenas um Ã© permitido.');
+      alert('⚠ Já existe um nó de Configuração. Apenas um é permitido.');
       return;
     }
 
     const newNode = buildNode(type, position);
 
-    // Atribui exportOrder automÃ¡tico e nome Ãºnico para novos ContextNodes
+    // Atribui exportOrder automático e nome único para novos ContextNodes
     if (type === 'context') {
       const ctxNodes = nodes.filter((n) => n.type === 'context');
       const maxOrder = ctxNodes.reduce((max, n) => Math.max(max, n.data?.exportOrder ?? 0), 0);
       const existingNames = ctxNodes.map((n) => n.data?.contextName || '');
-      // Usa o prefixo configurado pelo usuÃ¡rio como base do nome
+      // Usa o prefixo configurado pelo usuário como base do nome
       const prefix    = (config.contextPrefix || 'orpen-ivr').replace(/\s+/g, '-');
       const baseName  = `${prefix}-novo-contexto`;
       const uniqueName = generateUniqueContextName(baseName, existingNames);
@@ -460,7 +460,7 @@ function Canvas({ initialFlow, projectName, projectCreatedAt, currentProjectId, 
         newNode.draggable  = false; // gerenciado pelo ContextNode
         newNode.position   = {
           x: 20,
-          y: 0, // serÃ¡ ajustado pelo ContextNode via useEffect
+          y: 0, // será ajustado pelo ContextNode via useEffect
         };
 
         // Adiciona ao final do childOrder do pai
@@ -482,19 +482,19 @@ function Canvas({ initialFlow, projectName, projectCreatedAt, currentProjectId, 
     );
   }, [rfInstance, nodes, setNodes]);
 
-  // â”€â”€ Re-parenting ao arrastar nÃ³ existente â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+  // ── Re-parenting ao arrastar nó existente ─────────────────────────────────
   const onNodeDragStop = useCallback((event, draggedNode) => {
     // Apply alignment snap before anything else
     alignDragStop(event, draggedNode);
 
-    // IDs de nÃ³s que se moveram: o nÃ³ arrastado + filhos quando Ã© ContextNode
+    // IDs de nós que se moveram: o nó arrastado + filhos quando é ContextNode
     const movedIds = new Set([draggedNode.id]);
     if (draggedNode.type === 'context') {
       nodes.forEach((n) => { if (n.parentNode === draggedNode.id) movedIds.add(n.id); });
     }
 
-    // Reseta o offset de todas as edges conectadas aos nÃ³s movidos.
-    // Feito ao soltar (nÃ£o durante o drag) para evitar re-renders excessivos.
+    // Reseta o offset de todas as edges conectadas aos nós movidos.
+    // Feito ao soltar (não durante o drag) para evitar re-renders excessivos.
     setEdges((es) =>
       es.map((e) => {
         if (
@@ -507,7 +507,7 @@ function Canvas({ initialFlow, projectName, projectCreatedAt, currentProjectId, 
       })
     );
 
-    // Re-parenting apenas para nÃ³s nÃ£o-contexto
+    // Re-parenting apenas para nós não-contexto
     if (draggedNode.type === 'context') return;
 
     let absX = draggedNode.position.x;
@@ -523,7 +523,7 @@ function Canvas({ initialFlow, projectName, projectCreatedAt, currentProjectId, 
     if (targetId === currentParent) return;
 
     setNodes((ns) => {
-      // 1. Atualiza o nÃ³ arrastado (parentNode, extent, draggable, position)
+      // 1. Atualiza o nó arrastado (parentNode, extent, draggable, position)
       let result = ns.map((n) => {
         if (n.id !== draggedNode.id) return n;
         if (targetId) {
@@ -554,7 +554,7 @@ function Canvas({ initialFlow, projectName, projectCreatedAt, currentProjectId, 
         return changed ? { ...n, data: { ...n.data, childOrder: order } } : n;
       });
 
-      // 3. Garante filho DEPOIS do pai no array (exigÃªncia do React Flow)
+      // 3. Garante filho DEPOIS do pai no array (exigência do React Flow)
       if (targetId) {
         const childIdx  = result.findIndex((n) => n.id === draggedNode.id);
         const parentIdx = result.findIndex((n) => n.id === targetId);
@@ -566,12 +566,12 @@ function Canvas({ initialFlow, projectName, projectCreatedAt, currentProjectId, 
 
       return result;
     });
-  }, [nodes, setNodes, setEdges]); // alignDragStop omitido â€” Ã© estÃ¡vel
+  }, [nodes, setNodes, setEdges]); // alignDragStop omitido — é estável
 
-  // â”€â”€ SeleÃ§Ã£o â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+  // ── Seleção ───────────────────────────────────────────────────────────────
 
-  // Helpers para calcular conjunto ativo a partir de um nÃ³ clicado
-  // edgesRef.current sempre atualizado pelo useEffect acima â€” callback estÃ¡vel para sempre
+  // Helpers para calcular conjunto ativo a partir de um nó clicado
+  // edgesRef.current sempre atualizado pelo useEffect acima — callback estável para sempre
   const computeActiveFromNode = useCallback((nodeId) => {
     const connectedEdges = edgesRef.current.filter((e) => e.source === nodeId || e.target === nodeId);
     const newEdgeIds     = new Set(connectedEdges.map((e) => e.id));
@@ -581,7 +581,7 @@ function Canvas({ initialFlow, projectName, projectCreatedAt, currentProjectId, 
     }
     setActiveEdgeIds(newEdgeIds);
     setActiveNodeIds(newNodeIds);
-  }, []); // â† edges removido das deps; edgesRef Ã© estÃ¡vel
+  }, []); // ← edges removido das deps; edgesRef é estável
 
   const onNodeClick  = useCallback((_, n) => {
     setSelectedId(n.id);
@@ -590,7 +590,7 @@ function Canvas({ initialFlow, projectName, projectCreatedAt, currentProjectId, 
     computeActiveFromNode(n.id);
   }, [computeActiveFromNode]);
 
-  // Clicar em edge â†’ ativa a edge + os dois nÃ³s das extremidades
+  // Clicar em edge → ativa a edge + os dois nós das extremidades
   const onEdgeClick  = useCallback((_, edge) => {
     setSelectedId(null);
     setEdgeMenu(null);
@@ -599,7 +599,7 @@ function Canvas({ initialFlow, projectName, projectCreatedAt, currentProjectId, 
     setActiveNodeIds(new Set([edge.source, edge.target]));
   }, []);
 
-  // Clicar no canvas â†’ volta ao repouso imediatamente
+  // Clicar no canvas → volta ao repouso imediatamente
   const onPaneClick  = useCallback(() => {
     setSelectedId(null);
     setEdgeMenu(null);
@@ -608,12 +608,12 @@ function Canvas({ initialFlow, projectName, projectCreatedAt, currentProjectId, 
     setActiveNodeIds(new Set());
   }, []);
 
-  // â”€â”€ AtualizaÃ§Ã£o de dados e estilo â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+  // ── Atualização de dados e estilo ─────────────────────────────────────────
   const updateNodeData = useCallback((id, data) => {
     setNodes((ns) => ns.map((n) => (n.id === id ? { ...n, data } : n)));
   }, [setNodes]);
 
-  // Atualiza campos parciais do data de um nÃ³ (usado pelo ExportOrderPanel)
+  // Atualiza campos parciais do data de um nó (usado pelo ExportOrderPanel)
   const patchNodeData = useCallback((id, dataPatch) => {
     setNodes((ns) =>
       ns.map((n) => (n.id === id ? { ...n, data: { ...n.data, ...dataPatch } } : n))
@@ -626,23 +626,23 @@ function Canvas({ initialFlow, projectName, projectCreatedAt, currentProjectId, 
     );
   }, [setNodes]);
 
-  // Goto.context sync removido deste useEffect â€” movido para onConnect (conexÃ£o)
-  // e handleEdgesChange/removeEdgeById (desconexÃ£o), onde o evento Ã© preciso e
-  // nÃ£o requer varredura O(nÃ—m) de todos os nÃ³s a cada mudanÃ§a de edges.
+  // Goto.context sync removido deste useEffect — movido para onConnect (conexão)
+  // e handleEdgesChange/removeEdgeById (desconexão), onde o evento é preciso e
+  // não requer varredura O(n×m) de todos os nós a cada mudança de edges.
 
-  // â”€â”€ PropagaÃ§Ã£o de rename de ContextNode â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
-  // Chamado pelo PropertiesPanel quando contextName muda via painel de ediÃ§Ã£o.
-  // O ContextNode inline jÃ¡ propaga diretamente via useReactFlow + applyContextRename.
+  // ── Propagação de rename de ContextNode ──────────────────────────────────
+  // Chamado pelo PropertiesPanel quando contextName muda via painel de edição.
+  // O ContextNode inline já propaga diretamente via useReactFlow + applyContextRename.
   const propagateContextRename = useCallback((oldName, newName) => {
     setNodes((ns) => applyContextRename(ns, oldName, newName));
   }, [setNodes]);
 
-  // â”€â”€ DeleÃ§Ã£o â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+  // ── Deleção ───────────────────────────────────────────────────────────────
   const deleteNode = useCallback((id) => {
     setNodes((ns) =>
       ns
         .filter((n) => n.id !== id)
-        // Remove o id excluÃ­do do childOrder de qualquer ContextNode pai
+        // Remove o id excluído do childOrder de qualquer ContextNode pai
         .map((n) => {
           if (n.type !== 'context') return n;
           const order = (n.data.childOrder || []).filter((cid) => cid !== id);
@@ -654,7 +654,7 @@ function Canvas({ initialFlow, projectName, projectCreatedAt, currentProjectId, 
     setSelectedId(null);
   }, [setNodes, setEdges]);
 
-  // â”€â”€ Toggle comentado (DESATIVAR / ATIVAR) â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+  // ── Toggle comentado (DESATIVAR / ATIVAR) ─────────────────────────────────
   const toggleComment = useCallback((id) => {
     setNodes((ns) =>
       ns.map((n) => {
@@ -668,9 +668,9 @@ function Canvas({ initialFlow, projectName, projectCreatedAt, currentProjectId, 
     );
   }, [setNodes]);
 
-  // â”€â”€ Destaque de navegaÃ§Ã£o de contextos â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+  // ── Destaque de navegação de contextos ───────────────────────────────────
   // Acionado pelo ContextNavPanel ao clicar num item da lista.
-  // Injeta _navHighlight=true no data do nÃ³ alvo via nodesWithSel (nÃ£o persiste).
+  // Injeta _navHighlight=true no data do nó alvo via nodesWithSel (não persiste).
   const [highlightedCtxId,  setHighlightedCtxId]  = useState(null);
   const highlightTimerRef = useRef(null);
 
@@ -682,7 +682,7 @@ function Canvas({ initialFlow, projectName, projectCreatedAt, currentProjectId, 
     }, 1500);
   }, []);
 
-  // â”€â”€ Alignment guides + snap â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+  // ── Alignment guides + snap ───────────────────────────────────────────────
   const {
     guides,
     onNodeDragStart,
@@ -691,10 +691,10 @@ function Canvas({ initialFlow, projectName, projectCreatedAt, currentProjectId, 
   } = useAlignmentGuides(nodes, setNodes, config.smartGuides);
 
   // mousePos e seus callbacks foram movidos para dentro do ContextOrderOverlay.
-  // O componente lÃª o mouse diretamente via wrapperRef, evitando que o Canvas
+  // O componente lê o mouse diretamente via wrapperRef, evitando que o Canvas
   // todo re-renderize a cada movimento do mouse.
 
-  // â”€â”€ Helpers de reordenaÃ§Ã£o de childOrder â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+  // ── Helpers de reordenação de childOrder ────────────────────────────────────
   // Atualiza childOrder de um ContextNode e retorna os novos nodes
   const updateChildOrder = useCallback((ctxId, newOrder) => {
     setNodes((ns) =>
@@ -746,7 +746,7 @@ function Canvas({ initialFlow, projectName, projectCreatedAt, currentProjectId, 
     onMoveTo(ctxId, nodeId, targetIndex);
   }, [onMoveTo]);
 
-  // â”€â”€ Context menu de clique direito em nÃ³ â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+  // ── Context menu de clique direito em nó ─────────────────────────────────
   const [nodeMenu, setNodeMenu] = useState(null); // { x, y, nodeId }
 
   const onNodeContextMenu = useCallback((event, n) => {
@@ -757,7 +757,7 @@ function Canvas({ initialFlow, projectName, projectCreatedAt, currentProjectId, 
     computeActiveFromNode(n.id);
   }, [computeActiveFromNode]);
 
-  // â”€â”€ ForÃ§ar save imediato (sem aguardar debounce) â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+  // ── Forçar save imediato (sem aguardar debounce) ─────────────────────────
   const flushSave = useCallback(async () => {
     if (!currentProjectId) return;
     if (saveTimerRef.current) { clearTimeout(saveTimerRef.current); saveTimerRef.current = null; }
@@ -780,7 +780,7 @@ function Canvas({ initialFlow, projectName, projectCreatedAt, currentProjectId, 
     setTimeout(() => setSaveStatus(null), 2000);
   }, [rfInstance, projectName, projectCreatedAt, currentProjectId, onProjectSaved]);
 
-  // â”€â”€ NavegaÃ§Ã£o de volta Ã  Home â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+  // ── Navegação de volta à Home ─────────────────────────────────────────────
   const handleBack = useCallback(() => {
     if (onGoBack && config.confirmBack && isDirtyRef.current) {
       setShowBackConfirm(true);
@@ -795,7 +795,7 @@ function Canvas({ initialFlow, projectName, projectCreatedAt, currentProjectId, 
     onGoBack?.();
   }, [flushSave, onGoBack]);
 
-  // â”€â”€ ExportaÃ§Ã£o â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+  // ── Exportação ────────────────────────────────────────────────────────────
   const doExport = () => {
     setExportText(generateDialplan(nodes, edges, {
       includeSectionComments: config.includeSectionComments,
@@ -811,7 +811,7 @@ function Canvas({ initialFlow, projectName, projectCreatedAt, currentProjectId, 
     } catch (_) {
       setExportLayout(null);
     }
-    // Modo AMIGÃVEL: mostra aviso informativo na primeira exportaÃ§Ã£o
+    // Modo AMIGÁVEL: mostra aviso informativo na primeira exportação
     if (mode === 'amigavel' && !localStorage.getItem('orpen-first-export-shown')) {
       setShowFirstExportModal(true);
     } else {
@@ -848,7 +848,7 @@ function Canvas({ initialFlow, projectName, projectCreatedAt, currentProjectId, 
 
   /**
    * Baixa os dois arquivos sequencialmente (300ms de intervalo para evitar bloqueio do browser).
-   * Comportamento descrito na spec: "ao clicar em EXPORTAR URA, dois arquivos sÃ£o baixados".
+   * Comportamento descrito na spec: "ao clicar em EXPORTAR URA, dois arquivos são baixados".
    */
   const downloadBoth = () => {
     downloadConf();
@@ -862,8 +862,8 @@ function Canvas({ initialFlow, projectName, projectCreatedAt, currentProjectId, 
   };
 
   // Injeta selected visualmente sem armazenar em estado extra do React Flow.
-  // _navHighlight: flag transitÃ³ria para a animaÃ§Ã£o de destaque de navegaÃ§Ã£o â€”
-  // nÃ£o persiste nos nodes reais nem dispara autosave.
+  // _navHighlight: flag transitória para a animação de destaque de navegação —
+  // não persiste nos nodes reais nem dispara autosave.
   const nodesWithSel = useMemo(
     () => nodes.map((n) => {
       const navHl = highlightedCtxId && n.id === highlightedCtxId;
@@ -881,7 +881,7 @@ function Canvas({ initialFlow, projectName, projectCreatedAt, currentProjectId, 
     [nodes, selectedId]
   );
 
-  // â”€â”€ Tema: sincroniza cor do marker das edges quando o tema muda â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+  // ── Tema: sincroniza cor do marker das edges quando o tema muda ───────────────
   useEffect(() => {
     setEdges((es) =>
       es.map((e) => {
@@ -892,7 +892,7 @@ function Canvas({ initialFlow, projectName, projectCreatedAt, currentProjectId, 
     );
   }, [neonColor]); // eslint-disable-line react-hooks/exhaustive-deps
 
-  // â”€â”€ RevisÃ£o pÃ³s-importaÃ§Ã£o â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+  // ── Revisão pós-importação ────────────────────────────────────────────────
   const handleConfirmReview = useCallback(() => {
     const flow = {
       nodes:    rfInstance.getNodes(),
@@ -906,7 +906,7 @@ function Canvas({ initialFlow, projectName, projectCreatedAt, currentProjectId, 
     onReviewCancel?.();
   }, [onReviewCancel]);
 
-  // MÃ©tricas para o banner de revisÃ£o
+  // Métricas para o banner de revisão
   const reviewMetrics = useMemo(() => {
     if (!isReviewMode) return null;
     const rawCount       = nodes.filter((n) => n.type === 'raw').length;
@@ -915,7 +915,7 @@ function Canvas({ initialFlow, projectName, projectCreatedAt, currentProjectId, 
     return { rawCount, commentedCount, ctxCount, total: nodes.length };
   }, [isReviewMode, nodes]);
 
-  // Mapa de estilo de edge configurÃ¡vel â†’ tipo do React Flow
+  // Mapa de estilo de edge configurável → tipo do React Flow
   const edgeStyleMap = { smooth: 'smoothstep', straight: 'straight', step: 'step' };
 
   // defaultEdgeOptions reativo ao tema e ao estilo configurado
@@ -938,7 +938,7 @@ function Canvas({ initialFlow, projectName, projectCreatedAt, currentProjectId, 
 
       <div style={{ flex: 1, display: 'flex', flexDirection: 'column', minWidth: 0 }}>
 
-        {/* â”€â”€ Banner modo de revisÃ£o pÃ³s-importaÃ§Ã£o â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */}
+        {/* ── Banner modo de revisão pós-importação ──────────────────────── */}
         {isReviewMode && reviewMetrics && (
           <div style={{
             flexShrink: 0,
@@ -949,13 +949,13 @@ function Canvas({ initialFlow, projectName, projectCreatedAt, currentProjectId, 
             zIndex: 20,
           }}>
             <span style={{ fontSize: 10, letterSpacing: 2, color: '#ffcc00', fontWeight: 700, whiteSpace: 'nowrap' }}>
-              â–Œ MODO REVISÃƒO
+              ▌ MODO REVISÃO
             </span>
             <span style={{ fontSize: 9, color: 'var(--neon-dim)', letterSpacing: 0.5 }}>
-              {reviewMetrics.total} nÃ³(s) importado(s)
-              {reviewMetrics.rawCount > 0 && <span style={{ color: '#ff8c00' }}> Â· {reviewMetrics.rawCount} nÃ£o mapeado(s)</span>}
-              {reviewMetrics.commentedCount > 0 && <span style={{ color: '#ffcc00' }}> Â· {reviewMetrics.commentedCount} comentado(s)</span>}
-              {' â€” verifique antes de confirmar'}
+              {reviewMetrics.total} nó(s) importado(s)
+              {reviewMetrics.rawCount > 0 && <span style={{ color: '#ff8c00' }}> · {reviewMetrics.rawCount} não mapeado(s)</span>}
+              {reviewMetrics.commentedCount > 0 && <span style={{ color: '#ffcc00' }}> · {reviewMetrics.commentedCount} comentado(s)</span>}
+              {' — verifique antes de confirmar'}
             </span>
             <div style={{ marginLeft: 'auto', display: 'flex', gap: 8 }}>
               <button
@@ -963,7 +963,7 @@ function Canvas({ initialFlow, projectName, projectCreatedAt, currentProjectId, 
                 className="btn-neon"
                 onClick={handleCancelReview}
                 style={{ padding: '4px 14px', fontSize: 10, letterSpacing: 1, borderColor: '#ff5050', color: '#ff5050' }}
-                aria-label="Cancelar importaÃ§Ã£o e voltar para home"
+                aria-label="Cancelar importação e voltar para home"
               >
                 CANCELAR
               </button>
@@ -972,9 +972,9 @@ function Canvas({ initialFlow, projectName, projectCreatedAt, currentProjectId, 
                 className="btn-neon"
                 onClick={handleConfirmReview}
                 style={{ padding: '4px 14px', fontSize: 10, letterSpacing: 1, borderColor: '#ffcc00', color: '#ffcc00', boxShadow: '0 0 6px rgba(255,204,0,0.25)' }}
-                aria-label="Confirmar importaÃ§Ã£o e salvar projeto"
+                aria-label="Confirmar importação e salvar projeto"
               >
-                âœ“ CONFIRMAR IMPORTAÃ‡ÃƒO
+                ✓ CONFIRMAR IMPORTAÇÃO
               </button>
             </div>
           </div>
@@ -986,7 +986,7 @@ function Canvas({ initialFlow, projectName, projectCreatedAt, currentProjectId, 
         onDragOver={!isReviewMode ? onDragOver : undefined}
         onDrop={!isReviewMode ? onDrop : undefined}
       >
-        {/* BotÃ£o â† VOLTAR (apenas no modo projeto) */}
+        {/* Botão ← VOLTAR (apenas no modo projeto) */}
         {onGoBack && (
           <button
             className="btn-neon"
@@ -996,7 +996,7 @@ function Canvas({ initialFlow, projectName, projectCreatedAt, currentProjectId, 
               padding: '5px 12px', fontSize: 11, letterSpacing: 1,
             }}
           >
-            â† VOLTAR
+            ← VOLTAR
           </button>
         )}
 
@@ -1012,11 +1012,11 @@ function Canvas({ initialFlow, projectName, projectCreatedAt, currentProjectId, 
           color: 'var(--neon-dim)',
         }}>
           <span>NODES: <span style={{ color: '#fff' }}>{nodes.length}</span></span>
-          <span style={{ color: 'var(--line)' }}>â”‚</span>
+          <span style={{ color: 'var(--line)' }}>│</span>
           <span>EDGES: <span style={{ color: '#fff' }}>{edges.length}</span></span>
-          <span style={{ color: 'var(--line)' }}>â”‚</span>
-          <span>STATUS: <span style={{ color: 'var(--neon)' }}>â— LIVE</span></span>
-          <span style={{ color: 'var(--line)' }}>â”‚</span>
+          <span style={{ color: 'var(--line)' }}>│</span>
+          <span>STATUS: <span style={{ color: 'var(--neon)' }}>● LIVE</span></span>
+          <span style={{ color: 'var(--line)' }}>│</span>
           <span style={{ color: '#888' }}>
             SELECT +{' '}
             <kbd style={{ padding: '1px 5px', border: '1px solid var(--neon-dim)', borderRadius: 2, fontSize: 9, color: 'var(--neon)' }}>
@@ -1024,11 +1024,11 @@ function Canvas({ initialFlow, projectName, projectCreatedAt, currentProjectId, 
             </kbd>{' '}
             p/ excluir
           </span>
-          <span style={{ color: 'var(--line)' }}>â”‚</span>
-          {/* Painel de ordem de exportaÃ§Ã£o */}
+          <span style={{ color: 'var(--line)' }}>│</span>
+          {/* Painel de ordem de exportação */}
           <button
             onClick={() => setShowOrderPanel((v) => !v)}
-            title="Gerenciar ordem de exportaÃ§Ã£o dos contextos"
+            title="Gerenciar ordem de exportação dos contextos"
             style={{
               background: showOrderPanel ? 'var(--neon-glow-faint)' : 'transparent',
               border: `1px solid ${showOrderPanel ? 'var(--neon)' : 'var(--line)'}`,
@@ -1038,14 +1038,14 @@ function Canvas({ initialFlow, projectName, projectCreatedAt, currentProjectId, 
               transition: 'all 0.15s',
             }}
           >
-            âŠž ORDEM
+            ⊞ ORDEM
           </button>
-          <span style={{ color: 'var(--line)' }}>â”‚</span>
-          {/* BotÃ£o de configuraÃ§Ãµes */}
+          <span style={{ color: 'var(--line)' }}>│</span>
+          {/* Botão de configurações */}
           <button
             type="button"
             onClick={() => setShowConfigModal(true)}
-            title="ConfiguraÃ§Ãµes do projeto"
+            title="Configurações do projeto"
             style={{
               background: 'transparent',
               border: '1px solid var(--line)',
@@ -1057,16 +1057,16 @@ function Canvas({ initialFlow, projectName, projectCreatedAt, currentProjectId, 
             onMouseEnter={(e) => { e.currentTarget.style.borderColor = 'var(--neon)'; e.currentTarget.style.color = 'var(--neon)'; }}
             onMouseLeave={(e) => { e.currentTarget.style.borderColor = 'var(--line)'; e.currentTarget.style.color = 'var(--neon-dim)'; }}
           >
-            âš™ CONFIG
+            ⚙ CONFIG
           </button>
-          {/* â”€â”€ Toggle PRO / AMIGÃVEL â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */}
+          {/* ── Toggle PRO / AMIGÁVEL ─────────────────────────────────────── */}
           <>
-            <span style={{ color: 'var(--line)' }}>â”‚</span>
+            <span style={{ color: 'var(--line)' }}>│</span>
             <div style={{ display: 'flex', gap: 0 }}>
               <button
                 type="button"
                 onClick={() => config.setConfig('mode', 'pro')}
-                title="Modo PRO â€” interface tÃ©cnica completa"
+                title="Modo PRO — interface técnica completa"
                 style={{
                   background: mode === 'pro' ? 'var(--neon)' : 'transparent',
                   border: '1px solid var(--neon)',
@@ -1085,7 +1085,7 @@ function Canvas({ initialFlow, projectName, projectCreatedAt, currentProjectId, 
               <button
                 type="button"
                 onClick={() => config.setConfig('mode', 'amigavel')}
-                title="Modo AMIGÃVEL â€” interface humanizada com dicas"
+                title="Modo AMIGÁVEL — interface humanizada com dicas"
                 style={{
                   background: mode === 'amigavel' ? 'var(--neon)' : 'transparent',
                   border: '1px solid var(--neon)',
@@ -1099,7 +1099,7 @@ function Canvas({ initialFlow, projectName, projectCreatedAt, currentProjectId, 
                   whiteSpace: 'nowrap',
                 }}
               >
-                AMIGÃVEL
+                AMIGÁVEL
               </button>
             </div>
           </>
@@ -1150,10 +1150,10 @@ function Canvas({ initialFlow, projectName, projectCreatedAt, currentProjectId, 
           />
         </ReactFlow>
 
-        {/* â”€â”€ Indicador de salvamento flutuante â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+        {/* ── Indicador de salvamento flutuante ────────────────────────────
              Posicionado no canto inferior esquerdo do wrapper do canvas.
-             Sem borda nem fundo â€” apenas texto monospace sobre o canvas.
-             Estados: saving â†’ neon 60%, saved â†’ fade 0.35â†’0 em 3s, error â†’ vermelho 80%. */}
+             Sem borda nem fundo — apenas texto monospace sobre o canvas.
+             Estados: saving → neon 60%, saved → fade 0.35→0 em 3s, error → vermelho 80%. */}
         {saveStatus && (
           <div
             key={saveStatus}
@@ -1171,7 +1171,7 @@ function Canvas({ initialFlow, projectName, projectCreatedAt, currentProjectId, 
               color: saveStatus === 'error' ? '#ff5050' : neonColor,
               opacity: saveStatus === 'saving' ? 0.6
                      : saveStatus === 'error'  ? 0.8
-                     : undefined, // 'saved': animaÃ§Ã£o save-status-fade controla opacity
+                     : undefined, // 'saved': animação save-status-fade controla opacity
             }}
           >
             {saveStatus === 'saving' && '// salvando...'}
@@ -1180,10 +1180,10 @@ function Canvas({ initialFlow, projectName, projectCreatedAt, currentProjectId, 
           </div>
         )}
 
-        {/* Alignment guide lines â€” rendered over canvas, below UI controls */}
+        {/* Alignment guide lines — rendered over canvas, below UI controls */}
         <AlignmentGuides guides={guides} />
 
-        {/* Reorder controls overlay â€” rendered above React Flow, z-index 50 */}
+        {/* Reorder controls overlay — rendered above React Flow, z-index 50 */}
         <ContextOrderOverlay
           nodes={nodes}
           wrapperRef={wrapperRef}
@@ -1193,7 +1193,7 @@ function Canvas({ initialFlow, projectName, projectCreatedAt, currentProjectId, 
           onDragReorder={onDragReorder}
         />
 
-        {/* Painel de ordem de exportaÃ§Ã£o dos contextos */}
+        {/* Painel de ordem de exportação dos contextos */}
         {showOrderPanel && (
           <ExportOrderPanel
             nodes={nodes}
@@ -1202,7 +1202,7 @@ function Canvas({ initialFlow, projectName, projectCreatedAt, currentProjectId, 
           />
         )}
 
-        {/* â”€â”€ Hint de canvas vazio (modo AMIGÃVEL) â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */}
+        {/* ── Hint de canvas vazio (modo AMIGÁVEL) ─────────────────────── */}
         {mode === 'amigavel' && nodes.filter((n) => n.type !== 'config').length === 0 && (
           <div style={{
             position: 'absolute',
@@ -1222,7 +1222,7 @@ function Canvas({ initialFlow, projectName, projectCreatedAt, currentProjectId, 
             opacity: 0.75,
           }}>
             <div style={{ fontSize: 10, letterSpacing: 2, marginBottom: 10, color: 'var(--neon-dim)', borderBottom: '1px dashed var(--line)', paddingBottom: 8 }}>
-              // COMO COMEÃ‡AR
+              // COMO COMEÇAR
             </div>
             <div>1. Arraste um <strong style={{ color: 'var(--neon)' }}>Bloco de Contexto</strong> da barra lateral para o canvas</div>
             <div>2. Dentro do bloco, arraste os elementos do fluxo de atendimento</div>
@@ -1231,7 +1231,7 @@ function Canvas({ initialFlow, projectName, projectCreatedAt, currentProjectId, 
           </div>
         )}
 
-        {/* BotÃ£o de exportaÃ§Ã£o flutuante */}
+        {/* Botão de exportação flutuante */}
         <button
           className="btn-neon"
           onClick={doExport}
@@ -1241,7 +1241,7 @@ function Canvas({ initialFlow, projectName, projectCreatedAt, currentProjectId, 
             boxShadow: '0 0 10px var(--neon), 0 0 22px var(--neon-glow)',
           }}
         >
-          â¤“ EXPORTAR URA (.conf)
+          ⤓ EXPORTAR URA (.conf)
         </button>
 
       </div>
@@ -1262,7 +1262,7 @@ function Canvas({ initialFlow, projectName, projectCreatedAt, currentProjectId, 
         isReviewMode={isReviewMode}
       />
 
-      {/* â”€â”€ Context menu de edge (botÃ£o direito) â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */}
+      {/* ── Context menu de edge (botão direito) ─────────────────────────── */}
       {edgeMenu && (() => {
         const menuEdge      = edges.find((e) => e.id === edgeMenu.edgeId);
         const isFloating = menuEdge?.type === 'floating';
@@ -1300,10 +1300,10 @@ function Canvas({ initialFlow, projectName, projectCreatedAt, currentProjectId, 
                 borderBottom: '1px solid var(--line)',
                 background: 'var(--panel-2)',
               }}>
-                // CONEXÃƒO
+                // CONEXÃO
               </div>
 
-              {/* Redefinir trajeto â€” sÃ³ para edges floating com offset */}
+              {/* Redefinir trajeto — só para edges floating com offset */}
               {isFloating && hasOffset && (
                 <button
                   style={{ ...menuBtnStyle, color: 'var(--neon)' }}
@@ -1311,7 +1311,7 @@ function Canvas({ initialFlow, projectName, projectCreatedAt, currentProjectId, 
                   onMouseLeave={(e) => { e.currentTarget.style.background = 'transparent'; }}
                   onClick={() => resetEdgeOffset(edgeMenu.edgeId)}
                 >
-                  â†º Redefinir trajeto
+                  ↺ Redefinir trajeto
                 </button>
               )}
 
@@ -1321,14 +1321,14 @@ function Canvas({ initialFlow, projectName, projectCreatedAt, currentProjectId, 
                 onMouseLeave={(e) => { e.currentTarget.style.background = 'transparent'; }}
                 onClick={() => removeEdgeById(edgeMenu.edgeId)}
               >
-                âŒ« Remover conexÃ£o
+                ⌫ Remover conexão
               </button>
             </div>
           </>
         );
       })()}
 
-      {/* â”€â”€ Context menu de clique direito em nÃ³ â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */}
+      {/* ── Context menu de clique direito em nó ─────────────────────────── */}
       {nodeMenu && (() => {
         const menuNode     = nodes.find((n) => n.id === nodeMenu.nodeId);
         const isCommented  = !!menuNode?.data?._commented;
@@ -1366,7 +1366,7 @@ function Canvas({ initialFlow, projectName, projectCreatedAt, currentProjectId, 
                 borderBottom: '1px solid var(--line)',
                 background: 'var(--panel-2)',
               }}>
-                // NÃ“
+                // NÓ
               </div>
 
               {canComment && (
@@ -1376,7 +1376,7 @@ function Canvas({ initialFlow, projectName, projectCreatedAt, currentProjectId, 
                   onMouseLeave={(e) => { e.currentTarget.style.background = 'transparent'; }}
                   onClick={() => { toggleComment(nodeMenu.nodeId); setNodeMenu(null); }}
                 >
-                  {isCommented ? 'â–¶ ATIVAR nÃ³' : '// DESATIVAR nÃ³'}
+                  {isCommented ? '▶ ATIVAR nó' : '// DESATIVAR nó'}
                 </button>
               )}
 
@@ -1387,7 +1387,7 @@ function Canvas({ initialFlow, projectName, projectCreatedAt, currentProjectId, 
                   onMouseLeave={(e) => { e.currentTarget.style.background = 'transparent'; }}
                   onClick={() => { deleteNode(nodeMenu.nodeId); setNodeMenu(null); }}
                 >
-                  âŒ« Excluir nÃ³
+                  ⌫ Excluir nó
                 </button>
               )}
             </div>
@@ -1395,23 +1395,23 @@ function Canvas({ initialFlow, projectName, projectCreatedAt, currentProjectId, 
         );
       })()}
 
-      {/* â”€â”€ Modal: confirmaÃ§Ã£o de saÃ­da com alteraÃ§Ãµes nÃ£o salvas â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */}
+      {/* ── Modal: confirmação de saída com alterações não salvas ─────────── */}
       {showBackConfirm && (
         <div className="modal-backdrop" onClick={() => setShowBackConfirm(false)}>
           <div className="modal" style={{ maxWidth: 380, width: '90vw' }} onClick={(e) => e.stopPropagation()}>
             <div style={{ padding: '10px 14px', borderBottom: '1px solid var(--line)' }}>
               <div className="neon-text" style={{ letterSpacing: 2, fontSize: 12 }}>
-                â–Œ ALTERAÃ‡Ã•ES NÃƒO SALVAS
+                ▌ ALTERAÇÕES NÃO SALVAS
               </div>
             </div>
             <div style={{ padding: 20 }}>
               <p style={{ fontSize: 11, color: 'var(--neon-dim)', marginBottom: 20, lineHeight: 1.7 }}>
-                Existem alteraÃ§Ãµes nÃ£o salvas no projeto atual.<br />
+                Existem alterações não salvas no projeto atual.<br />
                 Como deseja prosseguir?
               </p>
               <div style={{ display: 'flex', gap: 8, flexDirection: 'column' }}>
                 <button className="btn-neon" onClick={handleSaveAndBack} style={{ padding: '9px 12px', fontSize: 11, letterSpacing: 1 }}>
-                  â¤“ SALVAR E VOLTAR
+                  ⤓ SALVAR E VOLTAR
                 </button>
                 <button className="btn-neon btn-danger" onClick={() => { setShowBackConfirm(false); onGoBack?.(); }} style={{ padding: '9px 12px', fontSize: 11, letterSpacing: 1 }}>
                   SAIR SEM SALVAR
@@ -1425,23 +1425,23 @@ function Canvas({ initialFlow, projectName, projectCreatedAt, currentProjectId, 
         </div>
       )}
 
-      {/* â”€â”€ Modal: primeiro export (modo AMIGÃVEL) â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */}
+      {/* ── Modal: primeiro export (modo AMIGÁVEL) ─────────────────────────── */}
       {showFirstExportModal && (
         <div className="modal-backdrop" onClick={() => setShowFirstExportModal(false)}>
           <div className="modal" style={{ maxWidth: 420, width: '90vw' }} onClick={(e) => e.stopPropagation()}>
             <div style={{ padding: '10px 14px', borderBottom: '1px solid var(--line)', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-              <div className="neon-text" style={{ letterSpacing: 2, fontSize: 12 }}>â–Œ ARQUIVO GERADO</div>
+              <div className="neon-text" style={{ letterSpacing: 2, fontSize: 12 }}>▌ ARQUIVO GERADO</div>
               <button className="btn-neon btn-danger" style={{ padding: '4px 10px' }} onClick={() => setShowFirstExportModal(false)} aria-label="Fechar">X</button>
             </div>
             <div style={{ padding: 20 }}>
               <p style={{ fontSize: 12, color: 'var(--neon-dim)', marginBottom: 12, lineHeight: 1.8 }}>
-                O arquivo <span style={{ color: '#fff' }}>.conf</span> gerado estÃ¡ pronto para uso no servidor Asterisk.
+                O arquivo <span style={{ color: '#fff' }}>.conf</span> gerado está pronto para uso no servidor Asterisk.
               </p>
               <p style={{ fontSize: 12, color: 'var(--neon-dim)', marginBottom: 12, lineHeight: 1.8 }}>
-                Entregue este arquivo para o tÃ©cnico responsÃ¡vel pela instalaÃ§Ã£o.
+                Entregue este arquivo para o técnico responsável pela instalação.
               </p>
               <p style={{ fontSize: 12, color: '#ffcc00', marginBottom: 20, lineHeight: 1.8 }}>
-                âš  NÃ£o edite o arquivo manualmente sem conhecimento tÃ©cnico.
+                ⚠ Não edite o arquivo manualmente sem conhecimento técnico.
               </p>
               <label style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 20, cursor: 'pointer', fontSize: 11, color: 'var(--neon-dim)' }}>
                 <input
@@ -1450,7 +1450,7 @@ function Canvas({ initialFlow, projectName, projectCreatedAt, currentProjectId, 
                   onChange={(e) => setFirstExportDontShow(e.target.checked)}
                   style={{ accentColor: 'var(--neon)' }}
                 />
-                NÃ£o mostrar novamente
+                Não mostrar novamente
               </label>
               <button className="btn-neon" onClick={confirmFirstExport} style={{ width: '100%', padding: '10px 12px', fontSize: 11, letterSpacing: 1 }}>
                 ENTENDI, BAIXAR ARQUIVO
@@ -1460,18 +1460,18 @@ function Canvas({ initialFlow, projectName, projectCreatedAt, currentProjectId, 
         </div>
       )}
 
-      {/* Modal de exportaÃ§Ã£o */}
+      {/* Modal de exportação */}
       {showExport && (
         <div className="modal-backdrop" onClick={() => setShowExport(false)}>
           <div className="modal" onClick={(e) => e.stopPropagation()}>
-            {/* CabeÃ§alho */}
+            {/* Cabeçalho */}
             <div style={{
               padding: '10px 14px',
               borderBottom: '1px solid var(--line)',
               display: 'flex', justifyContent: 'space-between', alignItems: 'center',
             }}>
               <div style={{ letterSpacing: 2, fontSize: 12 }} className="neon-text">
-                â–Œ DIALPLAN GERADO :: {confFileName}
+                ▌ DIALPLAN GERADO :: {confFileName}
               </div>
               <button className="btn-neon btn-danger" style={{ padding: '4px 10px' }}
                 onClick={() => setShowExport(false)}>
@@ -1492,10 +1492,10 @@ function Canvas({ initialFlow, projectName, projectCreatedAt, currentProjectId, 
               <span style={{ color: '#555', letterSpacing: 1 }}>{'// arquivos gerados:'}</span>
               <br />
               <span style={{ color: 'var(--neon)' }}>{confFileName}</span>
-              {' â€” dialplan para o Asterisk'}
+              {' — dialplan para o Asterisk'}
               <br />
               <span style={{ color: 'var(--neon)' }}>{confFileName.replace(/\.conf$/, '.layout.json')}</span>
-              {' â€” layout do canvas '}
+              {' — layout do canvas '}
               <span style={{ color: '#555' }}>(mantenha junto ao .conf)</span>
             </div>
 
@@ -1512,21 +1512,21 @@ function Canvas({ initialFlow, projectName, projectCreatedAt, currentProjectId, 
               {exportText}
             </pre>
 
-            {/* AÃ§Ãµes */}
+            {/* Ações */}
             <div style={{
               padding: '10px 14px',
               borderTop: '1px solid var(--line)',
               display: 'flex', gap: 8, justifyContent: 'flex-end', flexWrap: 'wrap',
             }}>
-              <button className="btn-neon" onClick={copyConf} title="Copiar .conf para a Ã¡rea de transferÃªncia">
-                âŽ˜ COPIAR
+              <button className="btn-neon" onClick={copyConf} title="Copiar .conf para a área de transferência">
+                ⎘ COPIAR
               </button>
               <button className="btn-neon" onClick={downloadConf} title={`Baixar apenas ${confFileName}`}
                 style={{ borderColor: 'var(--neon-dim)', color: 'var(--neon-dim)' }}
                 onMouseEnter={(e) => { e.currentTarget.style.borderColor = 'var(--neon)'; e.currentTarget.style.color = 'var(--neon)'; }}
                 onMouseLeave={(e) => { e.currentTarget.style.borderColor = 'var(--neon-dim)'; e.currentTarget.style.color = 'var(--neon-dim)'; }}
               >
-                â¤“ .conf
+                ⤓ .conf
               </button>
               <button className="btn-neon" onClick={downloadLayoutJson}
                 disabled={!exportLayout}
@@ -1535,19 +1535,19 @@ function Canvas({ initialFlow, projectName, projectCreatedAt, currentProjectId, 
                 onMouseEnter={(e) => { if (exportLayout) { e.currentTarget.style.borderColor = 'var(--neon)'; e.currentTarget.style.color = 'var(--neon)'; } }}
                 onMouseLeave={(e) => { e.currentTarget.style.borderColor = 'var(--neon-dim)'; e.currentTarget.style.color = 'var(--neon-dim)'; }}
               >
-                â¤“ .layout.json
+                ⤓ .layout.json
               </button>
               <button className="btn-neon" onClick={downloadBoth}
                 title="Baixar ambos os arquivos sequencialmente"
                 style={{ boxShadow: '0 0 6px var(--neon-glow)' }}
               >
-                â¤“ BAIXAR AMBOS
+                ⤓ BAIXAR AMBOS
               </button>
             </div>
           </div>
         </div>
       )}
-      {/* Modal de configuraÃ§Ãµes */}
+      {/* Modal de configurações */}
       {showConfigModal && <ConfigModal onClose={() => setShowConfigModal(false)} />}
 
     </div>
@@ -1559,9 +1559,9 @@ function Canvas({ initialFlow, projectName, projectCreatedAt, currentProjectId, 
   );
 }
 
-// â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
-// ROOT APP â€” roteamento simples: 'home' | 'canvas'
-// â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+// ─────────────────────────────────────────────────────────────────────────────
+// ROOT APP — roteamento simples: 'home' | 'canvas'
+// ─────────────────────────────────────────────────────────────────────────────
 export default function App() {
   const [screen,         setScreen]         = useState('home');
   const [projects,       setProjects]       = useState([]);  // reflete o IndexedDB
@@ -1574,17 +1574,17 @@ export default function App() {
   // Modo de interface agora gerenciado pelo ConfigContext (ConfigProvider)
   // Tema gerenciado pelo ConfigContext via colorTheme ('terminal'|'matrix'|'dark')
 
-  // Carrega projetos do IndexedDB na inicializaÃ§Ã£o
+  // Carrega projetos do IndexedDB na inicialização
   useEffect(() => {
     listarProjetos().then(setProjects).catch(() => {});
   }, []);
 
-  // Recarrega a lista da home sempre que um projeto Ã© salvo pelo Canvas
+  // Recarrega a lista da home sempre que um projeto é salvo pelo Canvas
   const refreshProjects = useCallback(() => {
     listarProjetos().then(setProjects).catch(() => {});
   }, []);
 
-  // â”€â”€ Criar novo projeto â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+  // ── Criar novo projeto ────────────────────────────────────────────────────
   const handleCreateProject = useCallback(async (name) => {
     const now     = new Date().toISOString();
     const project = { id: Date.now().toString(), name, dataCriacao: now, dataModificacao: now, flow: null };
@@ -1595,9 +1595,9 @@ export default function App() {
     setScreen('canvas');
   }, []);
 
-  // â”€â”€ Abrir projeto existente â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+  // ── Abrir projeto existente ───────────────────────────────────────────────
   // Carrega automaticamente o layout da store 'layouts' e aplica sobre o flow.
-  // Isso Ã© nÃ£o-crÃ­tico: se nÃ£o houver layout salvo, usa as posiÃ§Ãµes do project.flow.
+  // Isso é não-crítico: se não houver layout salvo, usa as posições do project.flow.
   const handleOpenProject = useCallback(async (project) => {
     let flow = project.flow;
     if (flow?.nodes?.length) {
@@ -1606,37 +1606,37 @@ export default function App() {
         const layout = await loadLayout(cFileName);
         if (layout) {
           const result = applyLayout(flow.nodes, flow.edges || [], layout);
-          // MantÃ©m o viewport do project.flow (posiÃ§Ã£o de cÃ¢mera que o usuÃ¡rio deixou)
+          // Mantém o viewport do project.flow (posição de câmera que o usuário deixou)
           flow = { ...flow, nodes: result.nodes, edges: result.edges };
         }
-      } catch (_) { /* nÃ£o-crÃ­tico â€” prossegue com flow original */ }
+      } catch (_) { /* não-crítico — prossegue com flow original */ }
     }
     setCurrentProject(project);
     setPendingFlow(flow);
     setScreen('canvas');
   }, []);
 
-  // â”€â”€ Callback recebido do Canvas apÃ³s auto-save â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+  // ── Callback recebido do Canvas após auto-save ────────────────────────────
   const handleProjectSaved = useCallback((updatedProject) => {
     setCurrentProject(updatedProject);
     refreshProjects(); // sincroniza a lista com o IndexedDB
   }, [refreshProjects]);
 
-  // â”€â”€ Voltar para a Home â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+  // ── Voltar para a Home ────────────────────────────────────────────────────
   const handleGoBack = useCallback(() => {
     setScreen('home');
     setCurrentProject(null);
     setPendingFlow(null);
   }, []);
 
-  // â”€â”€ Importar projeto via arquivo .JSON â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+  // ── Importar projeto via arquivo .JSON ────────────────────────────────────
   const handleImportProject = useCallback((file) => {
     const reader = new FileReader();
     reader.onload = async (e) => {
       try {
         const data = JSON.parse(e.target.result);
         if (!data.name || !data.dataCriacao || !data.flow?.nodes) {
-          setImportError('arquivo invÃ¡lido ou incompatÃ­vel');
+          setImportError('arquivo inválido ou incompatível');
           return;
         }
         const project = {
@@ -1650,15 +1650,15 @@ export default function App() {
         refreshProjects();
         setImportError(null);
       } catch {
-        setImportError('arquivo invÃ¡lido ou incompatÃ­vel');
+        setImportError('arquivo inválido ou incompatível');
       }
     };
     reader.readAsText(file);
   }, [refreshProjects]);
 
-  // â”€â”€ Importar projeto via arquivo .CONF â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
-  // Aceita um confFile obrigatÃ³rio e um layoutFile opcional (detecÃ§Ã£o automÃ¡tica
-  // pelo input mÃºltiplo no HomeScreen).
+  // ── Importar projeto via arquivo .CONF ────────────────────────────────────
+  // Aceita um confFile obrigatório e um layoutFile opcional (detecção automática
+  // pelo input múltiplo no HomeScreen).
   const handleImportConf = useCallback((confFile, layoutFile) => {
     const reader = new FileReader();
     reader.onload = async (e) => {
@@ -1678,13 +1678,13 @@ export default function App() {
             edges    = applied.edges;
             viewport = applied.viewport || viewport;
             layoutApplied = true;
-            // Persiste para sessÃµes futuras (abertura via IndexedDB)
+            // Persiste para sessões futuras (abertura via IndexedDB)
             const cFileName = result.suggestedName
               ? `${result.suggestedName}.conf`
               : confFile.name;
             saveLayout(cFileName, layout).catch(() => {});
           } catch (err) {
-            console.warn('[layout] nÃ£o foi possÃ­vel aplicar o layout:', err.message);
+            console.warn('[layout] não foi possível aplicar o layout:', err.message);
             layoutApplied = false;
           }
         }
@@ -1708,7 +1708,7 @@ export default function App() {
     reader.readAsText(confFile);
   }, []);
 
-  // Layout jÃ¡ foi aplicado dentro de handleImportConf â€” aqui apenas cria o projeto.
+  // Layout já foi aplicado dentro de handleImportConf — aqui apenas cria o projeto.
   const handleConfImportConfirm = useCallback(async (name) => {
     if (!confImportData) return;
     const now     = new Date().toISOString();
@@ -1732,7 +1732,7 @@ export default function App() {
     setScreen('canvas');
   }, [confImportData, refreshProjects]);
 
-  // Abre o canvas em modo de revisÃ£o â€” NÃƒO salva ainda; aguarda confirmaÃ§Ã£o.
+  // Abre o canvas em modo de revisão — NÃO salva ainda; aguarda confirmação.
   const handleConfImportReview = useCallback((name) => {
     if (!confImportData) return;
     const now     = new Date().toISOString();
@@ -1754,7 +1754,7 @@ export default function App() {
     setScreen('canvas');
   }, [confImportData]);
 
-  // ConfirmaÃ§Ã£o da revisÃ£o â€” salva o projeto no IndexedDB e sai do modo revisÃ£o.
+  // Confirmação da revisão — salva o projeto no IndexedDB e sai do modo revisão.
   const handleReviewConfirm = useCallback(async (flow) => {
     if (!currentProject) return;
     const now     = new Date().toISOString();
@@ -1769,7 +1769,7 @@ export default function App() {
     setIsReviewMode(false);
   }, [currentProject, refreshProjects]);
 
-  // Cancelamento da revisÃ£o â€” descarta o projeto (nÃ£o salvo) e volta para home.
+  // Cancelamento da revisão — descarta o projeto (não salvo) e volta para home.
   const handleReviewCancel = useCallback(() => {
     setIsReviewMode(false);
     setCurrentProject(null);
@@ -1777,15 +1777,15 @@ export default function App() {
     setScreen('home');
   }, []);
 
-  // â”€â”€ Excluir projeto â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+  // ── Excluir projeto ───────────────────────────────────────────────────────
   const handleDeleteProject = useCallback(async (id) => {
     const { excluirProjeto } = await import('./services/projectStorage');
     await excluirProjeto(id);
     refreshProjects();
   }, [refreshProjects]);
 
-  // â”€â”€ RenderizaÃ§Ã£o â€” ConfigProvider Ãºnico envolve todo o roteamento â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
-  // Provider estÃ¡vel entre trocas de tela: contexto de config/tema nÃ£o remonta.
+  // ── Renderização — ConfigProvider único envolve todo o roteamento ──────────
+  // Provider estável entre trocas de tela: contexto de config/tema não remonta.
   return (
     <ConfigProvider>
       {screen === 'home' ? (
@@ -1805,7 +1805,7 @@ export default function App() {
       ) : (
         <div style={{ height: '100vh', width: '100vw', display: 'flex' }}>
           <ReactFlowProvider>
-            {/* key forÃ§a remount completo ao trocar de projeto */}
+            {/* key força remount completo ao trocar de projeto */}
             <Canvas
               key={currentProject?.id || 'standalone'}
               initialFlow={pendingFlow}

@@ -49,6 +49,91 @@ const Toggle = memo(function Toggle({ d, set, label, k }) {
   );
 });
 
+// ─── HangupCausePicker ───────────────────────────────────────────────────────
+
+const HANGUP_CAUSES = [
+  { value: '',           label: '(padrão) — sem código de causa',       group: null },
+  { value: '16',         label: '16 — Normal Clearing',                 group: 'ENCERRAMENTO NORMAL' },
+  { value: '17',         label: '17 — User Busy',                       group: 'ENCERRAMENTO NORMAL' },
+  { value: '18',         label: '18 — No User Responding',              group: 'ENCERRAMENTO NORMAL' },
+  { value: '19',         label: '19 — No Answer',                       group: 'ENCERRAMENTO NORMAL' },
+  { value: '20',         label: '20 — Subscriber Absent',               group: 'ENCERRAMENTO NORMAL' },
+  { value: '21',         label: '21 — Call Rejected',                   group: 'REJEIÇÃO' },
+  { value: '27',         label: '27 — Destination Out of Order',        group: 'REJEIÇÃO' },
+  { value: '34',         label: '34 — No Circuit Available',            group: 'REJEIÇÃO' },
+  { value: '38',         label: '38 — Network Out of Order',            group: 'REJEIÇÃO' },
+  { value: '28',         label: '28 — Invalid Number Format',           group: 'PROBLEMAS TÉCNICOS' },
+  { value: '29',         label: '29 — Facility Rejected',               group: 'PROBLEMAS TÉCNICOS' },
+  { value: '41',         label: '41 — Temporary Failure',               group: 'PROBLEMAS TÉCNICOS' },
+  { value: '42',         label: '42 — Switching Equipment Congestion',  group: 'PROBLEMAS TÉCNICOS' },
+  { value: '47',         label: '47 — Resource Unavailable',            group: 'PROBLEMAS TÉCNICOS' },
+  { value: '31',         label: '31 — Normal Unspecified',              group: 'OUTROS' },
+  { value: '96',         label: '96 — Invalid Message',                 group: 'OUTROS' },
+  { value: '__custom__', label: 'Personalizado',                        group: 'OUTROS' },
+];
+
+const HANGUP_KNOWN = new Set(
+  HANGUP_CAUSES.filter((c) => c.value && c.value !== '__custom__').map((c) => c.value)
+);
+
+const HANGUP_GROUPS = ['ENCERRAMENTO NORMAL', 'REJEIÇÃO', 'PROBLEMAS TÉCNICOS', 'OUTROS'];
+
+const HangupCausePicker = memo(function HangupCausePicker({ d, set }) {
+  const causeCode = d.causeCode ?? '';
+  const [customMode, setCustomMode] = useState(
+    () => causeCode !== '' && !HANGUP_KNOWN.has(causeCode)
+  );
+
+  const dropdownValue = customMode ? '__custom__' : causeCode;
+
+  const handleSelect = (e) => {
+    const val = e.target.value;
+    if (val === '__custom__') {
+      setCustomMode(true);
+      if (!customMode) set('causeCode', '');
+    } else {
+      setCustomMode(false);
+      set('causeCode', val);
+    }
+  };
+
+  const byGroup = {};
+  HANGUP_CAUSES.forEach((c) => {
+    const g = c.group ?? '__default__';
+    if (!byGroup[g]) byGroup[g] = [];
+    byGroup[g].push(c);
+  });
+
+  return (
+    <div style={{ marginBottom: 10 }}>
+      <label className="term-label">Código de Causa SIP (opcional)</label>
+      <select className="term-select" value={dropdownValue} onChange={handleSelect}>
+        {(byGroup['__default__'] ?? []).map((c) => (
+          <option key={c.value} value={c.value}>{c.label}</option>
+        ))}
+        {HANGUP_GROUPS.map((g) => (
+          <optgroup key={g} label={g}>
+            {(byGroup[g] ?? []).map((c) => (
+              <option key={c.value} value={c.value}>{c.label}</option>
+            ))}
+          </optgroup>
+        ))}
+      </select>
+      {customMode && (
+        <input
+          className="term-input"
+          type="text"
+          inputMode="numeric"
+          value={causeCode}
+          placeholder="ex: 99"
+          style={{ marginTop: 6 }}
+          onChange={(e) => set('causeCode', e.target.value)}
+        />
+      )}
+    </div>
+  );
+});
+
 // ─── Sub-componentes para o TimeConditionNode ────────────────────────────────
 
 const SECTION_HDR = {
@@ -632,7 +717,7 @@ export default function PropertiesPanel({ node, updateNodeData, deleteNode, togg
         <Field d={d} set={set} label="Valor de Retorno (opcional)" k="value" placeholder="0" />
       )}
       {node.type === 'hangup' && (
-        <Field d={d} set={set} label="Código de Causa SIP (opcional)" k="causeCode" placeholder="17 = busy / 21 = rejected" />
+        <HangupCausePicker key={node.id} d={d} set={set} />
       )}
       {node.type === 'gotoif' && (() => {
         const errs = ACTION_META.gotoif?.validate ? ACTION_META.gotoif.validate(d) : [];

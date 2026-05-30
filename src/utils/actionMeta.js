@@ -39,7 +39,7 @@ export const ACTION_META = {
   hangup: {
     title: 'HANGUP', app: 'Hangup', icon: Scissors, color: '#ff5050', category: 'flow',
     terminal: true,
-    summary: (d) => [{ k: 'cause', v: d.causeCode || '(default)' }],
+    summary: (d) => [{ k: 'cause', v: d.causeCode || '(padrão)' }],
     validate: ok,
   },
   gotoif: {

@@ -413,6 +413,11 @@ export default function ConfigModal({ onClose }) {
             label="Preservar comentários como NóComentado"
             hint="Se OFF, linhas comentadas (;exten =>) são ignoradas na importação"
           />
+          <ToggleRow
+            configKey="reviewModeOnImport"
+            label="Modo de revisão ao importar .conf"
+            hint="ON: abre o canvas em modo de revisão antes de salvar — permite inspecionar os nós importados. OFF: abre direto para edição."
+          />
 
           {/* ── PROJETO ── */}
           <SectionHeader label="PROJETO" />

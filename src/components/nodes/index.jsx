@@ -3,6 +3,7 @@ import ActionNode from './ActionNode';
 import ConfigNode from './ConfigNode';
 import ContextNode from './ContextNode';
 import CommentedNode from './CommentedNode';
+import IntegrationNode from './IntegrationNode';
 import MenuNode from './MenuNode';
 import RawNode from './RawNode';
 import RouteNode from './RouteNode';
@@ -11,13 +12,14 @@ import TimeNode from './TimeNode';
 const mkActionType = (type) => (props) => <ActionNode {...props} type={type} />;
 
 export const nodeTypes = {
-  context:   ContextNode,
-  config:    ConfigNode,
-  menu:      MenuNode,
-  time:      TimeNode,
-  route:     RouteNode,
-  commented: CommentedNode,
-  raw:       RawNode,
+  context:     ContextNode,
+  config:      ConfigNode,
+  menu:        MenuNode,
+  time:        TimeNode,
+  route:       RouteNode,
+  commented:   CommentedNode,
+  raw:         RawNode,
+  integration: IntegrationNode,
   // Controle de Fluxo
   gosub:       mkActionType('gosub'),
   return:      mkActionType('return'),

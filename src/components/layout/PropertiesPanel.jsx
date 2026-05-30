@@ -227,12 +227,13 @@ export default function PropertiesPanel({ node, updateNodeData, deleteNode, togg
           ? `◆ ${getNodeLabel(node.type, 'amigavel')}`
           : (
             <>
-              {node.type === 'context' && '◆ Contexto (Container)'}
-              {node.type === 'config'  && '◆ Config / Start'}
-              {node.type === 'menu'    && '◆ Menu DTMF'}
-              {node.type === 'time'    && '◆ Condição de Tempo'}
-              {node.type === 'route'   && '◆ Destino / Roteamento'}
-              {ACTION_META[node.type]  && '◆ ' + ACTION_META[node.type].title}
+              {node.type === 'context'     && '◆ Contexto (Container)'}
+              {node.type === 'config'      && '◆ Config / Start'}
+              {node.type === 'menu'        && '◆ Menu DTMF'}
+              {node.type === 'time'        && '◆ Condição de Tempo'}
+              {node.type === 'route'       && '◆ Destino / Roteamento'}
+              {node.type === 'integration' && '◆ Bloco de Integração'}
+              {ACTION_META[node.type]      && '◆ ' + ACTION_META[node.type].title}
             </>
           )
         }
@@ -897,6 +898,141 @@ export default function PropertiesPanel({ node, updateNodeData, deleteNode, togg
           </div>
         </>
       )}
+
+      {node.type === 'integration' && (() => {
+        const variables  = Array.isArray(d.variables)  ? d.variables  : [];
+        const agiParams  = Array.isArray(d.agiParams)  ? d.agiParams  : [];
+        const dest       = d.destination || {};
+        const destType   = dest.type || 'none';
+
+        const setVar = (idx, field, value) => {
+          const next = [...variables];
+          next[idx] = { ...next[idx], [field]: value };
+          set('variables', next);
+        };
+
+        return (
+          <>
+            {/* Variables */}
+            <div style={{ marginBottom: 6, fontSize: 10, color: 'var(--neon-dim)', letterSpacing: 1 }}>
+              ▌ VARIÁVEIS (Set)
+            </div>
+            {variables.map((v, idx) => (
+              <div key={idx} style={{ display: 'flex', gap: 4, marginBottom: 6, alignItems: 'center' }}>
+                <input
+                  className="term-input"
+                  style={{ flex: 1 }}
+                  value={v.key || ''}
+                  placeholder="VARIAVEL"
+                  onChange={(e) => setVar(idx, 'key', e.target.value)}
+                />
+                <span style={{ color: 'var(--neon-dim)', fontSize: 12, flexShrink: 0 }}>=</span>
+                <input
+                  className="term-input"
+                  style={{ flex: 2 }}
+                  value={v.value || ''}
+                  placeholder="valor"
+                  onChange={(e) => setVar(idx, 'value', e.target.value)}
+                />
+                <button
+                  className="btn-neon btn-danger"
+                  style={{ padding: '4px 8px', flexShrink: 0 }}
+                  onClick={() => set('variables', variables.filter((_, i) => i !== idx))}
+                >×</button>
+              </div>
+            ))}
+            <button
+              className="btn-neon"
+              style={{ width: '100%', padding: '4px 8px', marginBottom: 14 }}
+              onClick={() => set('variables', [...variables, { key: '', value: '' }])}
+            >+ VARIÁVEL</button>
+
+            {/* AGI */}
+            <div style={{ marginBottom: 6, fontSize: 10, color: 'var(--neon-dim)', letterSpacing: 1 }}>
+              ▌ SCRIPT AGI
+            </div>
+            <Field d={d} set={set} label="Nome do script" k="agiScript" placeholder="meuScript.php" />
+            {agiParams.map((p, idx) => (
+              <div key={idx} style={{ display: 'flex', gap: 6, marginBottom: 6, alignItems: 'center' }}>
+                <input
+                  className="term-input"
+                  style={{ flex: 1 }}
+                  value={p}
+                  placeholder={`parâmetro ${idx + 1}`}
+                  onChange={(e) => {
+                    const ps = [...agiParams]; ps[idx] = e.target.value;
+                    set('agiParams', ps);
+                  }}
+                />
+                <button
+                  className="btn-neon btn-danger"
+                  style={{ padding: '4px 8px' }}
+                  onClick={() => set('agiParams', agiParams.filter((_, i) => i !== idx))}
+                >×</button>
+              </div>
+            ))}
+            <button
+              className="btn-neon"
+              style={{ width: '100%', padding: '4px 8px', marginBottom: 14 }}
+              onClick={() => set('agiParams', [...agiParams, ''])}
+            >+ PARÂMETRO AGI</button>
+
+            {/* Destination */}
+            <div style={{ marginBottom: 6, fontSize: 10, color: 'var(--neon-dim)', letterSpacing: 1 }}>
+              ▌ DESTINO FINAL
+            </div>
+            <Field d={dest} set={(k, v) => set('destination', { ...dest, [k]: v })}
+              label="Tipo" k="type" options={['none', 'goto', 'queue']} />
+
+            {destType === 'goto' && (
+              <>
+                <Field d={dest} set={(k, v) => set('destination', { ...dest, [k]: v })}
+                  label="Contexto" k="context" placeholder="orpen-ivr-home" />
+                <Field d={dest} set={(k, v) => set('destination', { ...dest, [k]: v })}
+                  label="Extensão" k="extension" placeholder="s" />
+                <Field d={dest} set={(k, v) => set('destination', { ...dest, [k]: v })}
+                  label="Prioridade" k="priority" placeholder="1" />
+                <div style={{ fontSize: 9, color: '#00d4ff', border: '1px dashed #00d4ff33', padding: 6, borderRadius: 3, marginBottom: 10 }}>
+                  <code>Goto({dest.context || '...'},{ dest.extension || 's'},{dest.priority || '1'})</code>
+                </div>
+              </>
+            )}
+
+            {destType === 'queue' && (
+              <>
+                <Field d={dest} set={(k, v) => set('destination', { ...dest, [k]: v })}
+                  label="Fila" k="queue" placeholder="7000" />
+                <Field d={dest} set={(k, v) => set('destination', { ...dest, [k]: v })}
+                  label="Opções" k="queueOptions" placeholder="t" />
+                <div style={{ fontSize: 9, color: '#ff8c00', border: '1px dashed #ff8c0033', padding: 6, borderRadius: 3, marginBottom: 10 }}>
+                  <code>Queue({dest.queue || '...'}{dest.queueOptions ? ',' + dest.queueOptions : ''})</code>
+                </div>
+              </>
+            )}
+
+            {/* Preview */}
+            <div style={{ marginTop: 6, padding: 8, border: '1px dashed var(--line)', borderRadius: 3, fontSize: 9, lineHeight: 1.7 }}>
+              <div style={{ color: 'var(--neon-dim)', marginBottom: 4, letterSpacing: 1 }}>// PREVIEW</div>
+              {variables.map((v, i) => v.key && (
+                <div key={i}><code style={{ color: '#d4b8ff' }}>Set({v.key}={v.value || ''})</code></div>
+              ))}
+              {d.agiScript && (
+                <div>
+                  <code style={{ color: '#a78bfa' }}>
+                    AGI({'${AGI_PATH}/'}{d.agiScript}{agiParams.filter(Boolean).length ? ',' + agiParams.filter(Boolean).join(',') : ''})
+                  </code>
+                </div>
+              )}
+              {destType === 'goto' && dest.context && (
+                <div><code style={{ color: '#00d4ff' }}>Goto({dest.context},{dest.extension || 's'},{dest.priority || '1'})</code></div>
+              )}
+              {destType === 'queue' && dest.queue && (
+                <div><code style={{ color: '#ff8c00' }}>Queue({dest.queue}{dest.queueOptions ? ',' + dest.queueOptions : ''})</code></div>
+              )}
+            </div>
+          </>
+        );
+      })()}
 
       {node.type !== 'config' && node.type !== 'context' && (
         <button

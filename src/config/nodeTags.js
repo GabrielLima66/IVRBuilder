@@ -117,6 +117,12 @@ export const NODE_TAGS = {
     'ouvir', 'sussurro', 'barge', 'supervisao',
   ],
 
+  integration: [
+    'integracao', 'bloco', 'set', 'agi', 'script', 'variavel', 'calldata',
+    'fila', 'transferencia', 'destino', 'consulta', 'crm', 'dados', 'cliente',
+    'composite', 'composto', 'sequencia', 'registro', 'pipeline',
+  ],
+
   // ── Sistema / Áudio ──────────────────────────────────────────────────────────
   answer: [
     'atender', 'iniciar', 'comecar', 'chamada', 'answer', 'conectar',

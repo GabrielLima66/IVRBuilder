@@ -5,7 +5,7 @@ import {
   Terminal, Boxes, GitBranch, TimerReset, MessageSquare, Megaphone,
   Keyboard, ListOrdered, Hash, Disc, Square, Eye,
   PhoneCall, Timer, Play,
-  Pen, GitFork, PhoneOutgoing, Volume2, Hourglass,
+  Pen, GitFork, PhoneOutgoing, Volume2, Hourglass, Layers,
 } from 'lucide-react';
 import { NODE_TAGS } from '../../config/nodeTags';
 import { useThemeContext } from '../../contexts/ThemeContext';
@@ -70,6 +70,7 @@ const CATEGORIES = [
   {
     label: 'EXECUÇÃO LÓGICA',
     items: [
+      { type: 'integration', title: 'INTEGRAÇÃO',  desc: 'Set×N + AGI + destino · bloco composto', accent: '#a78bfa', Icon: Layers },
       { type: 'set',        title: 'SET',          desc: 'Set(VAR=valor) · define variável',  accent: '#a78bfa', Icon: Pen },
       { type: 'agi',        title: 'AGI',          desc: 'Agi(${AGI_PATH}/script,args)',       accent: '#a78bfa', Icon: Terminal },
       { type: 'macro',      title: 'MACRO',        desc: 'Macro(nome,param1,param2,...)',      accent: '#a78bfa', Icon: Boxes },

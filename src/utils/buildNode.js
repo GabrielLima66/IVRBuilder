@@ -113,6 +113,17 @@ export function buildNode(type, position) {
     case 'dial':
       return { ...base, data: { destination: 'SIP/ramal', timeout: '30', options: '' } };
 
+    case 'integration':
+      return {
+        ...base,
+        data: {
+          variables:  [],
+          agiScript:  '',
+          agiParams:  [],
+          destination: { type: 'none', context: '', extension: 's', priority: '1', queue: '', queueOptions: '' },
+        },
+      };
+
     // Sistema / Áudio
     case 'answer':
       return { ...base, data: {} };

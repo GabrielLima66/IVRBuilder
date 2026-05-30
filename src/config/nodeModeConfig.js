@@ -344,6 +344,19 @@ export const NODE_MODE_CONFIG = {
     },
   },
 
+  integration: {
+    labelPro:      'INTEGRAÇÃO',
+    labelAmigavel: 'Bloco de Integração',
+    desc:          'Encapsula uma sequência de variáveis + script AGI + destino final em um único bloco configurável',
+    dica:          'Use para agrupar: definir dados do cliente (Set), consultar sistema (AGI) e encaminhar para fila ou contexto',
+    campos: {
+      variables:   'Variáveis a definir (pares chave/valor)',
+      agiScript:   'Script AGI (nome do arquivo)',
+      agiParams:   'Parâmetros do script',
+      destination: 'Destino final (fila, contexto ou nenhum)',
+    },
+  },
+
   raw: {
     labelPro:      '// RAW',
     labelAmigavel: '// Comando Personalizado',

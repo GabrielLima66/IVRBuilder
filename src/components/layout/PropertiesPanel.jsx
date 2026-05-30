@@ -839,7 +839,8 @@ export default function PropertiesPanel({ node, updateNodeData, deleteNode, togg
           <Field d={d} set={set} label="Arquivo de Áudio" k="filename" placeholder="nome-do-audio" />
           <div style={{ fontSize: 9, color: 'var(--neon-dim)', marginTop: 6, lineHeight: 1.5, border: '1px dashed var(--line)', padding: 6, borderRadius: 3 }}>
             Aceita DTMF durante reprodução (sem travar o fluxo).<br />
-            <code style={{ color: '#a7ffba' }}>Background({'${SOUND_PATH}/'}{d.filename || '...'})</code>
+            Separe múltiplos arquivos com <code>&amp;</code> — ex: <code>audio1&amp;audio2</code><br />
+            <code style={{ color: '#a7ffba' }}>Background({d.filename || '...'})</code>
           </div>
         </>
       )}
@@ -853,10 +854,13 @@ export default function PropertiesPanel({ node, updateNodeData, deleteNode, togg
             <div style={{ color: 'var(--neon)', marginBottom: 4 }}>// COMPORTAMENTO</div>
             <span style={{ color: '#ffcc00' }}>Playback</span> trava a execução até o áudio terminar.
             Use <span style={{ color: '#ffcc00' }}>Background</span> (no nó Menu) se precisar receber dígitos enquanto o áudio toca.
+            <div style={{ marginTop: 4, fontSize: 9 }}>
+              Separe múltiplos arquivos com <code>&amp;</code> — ex: <code>arq1&amp;arq2</code>
+            </div>
             <div style={{ marginTop: 6 }}>
               <div style={{ fontSize: 9, color: 'var(--neon-dim)' }}>// PREVIEW</div>
               <code style={{ color: '#a7ffba', fontSize: 9 }}>
-                {'Playback(${SOUND_PATH}/'}{d.filename || '...'}{')'}
+                {'Playback('}{d.filename || '...'}{')'}
               </code>
             </div>
           </div>

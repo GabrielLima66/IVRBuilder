@@ -405,8 +405,8 @@ export default function ConfigModal({ onClose }) {
           <SectionHeader label="IMPORTAÇÃO" />
           <ToggleRow
             configKey="rawOnUnknown"
-            label="Criar NóRaw para comandos não reconhecidos"
-            hint="Se OFF, linhas não reconhecidas são ignoradas na importação de .conf"
+            label="Modo tolerante (recomendado)"
+            hint="ON: comandos não reconhecidos viram NóRaw e a importação continua. OFF: a importação pausa e exige confirmação antes de continuar."
           />
           <ToggleRow
             configKey="preserveComments"

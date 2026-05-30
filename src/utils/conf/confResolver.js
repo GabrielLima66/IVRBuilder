@@ -519,7 +519,7 @@ function resolveContext(rawCtx, globalConfig, isFirstContext) {
     }
   }
 
-  return { childNodes, dtmfGotos, directives: rawCtx.directives };
+  return { childNodes: detectIntegrationBlocks(childNodes), dtmfGotos, directives: rawCtx.directives };
 }
 
 // ── Résolution des références cross-contexte ─────────────────────────────────
@@ -577,6 +577,14 @@ function buildCrossRefs(resolvedContexts) {
           break;
         }
 
+        case 'integration': {
+          const dest = node.data?.destination || {};
+          if (dest.type === 'goto' && dest.context) {
+            refs.push({ sourceCtxName: ctx.name, sourceNodeIdx: String(i), sourceHandle: 'out', targetCtxName: dest.context, color: 'green' });
+          }
+          break;
+        }
+
         default:
           break;
       }
@@ -585,6 +593,104 @@ function buildCrossRefs(resolvedContexts) {
 
   // Filter out refs to contexts not in the imported file (will become unresolvedRefs)
   return refs;
+}
+
+// ── IntegrationBlock detection ───────────────────────────────────────────────
+
+/**
+ * Scans childNodes for the pattern: ≥2 consecutive Set nodes + AGI + optional Route.
+ * Collapses matching runs into a single integration node.
+ *
+ * The detection skips commented nodes so that a single ;exten comment in the
+ * middle of a set block does NOT break the pattern.
+ *
+ * @param {ResolvedNodeData[]} childNodes
+ * @returns {ResolvedNodeData[]}
+ */
+function detectIntegrationBlocks(childNodes) {
+  const result = [];
+  let i = 0;
+
+  while (i < childNodes.length) {
+    const cur = childNodes[i];
+
+    // Only look for runs starting with a non-commented set node
+    if (cur.type === 'set' && !cur.commented) {
+      // Collect consecutive (non-commented) set nodes
+      let j = i;
+      while (j < childNodes.length && childNodes[j].type === 'set' && !childNodes[j].commented) {
+        j++;
+      }
+      const setCount = j - i;
+
+      // Need ≥2 sets followed immediately by an AGI node
+      if (
+        setCount >= 2 &&
+        j < childNodes.length &&
+        childNodes[j].type === 'agi' &&
+        !childNodes[j].commented
+      ) {
+        const agiNode = childNodes[j];
+        let endIdx = j + 1;
+        let destination = { type: 'none', context: '', extension: 's', priority: '1', queue: '', queueOptions: '' };
+
+        // Optional: a route node (goto or queue) immediately after AGI
+        if (
+          endIdx < childNodes.length &&
+          childNodes[endIdx].type === 'route' &&
+          !childNodes[endIdx].commented
+        ) {
+          const routeNode = childNodes[endIdx];
+          if (routeNode.data?.routeMode === 'fila') {
+            destination = {
+              type: 'queue',
+              queue: routeNode.data.queue || '',
+              queueOptions: routeNode.data.queueOptions || '',
+              context: '', extension: 's', priority: '1',
+            };
+          } else if (routeNode.data?.routeMode === 'contexto') {
+            destination = {
+              type: 'goto',
+              context:   routeNode.data.context   || '',
+              extension: routeNode.data.extension || 's',
+              priority:  routeNode.data.priority  || '1',
+              queue: '', queueOptions: '',
+            };
+          }
+          // routeMode === 'macro' is not absorbed — leave as separate node
+          if (destination.type !== 'none') endIdx++;
+        }
+
+        // Build variables from the consecutive set nodes
+        const variables = [];
+        for (let k = i; k < j; k++) {
+          const assignment = childNodes[k].data?.assignment || '';
+          const eqIdx = assignment.indexOf('=');
+          const key   = eqIdx >= 0 ? assignment.slice(0, eqIdx) : assignment;
+          const value = eqIdx >= 0 ? assignment.slice(eqIdx + 1) : '';
+          variables.push({ key, value });
+        }
+
+        result.push({
+          type: 'integration',
+          data: {
+            variables,
+            agiScript:  agiNode.data?.script || '',
+            agiParams:  Array.isArray(agiNode.data?.params) ? agiNode.data.params : [],
+            destination,
+          },
+        });
+
+        i = endIdx;
+        continue;
+      }
+    }
+
+    result.push(cur);
+    i++;
+  }
+
+  return result;
 }
 
 // ── Entry point ──────────────────────────────────────────────────────────────

@@ -2,6 +2,7 @@ import React, { memo, useCallback } from 'react';
 import { Handle, Position, useReactFlow } from 'reactflow';
 import { cls } from '../../utils/common';
 import { useActiveSelection } from '../../contexts/ActiveSelectionContext';
+import { useReviewMode } from '../../contexts/ReviewModeContext';
 
 const btnStyle = (color) => ({
   flex: 1,
@@ -20,6 +21,7 @@ const RawNode = memo(({ id, data, selected }) => {
   const { setNodes, setEdges } = useReactFlow();
   const { activeNodeIds } = useActiveSelection();
   const isConnectedActive = activeNodeIds.has(id);
+  const reviewMode = useReviewMode();
 
   const handleChange = useCallback((e) => {
     setNodes((ns) =>
@@ -66,10 +68,15 @@ const RawNode = memo(({ id, data, selected }) => {
         <span style={{ fontSize: 9, letterSpacing: 1.5 }}>
           {data._commented ? '// RAW' : '// RAW'}
         </span>
-        {data._commented
-          ? <span className="badge" style={{ borderColor: '#ff505088', color: '#ff5050', fontSize: 8 }}>DESATIVADO</span>
-          : <span className="badge" style={{ borderColor: '#ff8c00', color: '#ff8c00', fontSize: 8 }}>não mapeado</span>
-        }
+        <span style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
+          {reviewMode && !data._commented && (
+            <span className="badge" style={{ borderColor: '#ff8c0099', color: '#ff8c00', fontSize: 9 }} title="Comando não reconhecido — verifique antes de confirmar">⚠</span>
+          )}
+          {data._commented
+            ? <span className="badge" style={{ borderColor: '#ff505088', color: '#ff5050', fontSize: 8 }}>DESATIVADO</span>
+            : <span className="badge" style={{ borderColor: '#ff8c00', color: '#ff8c00', fontSize: 8 }}>não mapeado</span>
+          }
+        </span>
       </div>
 
       <div className="rcx-node-body">

@@ -8,11 +8,13 @@ import React, { memo, useCallback } from 'react';
 import { Handle, Position, useReactFlow } from 'reactflow';
 import { cls } from '../../utils/common';
 import { useActiveSelection } from '../../contexts/ActiveSelectionContext';
+import { useReviewMode } from '../../contexts/ReviewModeContext';
 
 const CommentedNode = memo(({ id, data, selected }) => {
   const { setNodes } = useReactFlow();
   const { activeNodeIds } = useActiveSelection();
   const isConnectedActive = activeNodeIds.has(id);
+  const reviewMode = useReviewMode();
 
   const handleReactivate = useCallback(() => {
     // Tenta converter o comando original para um nó ativo
@@ -41,7 +43,12 @@ const CommentedNode = memo(({ id, data, selected }) => {
         borderColor: '#ffcc0066',
         color: '#ffcc00',
       }}>
-        <span style={{ fontSize: 9, letterSpacing: 1.5, opacity: 0.8 }}>// COMENTADO</span>
+        <span style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
+          <span style={{ fontSize: 9, letterSpacing: 1.5, opacity: 0.8 }}>// COMENTADO</span>
+          {reviewMode && (
+            <span className="badge" style={{ borderColor: '#ffcc0099', color: '#ffcc00', fontSize: 9 }} title="Linha comentada importada — verifique antes de confirmar">?</span>
+          )}
+        </span>
         {data.onReactivate && (
           <button
             style={{

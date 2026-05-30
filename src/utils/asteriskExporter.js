@@ -131,6 +131,27 @@ function generateDialplanFromContexts(nodes, edges, findNode, outEdges, options 
         }
         return [`Goto(${n.data.context || ''},${n.data.extension || 's'},${n.data.priority || '1'})`];
       }
+      case 'integration': {
+        const out = [];
+        const vars = Array.isArray(n.data?.variables) ? n.data.variables : [];
+        for (const v of vars) {
+          if (v.key) out.push(`Set(${v.key}=${v.value ?? ''})`);
+        }
+        const script = (n.data?.agiScript || '').trim();
+        if (script) {
+          const params = (n.data?.agiParams || []).filter(Boolean);
+          const argStr = params.length ? ',' + params.join(',') : '';
+          out.push(`AGI(\${AGI_PATH}/${script}${argStr})`);
+        }
+        const dest = n.data?.destination || {};
+        if (dest.type === 'goto' && dest.context) {
+          out.push(`Goto(${dest.context},${dest.extension || 's'},${dest.priority || '1'})`);
+        } else if (dest.type === 'queue' && dest.queue) {
+          const opts = dest.queueOptions ? `,${dest.queueOptions}` : '';
+          out.push(`Queue(${dest.queue}${opts})`);
+        }
+        return out;
+      }
       case 'commented':
         return []; // linhas comentadas não geram output no .conf
       case 'raw':

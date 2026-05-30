@@ -171,7 +171,7 @@ const DayCheckbox = memo(function DayCheckbox({ id, label, checked, accent, onCh
         onChange={(e) => onChange(id, e.target.checked)}
         style={{ accentColor: accent || 'var(--neon)', margin: 0 }}
       />
-      <span style={{ fontSize: 8, letterSpacing: 0.5, color: checked ? (accent || 'var(--neon)') : '#555' }}>
+      <span style={{ fontSize: 8, letterSpacing: 0.5, color: checked ? (accent || 'var(--neon)') : 'var(--panel-hint-color)' }}>
         {label}
       </span>
     </label>

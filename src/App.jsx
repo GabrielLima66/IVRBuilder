@@ -1489,14 +1489,14 @@ function Canvas({ initialFlow, projectName, projectCreatedAt, currentProjectId, 
               letterSpacing: 0.5,
               lineHeight: 2.2,
             }}>
-              <span style={{ color: '#555', letterSpacing: 1 }}>{'// arquivos gerados:'}</span>
+              <span style={{ color: 'var(--panel-hint-color)', letterSpacing: 1 }}>{'// arquivos gerados:'}</span>
               <br />
               <span style={{ color: 'var(--neon)' }}>{confFileName}</span>
               {' — dialplan para o Asterisk'}
               <br />
               <span style={{ color: 'var(--neon)' }}>{confFileName.replace(/\.conf$/, '.layout.json')}</span>
               {' — layout do canvas '}
-              <span style={{ color: '#555' }}>(mantenha junto ao .conf)</span>
+              <span style={{ color: 'var(--panel-hint-color)' }}>(mantenha junto ao .conf)</span>
             </div>
 
             {/* Preview do .conf */}

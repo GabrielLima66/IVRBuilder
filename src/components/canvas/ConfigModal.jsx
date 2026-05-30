@@ -65,7 +65,7 @@ const ToggleRow = memo(function ToggleRow({ configKey, label, hint }) {
     <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: 12, marginBottom: 14 }}>
       <div style={{ flex: 1 }}>
         <div style={{ fontSize: 11, color: 'var(--neon)', letterSpacing: 0.5, lineHeight: 1.4 }}>{label}</div>
-        {hint && <div style={{ fontSize: 9, color: '#555', marginTop: 2, lineHeight: 1.5 }}>{hint}</div>}
+        {hint && <div style={{ fontSize: 9, color: 'var(--panel-hint-color)', marginTop: 2, lineHeight: 1.5 }}>{hint}</div>}
       </div>
       <NeonToggle id={id} checked={!!value} onChange={(v) => setConfig(configKey, v)} />
     </div>
@@ -90,7 +90,7 @@ const SelectRow = memo(function SelectRow({ configKey, label, options, hint }) {
           <option key={o.value} value={o.value}>{o.label}</option>
         ))}
       </select>
-      {hint && <div style={{ fontSize: 9, color: '#555', marginTop: 4, lineHeight: 1.5 }}>{hint}</div>}
+      {hint && <div style={{ fontSize: 9, color: 'var(--panel-hint-color)', marginTop: 4, lineHeight: 1.5 }}>{hint}</div>}
     </div>
   );
 });
@@ -114,7 +114,7 @@ const SliderRow = memo(function SliderRow({ configKey, label, min, max, step = 1
         onChange={(e) => setConfig(configKey, step < 1 ? parseFloat(e.target.value) : parseInt(e.target.value, 10))}
         style={{ width: '100%', accentColor: 'var(--neon)', cursor: 'pointer' }}
       />
-      {hint && <div style={{ fontSize: 9, color: '#555', marginTop: 3, lineHeight: 1.5 }}>{hint}</div>}
+      {hint && <div style={{ fontSize: 9, color: 'var(--panel-hint-color)', marginTop: 3, lineHeight: 1.5 }}>{hint}</div>}
     </div>
   );
 });
@@ -140,9 +140,9 @@ const NumberRow = memo(function NumberRow({ configKey, label, min, max, suffix, 
           className="term-input"
           style={{ width: 80, fontSize: 11 }}
         />
-        {suffix && <span style={{ fontSize: 10, color: '#555' }}>{suffix}</span>}
+        {suffix && <span style={{ fontSize: 10, color: 'var(--panel-hint-color)' }}>{suffix}</span>}
       </div>
-      {hint && <div style={{ fontSize: 9, color: '#555', marginTop: 4, lineHeight: 1.5 }}>{hint}</div>}
+      {hint && <div style={{ fontSize: 9, color: 'var(--panel-hint-color)', marginTop: 4, lineHeight: 1.5 }}>{hint}</div>}
     </div>
   );
 });
@@ -165,7 +165,7 @@ const TextRow = memo(function TextRow({ configKey, label, placeholder, hint }) {
         autoComplete="off"
         spellCheck={false}
       />
-      {hint && <div style={{ fontSize: 9, color: '#555', marginTop: 4, lineHeight: 1.5 }}>{hint}</div>}
+      {hint && <div style={{ fontSize: 9, color: 'var(--panel-hint-color)', marginTop: 4, lineHeight: 1.5 }}>{hint}</div>}
     </div>
   );
 });
@@ -217,7 +217,7 @@ const ColorThemeRow = memo(function ColorThemeRow() {
           );
         })}
       </div>
-      <div style={{ fontSize: 9, color: '#555', marginTop: 5, lineHeight: 1.5 }}>
+      <div style={{ fontSize: 9, color: 'var(--panel-hint-color)', marginTop: 5, lineHeight: 1.5 }}>
         Hacking = verde neon clássico · Orpen = roxo/violeta · Dark = paleta VS Code
       </div>
     </div>
@@ -270,7 +270,7 @@ const ModeToggleRow = memo(function ModeToggleRow() {
           AMIGÁVEL
         </button>
       </div>
-      <div style={{ fontSize: 9, color: '#555', marginTop: 5, lineHeight: 1.5 }}>
+      <div style={{ fontSize: 9, color: 'var(--panel-hint-color)', marginTop: 5, lineHeight: 1.5 }}>
         Sincronizado com o toggle do header. PRO = interface técnica completa.
       </div>
     </div>

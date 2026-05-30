@@ -269,7 +269,7 @@ function ConfImportModal({ data, onClose, onConfirm, onReview }) {
                   <div style={{ flex: 1, minWidth: 0 }}>
                     <span style={{ fontSize: 10, color: '#ffb347', letterSpacing: 0.5 }}>{item.comando}</span>
                     {item.contextoOrigem && (
-                      <span style={{ fontSize: 9, color: '#555', marginLeft: 6 }}>em [{item.contextoOrigem}]</span>
+                      <span style={{ fontSize: 9, color: 'var(--panel-hint-color)', marginLeft: 6 }}>em [{item.contextoOrigem}]</span>
                     )}
                     {item.exemplo && (
                       <div style={{ fontSize: 9, color: '#ff8c00', opacity: 0.6, wordBreak: 'break-all', marginTop: 1 }}>
@@ -591,7 +591,7 @@ export default function HomeScreen({
       <div style={{ flex: 1, padding: '28px 48px' }}>
         {projects.length === 0 ? (
           <div style={{ textAlign: 'center', padding: '90px 0' }}>
-            <div style={{ fontSize: 13, color: 'var(--neon)', opacity: 0.25, letterSpacing: 1, lineHeight: 2.2 }}>
+            <div style={{ fontSize: 13, color: 'var(--neon)', opacity: 0.6, letterSpacing: 1, lineHeight: 2.2 }}>
               // nenhum projeto encontrado<br />— crie ou importe sua primeira URA
             </div>
             <div style={{ marginTop: 32, display: 'inline-block' }}>

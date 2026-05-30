@@ -158,7 +158,7 @@ const MonthPicker = memo(function MonthPicker({ selected, onChange }) {
 
 // ─── Painel principal ─────────────────────────────────────────────────────────
 
-export default function PropertiesPanel({ node, updateNodeData, deleteNode, toggleComment, patchNodeStyle, syncTrueContext, propagateContextRename, nodes = [], onContextNavigate }) {
+export default function PropertiesPanel({ node, updateNodeData, deleteNode, toggleComment, patchNodeStyle, syncTrueContext, propagateContextRename, nodes = [], onContextNavigate, isReviewMode }) {
   // Armazena o nome do contexto no momento do foco (para detectar rename via painel)
   const ctxNameOnFocus = useRef('');
   const [ctxNameDup, setCtxNameDup] = useState(false);
@@ -186,8 +186,39 @@ export default function PropertiesPanel({ node, updateNodeData, deleteNode, togg
   /** Retorna o label amigável do campo se estiver no modo AMIGÁVEL. */
   const fl = (defaultLabel, fieldKey) => getFieldLabel(node.type, fieldKey, defaultLabel, mode);
 
+  // Confidence level of the selected node in review mode
+  const reviewConfidence = isReviewMode
+    ? (node.type === 'raw' ? 'low'
+      : (node.type === 'commented' || node.data?._commented || node.type === 'execif' || node.type === 'execiftime' ? 'medium'
+      : 'high'))
+    : null;
+
   return (
     <aside style={panelStyle}>
+      {/* ── Banner modo revisão ─────────────────────────────────────────────── */}
+      {isReviewMode && (
+        <div style={{
+          background: 'rgba(255,204,0,0.07)',
+          border: '1px solid #ffcc0055',
+          borderRadius: 3, padding: '6px 8px',
+          marginBottom: 10, fontSize: 9, letterSpacing: 0.5,
+          color: '#ffcc00', lineHeight: 1.6,
+        }}>
+          ▌ MODO REVISÃO — somente leitura
+          {reviewConfidence === 'low' && (
+            <div style={{ marginTop: 4, color: '#ff8c00', fontSize: 9 }}>
+              ⚠ Nó de baixa confiança — comando não mapeado.
+            </div>
+          )}
+          {reviewConfidence === 'medium' && (
+            <div style={{ marginTop: 4, color: '#ffcc00', fontSize: 9 }}>
+              ? Nó de confiança parcial — verifique antes de confirmar.
+            </div>
+          )}
+        </div>
+      )}
+      {/* Content area — visually dimmed + non-interactive in review mode */}
+      <div style={isReviewMode ? { opacity: 0.72, pointerEvents: 'none', userSelect: 'none' } : {}}>
       <div style={{ fontSize: 11, color: 'var(--neon-dim)', letterSpacing: 1, marginBottom: 6 }}>
         ▌PROPRIEDADES
       </div>
@@ -887,6 +918,8 @@ export default function PropertiesPanel({ node, updateNodeData, deleteNode, togg
           ⌫ EXCLUIR NÓ
         </button>
       )}
+      </div>
+      {/* closes content wrapper div */}
     </aside>
   );
 }

@@ -128,9 +128,9 @@ function SectionHeader({ label }) {
   );
 }
 
-function ConfImportModal({ data, onClose, onConfirm }) {
+function ConfImportModal({ data, onClose, onConfirm, onReview }) {
   const [name, setName] = useState(data.suggestedName || 'projeto-importado');
-  const { rawOnUnknown } = useConfig();
+  const { rawOnUnknown, reviewModeOnImport } = useConfig();
 
   const isValid    = name.length >= 3 && NAME_RE.test(name);
   const { stats }  = data;
@@ -393,11 +393,34 @@ function ConfImportModal({ data, onClose, onConfirm }) {
 
         <div style={{ display: 'flex', gap: 8, justifyContent: 'flex-end', marginTop: 16 }}>
           <button className="btn-neon" onClick={onClose} style={{ padding: '8px 16px' }}>CANCELAR</button>
-          <button className="btn-neon" onClick={() => isValid && unknownsConfirmed && onConfirm(name)}
-            disabled={!isValid || !unknownsConfirmed}
-            style={{ padding: '8px 16px', opacity: (isValid && unknownsConfirmed) ? 1 : 0.4, cursor: (isValid && unknownsConfirmed) ? 'pointer' : 'not-allowed' }}>
-            ABRIR NO CANVAS
-          </button>
+          {reviewModeOnImport ? (
+            <>
+              <button
+                className="btn-neon"
+                onClick={() => isValid && unknownsConfirmed && onConfirm(name)}
+                disabled={!isValid || !unknownsConfirmed}
+                style={{ padding: '8px 16px', opacity: (isValid && unknownsConfirmed) ? 1 : 0.4, cursor: (isValid && unknownsConfirmed) ? 'pointer' : 'not-allowed', borderColor: 'var(--neon-dim)', color: 'var(--neon-dim)' }}
+                title="Abre direto para edição sem modo de revisão"
+              >
+                ABRIR DIRETO
+              </button>
+              <button
+                className="btn-neon"
+                onClick={() => isValid && unknownsConfirmed && onReview?.(name)}
+                disabled={!isValid || !unknownsConfirmed}
+                style={{ padding: '8px 16px', opacity: (isValid && unknownsConfirmed) ? 1 : 0.4, cursor: (isValid && unknownsConfirmed) ? 'pointer' : 'not-allowed' }}
+                title="Abre em modo de revisão — inspecione antes de confirmar"
+              >
+                ▶ REVISAR NO CANVAS
+              </button>
+            </>
+          ) : (
+            <button className="btn-neon" onClick={() => isValid && unknownsConfirmed && onConfirm(name)}
+              disabled={!isValid || !unknownsConfirmed}
+              style={{ padding: '8px 16px', opacity: (isValid && unknownsConfirmed) ? 1 : 0.4, cursor: (isValid && unknownsConfirmed) ? 'pointer' : 'not-allowed' }}>
+              ABRIR NO CANVAS
+            </button>
+          )}
         </div>
       </div>
     </Modal>
@@ -452,7 +475,7 @@ function ProjectCard({ project, onOpen, onExport, onDelete }) {
 export default function HomeScreen({
   projects, onCreateProject, onOpenProject,
   onImportProject, onImportConf, onDeleteProject,
-  importError, confImportData, onConfImportConfirm, onConfImportCancel,
+  importError, confImportData, onConfImportConfirm, onConfImportReview, onConfImportCancel,
 }) {
   const [showCreateModal, setShowCreateModal] = useState(false);
   const [confirmOpen,     setConfirmOpen]     = useState(null);
@@ -595,7 +618,7 @@ export default function HomeScreen({
       {showCreateModal  && <CreateProjectModal    onClose={() => setShowCreateModal(false)} onCreate={handleCreate} />}
       {confirmOpen      && <ConfirmOpenModal       projectName={confirmOpen.name}   onClose={() => setConfirmOpen(null)}   onConfirm={() => { onOpenProject(confirmOpen); setConfirmOpen(null); }} />}
       {confirmDelete    && <ConfirmDeleteModal     projectName={confirmDelete.name} onClose={() => setConfirmDelete(null)} onConfirm={handleConfirmDelete} />}
-      {confImportData   && <ConfImportModal        data={confImportData}            onClose={onConfImportCancel}           onConfirm={onConfImportConfirm} />}
+      {confImportData   && <ConfImportModal        data={confImportData}            onClose={onConfImportCancel}           onConfirm={onConfImportConfirm} onReview={onConfImportReview} />}
     </div>
   );
 }

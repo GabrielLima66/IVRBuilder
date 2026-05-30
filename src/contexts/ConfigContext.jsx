@@ -46,6 +46,7 @@ export const CONFIG_DEFAULTS = {
   // Importação
   rawOnUnknown:           true,         // bool — criar NóRaw para comandos não reconhecidos
   preserveComments:       true,         // bool — preservar linhas comentadas como NóComentado
+  reviewModeOnImport:     true,         // bool — abrir canvas em modo revisão antes de confirmar
 
   // Projeto
   autosaveDelay:          2,            // segundos (1–10) — debounce do autosave

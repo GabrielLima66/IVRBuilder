@@ -2,7 +2,11 @@
  * HomeScreen — tela inicial de gerenciamento de projetos.
  * Projetos persistidos no IndexedDB (via App.jsx).
  */
-import React, { useState, useRef, useCallback } from 'react';
+import React, { useState, useRef, useCallback, useEffect } from 'react';
+import { useConfig } from '../contexts/ConfigContext';
+
+// ── Log de sessão de importação (acumulado enquanto a página está aberta) ─────
+const sessionImportLog = [];
 
 // ── Utilitários ───────────────────────────────────────────────────────────────
 
@@ -126,15 +130,49 @@ function SectionHeader({ label }) {
 
 function ConfImportModal({ data, onClose, onConfirm }) {
   const [name, setName] = useState(data.suggestedName || 'projeto-importado');
+  const { rawOnUnknown } = useConfig();
 
   const isValid    = name.length >= 3 && NAME_RE.test(name);
   const { stats }  = data;
   const validation = data.validation || null;
   const totalNodes = Object.values(stats.nodesByType || {}).reduce((a, b) => a + b, 0);
 
+  // naoReconhecidos: prioriza campo rico, cai de volta para stats.raw (strings)
+  const naoReconhecidos = [...(stats.naoReconhecidos || [])].sort((a, b) => b.ocorrencias - a.ocorrencias);
+  const hasUnknowns = naoReconhecidos.length > 0 || (stats.raw || []).length > 0;
+
+  // Modo tolerante OFF com comandos não reconhecidos → exige confirmação extra
+  const [unknownsConfirmed, setUnknownsConfirmed] = useState(rawOnUnknown || !hasUnknowns);
+
+  // Acumula no log de sessão ao montar o modal
+  useEffect(() => {
+    if (naoReconhecidos.length > 0) {
+      sessionImportLog.push({
+        arquivo:        data.suggestedName || 'desconhecido',
+        data:           new Date().toISOString().slice(0, 10),
+        naoReconhecidos: naoReconhecidos.map((x) => ({
+          comando:     x.comando,
+          ocorrencias: x.ocorrencias,
+          exemplo:     x.exemplo || x.args,
+        })),
+      });
+    }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  const handleExportLog = useCallback(() => {
+    if (!sessionImportLog.length) return;
+    const blob = new Blob([JSON.stringify(sessionImportLog, null, 2)], { type: 'application/json;charset=utf-8' });
+    const url  = URL.createObjectURL(blob);
+    const a    = document.createElement('a');
+    a.href = url; a.download = `ura-import-log-${new Date().toISOString().slice(0, 10)}.json`;
+    document.body.appendChild(a); a.click();
+    document.body.removeChild(a); URL.revokeObjectURL(url);
+  }, []);
+
   return (
-    <Modal title="IMPORTAR .CONF" onClose={onClose} maxWidth={600}>
-      <div style={{ padding: '16px 20px', overflow: 'auto', maxHeight: '75vh' }}>
+    <Modal title="IMPORTAR .CONF" onClose={onClose} maxWidth={620}>
+      <div style={{ padding: '16px 20px', overflow: 'auto', maxHeight: '78vh' }}>
 
         <SectionHeader label="SEÇÃO 1 — MAPEAMENTO" />
 
@@ -173,7 +211,80 @@ function ConfImportModal({ data, onClose, onConfirm }) {
           </div>
         )}
 
-        {(stats.raw || []).length > 0 && (
+        {/* ── Comandos não reconhecidos — exibição rica ordenada por frequência ── */}
+        {naoReconhecidos.length > 0 && (
+          <div style={{ marginBottom: 12 }}>
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 6 }}>
+              <div style={{ fontSize: 10, color: '#ff8c00', letterSpacing: 1 }}>
+                COMANDOS NÃO RECONHECIDOS ({naoReconhecidos.length} tipo{naoReconhecidos.length !== 1 ? 's' : ''}, {stats.raw.length} ocorrência{stats.raw.length !== 1 ? 's' : ''})
+              </div>
+              {sessionImportLog.length > 0 && (
+                <button
+                  type="button"
+                  onClick={handleExportLog}
+                  style={{
+                    background: 'transparent', border: '1px solid #ff8c0066', color: '#ff8c00',
+                    fontFamily: 'inherit', fontSize: 9, letterSpacing: 1, padding: '2px 8px',
+                    cursor: 'pointer', borderRadius: 2,
+                  }}
+                  title="Baixar log JSON da sessão completa"
+                >
+                  ⤓ EXPORTAR LOG
+                </button>
+              )}
+            </div>
+
+            {/* Modo tolerante OFF: aviso de confirmação */}
+            {!rawOnUnknown && !unknownsConfirmed && (
+              <div style={{
+                background: 'rgba(255,140,0,0.08)', border: '1px solid #ff8c00',
+                borderRadius: 3, padding: '8px 10px', marginBottom: 8,
+              }}>
+                <div style={{ fontSize: 10, color: '#ff8c00', marginBottom: 6, letterSpacing: 0.5 }}>
+                  ⚠ MODO TOLERANTE DESATIVADO — os comandos abaixo foram importados como NóRaw.
+                </div>
+                <div style={{ fontSize: 9, color: 'var(--neon-dim)', marginBottom: 8, opacity: 0.8 }}>
+                  Revise a lista e confirme se deseja continuar.
+                </div>
+                <button
+                  type="button"
+                  onClick={() => setUnknownsConfirmed(true)}
+                  style={{
+                    background: '#ff8c00', border: 'none', color: '#000',
+                    fontFamily: 'inherit', fontSize: 9, letterSpacing: 1.5,
+                    padding: '4px 12px', cursor: 'pointer', borderRadius: 2, fontWeight: 700,
+                  }}
+                >
+                  CONFIRMAR E CONTINUAR
+                </button>
+              </div>
+            )}
+
+            <div style={{ maxHeight: 160, overflow: 'auto', background: 'var(--bg)', padding: '4px 6px', borderRadius: 3, border: '1px solid var(--line)' }}>
+              {naoReconhecidos.map((item, i) => (
+                <div key={i} style={{ display: 'flex', gap: 6, padding: '3px 0', borderBottom: i < naoReconhecidos.length - 1 ? '1px solid var(--line)' : 'none', alignItems: 'flex-start' }}>
+                  <span style={{ fontSize: 10, color: '#ff8c00', fontWeight: 700, minWidth: 20, textAlign: 'right', flexShrink: 0 }}>
+                    ×{item.ocorrencias}
+                  </span>
+                  <div style={{ flex: 1, minWidth: 0 }}>
+                    <span style={{ fontSize: 10, color: '#ffb347', letterSpacing: 0.5 }}>{item.comando}</span>
+                    {item.contextoOrigem && (
+                      <span style={{ fontSize: 9, color: '#555', marginLeft: 6 }}>em [{item.contextoOrigem}]</span>
+                    )}
+                    {item.exemplo && (
+                      <div style={{ fontSize: 9, color: '#ff8c00', opacity: 0.6, wordBreak: 'break-all', marginTop: 1 }}>
+                        {item.exemplo.length > 80 ? item.exemplo.slice(0, 80) + '…' : item.exemplo}
+                      </div>
+                    )}
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
+
+        {/* Fallback: stats.raw sem info rica (arquivos importados por sistema legado) */}
+        {naoReconhecidos.length === 0 && (stats.raw || []).length > 0 && (
           <div style={{ marginBottom: 12 }}>
             <div style={{ fontSize: 10, color: '#ff8c00', letterSpacing: 1, marginBottom: 6 }}>
               COMANDOS NÃO RECONHECIDOS ({stats.raw.length})
@@ -282,8 +393,9 @@ function ConfImportModal({ data, onClose, onConfirm }) {
 
         <div style={{ display: 'flex', gap: 8, justifyContent: 'flex-end', marginTop: 16 }}>
           <button className="btn-neon" onClick={onClose} style={{ padding: '8px 16px' }}>CANCELAR</button>
-          <button className="btn-neon" onClick={() => isValid && onConfirm(name)} disabled={!isValid}
-            style={{ padding: '8px 16px', opacity: isValid ? 1 : 0.4, cursor: isValid ? 'pointer' : 'not-allowed' }}>
+          <button className="btn-neon" onClick={() => isValid && unknownsConfirmed && onConfirm(name)}
+            disabled={!isValid || !unknownsConfirmed}
+            style={{ padding: '8px 16px', opacity: (isValid && unknownsConfirmed) ? 1 : 0.4, cursor: (isValid && unknownsConfirmed) ? 'pointer' : 'not-allowed' }}>
             ABRIR NO CANVAS
           </button>
         </div>

@@ -150,8 +150,10 @@ function appToNodeData(application, args) {
     }
 
     case 'agi': {
-      const parts  = params.split(',');
-      const script = (parts[0] || '').split('/').pop();
+      const parts   = params.split(',');
+      const rawPath = parts[0] || '';
+      // Absolute paths (start with /) are preserved as-is; relative paths strip the dirname
+      const script  = rawPath.startsWith('/') ? rawPath : rawPath.split('/').pop();
       return { type: 'agi', data: { script, params: parts.slice(1).filter(Boolean), label: '' } };
     }
 
@@ -601,7 +603,7 @@ export function resolve(rawContexts) {
       contexts: [],
       crossRefs: [],
       unresolvedRefs: [],
-      stats: { contexts: 0, nodesByType: {}, commented: [], raw: [], unresolvedRefs: [] },
+      stats: { contexts: 0, nodesByType: {}, commented: [], raw: [], naoReconhecidos: [], unresolvedRefs: [] },
     };
   }
 
@@ -617,6 +619,7 @@ export function resolve(rawContexts) {
     nodesByType: {},
     commented: [],
     raw: [],
+    naoReconhecidos: [], // [{ comando, args, exemplo, contextoOrigem, extensaoOrigem, ocorrencias }]
   };
 
   for (let i = 0; i < rawContexts.length; i++) {
@@ -631,7 +634,26 @@ export function resolve(rawContexts) {
       }
       const t = n.type;
       stats.nodesByType[t] = (stats.nodesByType[t] || 0) + 1;
-      if (t === 'raw') stats.raw.push(n.data?.rawLine || '');
+      if (t === 'raw' && n.data?.rawLine) {
+        const rawLine  = n.data.rawLine;
+        stats.raw.push(rawLine);
+        const parenIdx = rawLine.indexOf('(');
+        const comando  = (parenIdx >= 0 ? rawLine.slice(0, parenIdx) : rawLine).trim();
+        const args     = parenIdx >= 0 ? rawLine.slice(parenIdx + 1).replace(/\)$/, '') : '';
+        const existing = stats.naoReconhecidos.find((x) => x.comando === comando);
+        if (existing) {
+          existing.ocorrencias++;
+        } else {
+          stats.naoReconhecidos.push({
+            comando,
+            args,
+            exemplo: rawLine,
+            contextoOrigem: rawCtx.name,
+            extensaoOrigem: 's',
+            ocorrencias: 1,
+          });
+        }
+      }
     }
 
     resolvedContexts.push({

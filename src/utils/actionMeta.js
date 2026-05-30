@@ -225,7 +225,10 @@ export function actionLine(n) {
       return `Set(${d.assignment || ''})`;
     case 'agi': {
       const params = resolveParams(d.params, d.args);
-      return `AGI(\${AGI_PATH}/${d.script || ''}${params ? ',' + params : ''})`;
+      const script = d.script || '';
+      // Absolute paths are emitted as-is; relative paths get ${AGI_PATH}/ prepended
+      const scriptPath = script.startsWith('/') ? script : `\${AGI_PATH}/${script}`;
+      return `AGI(${scriptPath}${params ? ',' + params : ''})`;
     }
     case 'macro': {
       const params = resolveParams(d.params, d.args);

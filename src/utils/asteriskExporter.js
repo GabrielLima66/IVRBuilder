@@ -40,6 +40,10 @@ function getOrderedContexts(nodes) {
 // ─────────────────────────────────────────────────────────────────────────────
 function generateDialplanFromContexts(nodes, edges, findNode, outEdges, options = {}) {
   const includeSectionComments = options.includeSectionComments !== false;
+  // highFidelityMode (padrão: true) — usa originalLine para nós não editados,
+  // garantindo fidelidade literal ao .conf importado.
+  // false = sempre reconstrói a partir dos campos estruturados (normaliza formatação).
+  const highFidelityMode = options.highFidelityMode !== false;
   const ctxNodes = getOrderedContexts(nodes);
 
   const lines = [];
@@ -504,6 +508,15 @@ function generateDialplanFromContexts(nodes, edges, findNode, outEdges, options 
         });
         sSeq.push({ line: `WaitExten(${c.data.waitExten || 4})` });
         sSeq.push({ menuFlush: c }); // ← flush DTMF aqui, antes do próximo nó
+      } else if (
+        highFidelityMode &&
+        !c.data?.isDirty &&
+        c.data?.originalLine &&
+        !c.data?._commented
+      ) {
+        // Fidelidade máxima: emite a linha original exatamente como estava no .conf.
+        // Cobre qualquer formatação não capturada pelos metadados (_fmt, rawArgs etc.).
+        sSeq.push({ originalLine: c.data.originalLine });
       } else {
         const lns = linesForChild(c);
         const nodeLbl = ACTION_META[c.type]?.supportsLabel ? (c.data.label || '').trim() : '';
@@ -540,15 +553,17 @@ function generateDialplanFromContexts(nodes, edges, findNode, outEdges, options 
     }
 
     // ── Emissão ──────────────────────────────────────────────────────────────
-    // Verifica se há alguma linha real (exten ou raw com conteúdo) além de marcadores e formatação
+    // Verifica se há alguma linha real além de marcadores e blank-lines puras
     const hasRealLines = sSeq.some(
-      (item) => !item.menuFlush && (item.line || item.isRaw === false)
+      (item) => !item.menuFlush && (item.originalLine != null || item.line || item.isRaw === false)
     );
 
     if (!hasRealLines) {
       emit(`exten => s,1,Noop(## ${ctxName} ##)`);
     } else {
-      let seqIdx = 0;
+      // extenLineCount — conta TODAS as linhas exten emitidas (original + reconstruídas).
+      // Garante que linhas reconstruídas após originalLines recebam prioridade 'n' corretamente.
+      let extenLineCount = 0;
 
       // Emite TODAS as extensões DTMF de um menu imediatamente (bloco atômico).
       // Chamado pelo marcador { menuFlush } no meio do sSeq.
@@ -649,14 +664,19 @@ function generateDialplanFromContexts(nodes, edges, findNode, outEdges, options 
         if (item.menuFlush) {
           // Bloco atômico: emite DTMF do menu imediatamente após o WaitExten
           emitMenuDtmf(item.menuFlush);
+        } else if (item.originalLine != null) {
+          // Fidelidade máxima: emite a linha original verbatim (prioridade já embutida)
+          emit(item.originalLine);
+          extenLineCount++; // conta para que linhas reconstruídas seguintes usem 'n'
         } else if (item.isRaw) {
-          // Linhas raw (include =>, comentários, etc.) sem prefixo exten =>
+          // Linhas raw (include =>, blank lines, section comments) sem prefixo exten =>
           emit(item.line);
         } else {
-          const pri = seqIdx === 0 ? '1' : 'n';
+          // Linha reconstruída: deriva prioridade pela contagem de exten já emitidas
+          const pri = extenLineCount === 0 ? '1' : 'n';
           const lbl = item.label ? `(${item.label})` : '';
           emit(`exten => s,${pri}${lbl},${item.line}`);
-          seqIdx++;
+          extenLineCount++;
         }
       }
     }

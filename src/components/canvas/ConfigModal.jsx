@@ -279,6 +279,85 @@ const ModeToggleRow = memo(function ModeToggleRow() {
   );
 });
 
+// ── Controle de escala de fonte da UI ────────────────────────────────────────
+
+const BASE_PX = 13; // font-size base que o slider multiplica
+
+const FontScaleControl = memo(function FontScaleControl() {
+  const { uiFontScale = 1.0, setConfig } = useConfig();
+  const scale = Math.max(0.85, Math.min(1.45, uiFontScale));
+
+  const pxVal  = Math.round(BASE_PX * scale);
+  const pctVal = Math.round(scale * 100);
+
+  const dec = () => setConfig('uiFontScale', Math.max(0.85, Math.round((scale - 0.1) * 100) / 100));
+  const inc = () => setConfig('uiFontScale', Math.min(1.45, Math.round((scale + 0.1) * 100) / 100));
+
+  const btnStyle = {
+    background: 'transparent',
+    border: '1px solid var(--line)',
+    color: 'var(--neon)',
+    fontFamily: 'inherit',
+    fontSize: 11,
+    fontWeight: 700,
+    cursor: 'pointer',
+    borderRadius: 2,
+    padding: '2px 8px',
+    letterSpacing: 1,
+    lineHeight: 1,
+    transition: 'border-color 0.15s',
+    flexShrink: 0,
+  };
+
+  return (
+    <div style={{ marginBottom: 14 }}>
+      <div style={{ fontSize: 11, color: 'var(--neon-dim)', letterSpacing: 0.5, marginBottom: 8 }}>
+        TAMANHO DA FONTE DA INTERFACE
+      </div>
+      <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+        <button
+          type="button"
+          aria-label="Diminuir tamanho da fonte"
+          style={btnStyle}
+          onClick={dec}
+          onMouseEnter={(e) => { e.currentTarget.style.borderColor = 'var(--neon)'; }}
+          onMouseLeave={(e) => { e.currentTarget.style.borderColor = 'var(--line)'; }}
+        >
+          A-
+        </button>
+        <input
+          type="range"
+          min={0.85}
+          max={1.45}
+          step={0.05}
+          value={scale}
+          onChange={(e) => setConfig('uiFontScale', parseFloat(e.target.value))}
+          style={{ flex: 1, accentColor: 'var(--neon)', cursor: 'pointer' }}
+          aria-label="Escala da fonte da interface"
+        />
+        <button
+          type="button"
+          aria-label="Aumentar tamanho da fonte"
+          style={btnStyle}
+          onClick={inc}
+          onMouseEnter={(e) => { e.currentTarget.style.borderColor = 'var(--neon)'; }}
+          onMouseLeave={(e) => { e.currentTarget.style.borderColor = 'var(--line)'; }}
+        >
+          A+
+        </button>
+      </div>
+      <div style={{ textAlign: 'center', fontSize: 9, color: 'var(--neon-dim)', marginTop: 5, letterSpacing: 0.5 }}>
+        {pxVal}px ({pctVal}%)
+        <span style={{ margin: '0 8px', color: 'var(--line)' }}>·</span>
+        <span style={{ color: scale === 1.0 ? 'var(--neon)' : 'var(--neon-dim)' }}>padrão: 13px (100%)</span>
+      </div>
+      <div style={{ fontSize: 9, color: 'var(--panel-hint-color)', marginTop: 4, lineHeight: 1.5 }}>
+        Afeta sidebar, painel de propriedades, header e modais. Os nós do canvas permanecem com tamanho fixo.
+      </div>
+    </div>
+  );
+});
+
 // ── Modal principal ────────────────────────────────────────────────────────────
 
 export default function ConfigModal({ onClose }) {
@@ -379,6 +458,10 @@ export default function ConfigModal({ onClose }) {
             format={(v) => `${Math.round(v * 100)}%`}
             hint="Opacidade das edges tracejadas quando nenhum nó está selecionado"
           />
+
+          {/* ── ACESSIBILIDADE ── */}
+          <SectionHeader label="ACESSIBILIDADE" />
+          <FontScaleControl />
 
           {/* ── EXPORTAÇÃO ── */}
           <SectionHeader label="EXPORTAÇÃO" />

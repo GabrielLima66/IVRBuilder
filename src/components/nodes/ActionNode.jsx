@@ -8,6 +8,7 @@ import { resolveNodeColor } from '../../utils/nodeColors';
 import { useModeContext } from '../../contexts/ModeContext';
 import { getNodeLabel } from '../../config/nodeModeConfig';
 import { useReviewMode } from '../../contexts/ReviewModeContext';
+import { useConfig } from '../../contexts/ConfigContext';
 
 const btnStyle = (color) => ({
   flex: 1,
@@ -37,8 +38,12 @@ const ActionNode = memo(({ id, data, selected, type }) => {
   const theme      = useThemeContext();
   const modeCtx    = useModeContext();
   const reviewMode = useReviewMode();
+  const { highFidelityMode } = useConfig();
   const color      = resolveNodeColor(meta.color, theme);
   const displayTitle = getNodeLabel(type, modeCtx);
+
+  // Nó preservado: importado, não editado, highFidelityMode ativo
+  const isPreserved = highFidelityMode && !data.isDirty && !!data.originalLine;
 
   // confidence badge in review mode
   const confidenceLevel = reviewMode
@@ -101,6 +106,9 @@ const ActionNode = memo(({ id, data, selected, type }) => {
           )}
           {confidenceLevel === 'high' && (
             <span className="badge" style={{ borderColor: '#00cc4499', color: '#00cc44', fontSize: 9 }} title="Mapeamento bem-sucedido">✓</span>
+          )}
+          {isPreserved && (
+            <span className="node-preserved-badge" title="Linha original preservada — não editado">⬤</span>
           )}
           {data._commented
             ? <span className="badge" style={{ borderColor: '#ff505088', color: '#ff5050' }}>DESATIVADO</span>

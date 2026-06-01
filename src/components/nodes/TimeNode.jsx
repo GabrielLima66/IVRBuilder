@@ -5,6 +5,7 @@ import { formatTimeRange, formatDayRange, WEEKDAY_ORDER, MONTH_ORDER } from '../
 import { useActiveSelection } from '../../contexts/ActiveSelectionContext';
 import { useModeContext } from '../../contexts/ModeContext';
 import { getNodeLabel } from '../../config/nodeModeConfig';
+import { useConfig } from '../../contexts/ConfigContext';
 
 const btnStyle = (color) => ({
   flex: 1,
@@ -25,6 +26,8 @@ const TimeNode = memo(({ id, data, selected }) => {
   const isConnectedActive = activeNodeIds.has(id);
   const modeCtx = useModeContext();
   const displayTitle = getNodeLabel('time', modeCtx);
+  const { highFidelityMode } = useConfig();
+  const isPreserved = highFidelityMode && !data.isDirty && !!data.originalLine;
 
   const handleActivate = useCallback(() => {
     setNodes((ns) =>
@@ -85,6 +88,7 @@ const TimeNode = memo(({ id, data, selected }) => {
         <span className="neon-text">
           {data._commented ? `// ${displayTitle}` : `▶ ${displayTitle}`}
         </span>
+        {isPreserved && <span className="node-preserved-badge" title="Linha original preservada — não editado">⬤</span>}
         {data._commented
           ? <span className="badge" style={{ borderColor: '#ff505088', color: '#ff5050' }}>DESATIVADO</span>
           : modeCtx !== 'amigavel' && <span className="badge">GotoIfTime</span>

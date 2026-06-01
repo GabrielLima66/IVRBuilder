@@ -570,6 +570,16 @@ body::before {
 .blink { animation: blink 1.2s steps(2, start) infinite; }
 @keyframes blink { to { visibility: hidden; } }
 
+/* Indicador de nó preservado do original (originalLine, não editado, highFidelityMode ON) */
+.node-preserved-badge {
+  font-size: 6px;
+  color: var(--neon-dim);
+  opacity: 0.5;
+  line-height: 1;
+  cursor: default;
+  user-select: none;
+}
+
 /* ═══════════════════════════════════════════════════════════════════════════
    CONTEXT NODE
    ═══════════════════════════════════════════════════════════════════════════ */

@@ -43,6 +43,7 @@ export const CONFIG_DEFAULTS = {
   includeSectionComments: true,         // bool — emitir comentários ;; no .conf exportado
   lineEnding:             'lf',         // 'lf' | 'crlf'
   highFidelityMode:       true,         // bool — emitir originalLine para nós não editados (fidelidade literal)
+  showDiffBeforeExport:   true,         // bool — mostrar diff original×exportação antes de baixar
 
   // Visualização
   showFormattingElements: false,        // bool — mostrar NóLinhaEmBranco e NóComentárioSeção no canvas

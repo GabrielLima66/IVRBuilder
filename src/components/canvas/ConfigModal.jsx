@@ -396,6 +396,11 @@ export default function ConfigModal({ onClose }) {
             label="Modo de fidelidade máxima (recomendado)"
             hint="ON: nós importados não editados são emitidos literalmente (preserva formatação exata do original). OFF: reconstrói todas as linhas — útil para normalizar o arquivo"
           />
+          <ToggleRow
+            configKey="showDiffBeforeExport"
+            label="Mostrar diff antes de exportar"
+            hint="ON: compara o .conf original importado com o que será exportado antes de baixar (disponível apenas em projetos importados)"
+          />
           <SelectRow
             configKey="lineEnding"
             label="Encoding de fim de linha"

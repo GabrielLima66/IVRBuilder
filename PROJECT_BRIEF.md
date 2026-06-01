@@ -1199,3 +1199,65 @@ Isso permite que leitores de tela anunciem o erro sem redirecionar o foco.
 - **`nodesWithSel`** — `selected` é injetado via `useMemo` sem armazenar em state do React Flow, evitando conflito com seleção nativa.
 - **GotoIf `falseDestination` vazio é válido** no Asterisk (fall-through) — não é um erro de validação.
 - **MenuNode `contextName`** é usado apenas no modo legado para o Goto dentro do menu; no modo hierárquico, o ContextNode pai define o nome do bloco.
+
+
+---
+
+## VERSIONAMENTO
+
+O projeto usa **Versionamento Semântico (SemVer)** gerenciado em `src/version.js`.
+
+### Arquivo de versão
+
+`src/version.js` é a fonte de verdade. Exporta:
+- `VERSION` — objeto com `major`, `minor`, `patch`, `label`, `buildDate` e `changelog[]`
+- `VERSION_STRING` — string formatada (ex: `"0.9.0-beta"`)
+
+### Regras de incremento
+
+| Tipo | Quando usar | Exemplo |
+|---|---|---|
+| `MAJOR` (X.0.0) | Mudança arquitetural que quebra compatibilidade: formato IndexedDB, estrutura .layout.json, refatoração total do parser | `1.0.0` — novo formato de persistência |
+| `MINOR` (0.X.0) | Nova funcionalidade sem quebrar o existente: novo tipo de nó, novo tema, integração com servidor, salto de fidelidade > 5% | `0.10.0` — modo de revisão pós-importação |
+| `PATCH` (0.0.X) | Correção de bug ou melhoria pequena: fix de UI, correção no compilador, ajuste de performance | `0.9.1` — correção de contraste |
+
+**Labels pré-release:**
+- `beta` — funcional mas em validação com URAs reais
+- `rc` — release candidate, pronto para produção  
+- `` (vazio) — versão estável
+
+### Como incrementar
+
+```bash
+# Patch — correção de bug
+npm run version:patch "Correção de contraste nos três temas"
+
+# Minor — nova feature
+npm run version:minor "Modo de revisão pós-importação implementado"
+
+# Major — mudança arquitetural
+npm run version:major "Refatoração completa do pipeline de importação"
+```
+
+O script `scripts/bump-version.js`:
+1. Lê `src/version.js` atual
+2. Incrementa o número correto e zera os inferiores
+3. Atualiza `buildDate` para hoje
+4. Insere nova entrada no topo do `changelog[]`
+5. Salva o arquivo
+
+Após executar, commite manualmente:
+```bash
+git add src/version.js
+git commit -m "chore: bump version 0.9.1 — Descrição"
+```
+
+### Histórico
+
+Ver `changelog[]` em `src/version.js` — ordenado do mais recente para o mais antigo.
+
+### Exibição na interface
+
+- **Tela inicial** — rodapé inferior direito: `Orpen URA Builder · v0.9.0-beta`
+- **Header do canvas** — status bar: `v0.9.0-beta`
+- Clicar em qualquer versão abre o modal de changelog (`ChangelogModal.jsx`)

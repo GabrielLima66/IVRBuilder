@@ -22,6 +22,12 @@
  *  O compilador usa esses campos quando data.isDirty === false para reproduzir
  *  a linha exatamente como estava.
  *
+ * originalLine em cada nó importado:
+ *  data.originalLine — a linha exten => ... exata do .conf original (trimmed).
+ *  Usado pelo compilador em modo de fidelidade máxima (highFidelityMode) como
+ *  fallback final: emite a linha verbatim sem nenhuma reconstrução. Garante que
+ *  qualquer formato não capturado pelos metadados seja preservado literalmente.
+ *
  *  rawDigitLines no MenuNode.data:
  *    Mapa ext → [{ priority, cmdFull, inlineComment }] com TODAS as linhas
  *    de cada extensão DTMF (1-9, i, t). Usado pelo compilador quando o dígito
@@ -548,7 +554,8 @@ function processContext(ctx, xOffset, stats, globalConfig, isFirstContext) {
         data:     {
           assignment,
           label: '',
-          isDirty: false,
+          isDirty:      false,
+          originalLine: rawLine, // linha exata do .conf — usada como fallback de fidelidade
           _fmt: {
             appCasing:    nodeData.fmt?.appCasing    || 'Set',
             hasParens:    nodeData.fmt?.hasParens    ?? true,
@@ -590,8 +597,9 @@ function processContext(ctx, xOffset, stats, globalConfig, isFirstContext) {
     // Dados finais do nó
     const finalData = {
       ...nodeData.data || {},
-      _fmt:     nodeFmt,
-      isDirty:  false,
+      _fmt:         nodeFmt,
+      isDirty:      false,
+      originalLine: rawLine, // linha exata do .conf — fallback de fidelidade máxima
     };
 
     // Propaga lineLabel → data.label para tipos que suportam label

@@ -44,7 +44,7 @@ const Toggle = memo(function Toggle({ d, set, label, k }) {
         onChange={(e) => set(k, e.target.checked)}
         style={{ accentColor: 'var(--neon)' }}
       />
-      <span style={{ fontSize: 11, letterSpacing: 1, color: 'var(--neon)' }}>{label}</span>
+      <span style={{ fontSize: '0.85rem', letterSpacing: 1, color: 'var(--neon)' }}>{label}</span>
     </label>
   );
 });
@@ -137,7 +137,7 @@ const HangupCausePicker = memo(function HangupCausePicker({ d, set }) {
 // ─── Sub-componentes para o TimeConditionNode ────────────────────────────────
 
 const SECTION_HDR = {
-  fontSize: 10, color: 'var(--neon-dim)', letterSpacing: 1, marginBottom: 6,
+  fontSize: '0.77rem', color: 'var(--neon-dim)', letterSpacing: 1, marginBottom: 6,
 };
 
 const MINI_BTN = {
@@ -505,10 +505,10 @@ export default function PropertiesPanel({ node, updateNodeData, deleteNode, togg
       )}
       {/* Content area — visually dimmed + non-interactive in review mode */}
       <div style={isReviewMode ? { opacity: 0.72, pointerEvents: 'none', userSelect: 'none' } : {}}>
-      <div style={{ fontSize: 11, color: 'var(--neon-dim)', letterSpacing: 1, marginBottom: 6 }}>
+      <div style={{ fontSize: '0.85rem', color: 'var(--neon-dim)', letterSpacing: 1, marginBottom: 6 }}>
         ▌PROPRIEDADES
       </div>
-      <div style={{ fontSize: 13, color: '#fff', letterSpacing: 1, marginBottom: mode === 'amigavel' ? 8 : 12, textTransform: 'uppercase' }}>
+      <div style={{ fontSize: '1rem', color: '#fff', letterSpacing: 1, marginBottom: mode === 'amigavel' ? 8 : 12, textTransform: 'uppercase' }}>
         {mode === 'amigavel'
           ? `◆ ${getNodeLabel(node.type, 'amigavel')}`
           : (

@@ -41,7 +41,7 @@ export default function ChangelogModal({ onClose }) {
           flexShrink: 0,
         }}>
           <div>
-            <div className="neon-text" style={{ fontSize: 13, letterSpacing: 2 }}>
+            <div className="neon-text" style={{ fontSize: '1rem', letterSpacing: 2 }}>
               // ORPEN URA BUILDER
             </div>
             <div style={{ fontSize: 10, color: 'var(--neon-dim)', letterSpacing: 1, marginTop: 2 }}>

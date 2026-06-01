@@ -1490,7 +1490,7 @@ function Canvas({ initialFlow, projectName, projectCreatedAt, currentProjectId, 
           padding: '6px 12px',
           border: '1px solid var(--line)',
           borderRadius: 3,
-          fontSize: 11,
+          fontSize: '0.85rem',
           color: 'var(--neon-dim)',
         }}>
           <span>NODES: <span style={{ color: '#fff' }}>{nodes.length}</span></span>
@@ -1501,7 +1501,7 @@ function Canvas({ initialFlow, projectName, projectCreatedAt, currentProjectId, 
           <span style={{ color: 'var(--line)' }}>│</span>
           <span style={{ color: '#888' }}>
             SELECT +{' '}
-            <kbd style={{ padding: '1px 5px', border: '1px solid var(--neon-dim)', borderRadius: 2, fontSize: 9, color: 'var(--neon)' }}>
+            <kbd style={{ padding: '1px 5px', border: '1px solid var(--neon-dim)', borderRadius: 2, fontSize: '0.69rem', color: 'var(--neon)' }}>
               DEL
             </kbd>{' '}
             p/ excluir
@@ -1515,7 +1515,7 @@ function Canvas({ initialFlow, projectName, projectCreatedAt, currentProjectId, 
               background: showOrderPanel ? 'var(--neon-glow-faint)' : 'transparent',
               border: `1px solid ${showOrderPanel ? 'var(--neon)' : 'var(--line)'}`,
               color: showOrderPanel ? 'var(--neon)' : 'var(--neon-dim)',
-              fontFamily: 'inherit', fontSize: 9, letterSpacing: 1,
+              fontFamily: 'inherit', fontSize: '0.69rem', letterSpacing: 1,
               padding: '1px 7px', cursor: 'pointer', borderRadius: 2,
               transition: 'all 0.15s',
             }}
@@ -1532,7 +1532,7 @@ function Canvas({ initialFlow, projectName, projectCreatedAt, currentProjectId, 
               background: 'transparent',
               border: '1px solid var(--line)',
               color: 'var(--neon-dim)',
-              fontFamily: 'inherit', fontSize: 9, letterSpacing: 1,
+              fontFamily: 'inherit', fontSize: '0.69rem', letterSpacing: 1,
               padding: '1px 7px', cursor: 'pointer', borderRadius: 2,
               transition: 'all 0.15s',
             }}
@@ -1551,7 +1551,7 @@ function Canvas({ initialFlow, projectName, projectCreatedAt, currentProjectId, 
               background: 'transparent',
               border: '1px solid var(--line)',
               color: 'var(--neon-dim)',
-              fontFamily: 'inherit', fontSize: 9, letterSpacing: 1,
+              fontFamily: 'inherit', fontSize: '0.69rem', letterSpacing: 1,
               padding: '1px 7px', cursor: 'pointer', borderRadius: 2,
               transition: 'all 0.15s',
             }}
@@ -1569,7 +1569,7 @@ function Canvas({ initialFlow, projectName, projectCreatedAt, currentProjectId, 
               title="Ver changelog"
               style={{
                 background: 'none', border: 'none', cursor: 'pointer',
-                fontFamily: 'inherit', fontSize: 9, letterSpacing: 0.5,
+                fontFamily: 'inherit', fontSize: '0.69rem', letterSpacing: 0.5,
                 color: 'var(--neon)', opacity: 0.4,
                 padding: '0 2px',
                 transition: 'opacity 0.15s',
@@ -1595,7 +1595,7 @@ function Canvas({ initialFlow, projectName, projectCreatedAt, currentProjectId, 
                   borderRight: 'none',
                   color: mode === 'pro' ? '#000' : 'var(--neon)',
                   opacity: mode === 'pro' ? 1 : 0.45,
-                  fontFamily: 'inherit', fontSize: 9, letterSpacing: 1,
+                  fontFamily: 'inherit', fontSize: '0.69rem', letterSpacing: 1,
                   padding: '1px 7px', cursor: mode === 'pro' ? 'default' : 'pointer',
                   borderRadius: '2px 0 0 2px',
                   fontWeight: mode === 'pro' ? 700 : 400,
@@ -1613,7 +1613,7 @@ function Canvas({ initialFlow, projectName, projectCreatedAt, currentProjectId, 
                   border: '1px solid var(--neon)',
                   color: mode === 'amigavel' ? '#000' : 'var(--neon)',
                   opacity: mode === 'amigavel' ? 1 : 0.45,
-                  fontFamily: 'inherit', fontSize: 9, letterSpacing: 1,
+                  fontFamily: 'inherit', fontSize: '0.69rem', letterSpacing: 1,
                   padding: '1px 7px', cursor: mode === 'amigavel' ? 'default' : 'pointer',
                   borderRadius: '0 2px 2px 0',
                   fontWeight: mode === 'amigavel' ? 700 : 400,

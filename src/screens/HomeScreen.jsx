@@ -450,26 +450,26 @@ function ProjectCard({ project, onOpen, onExport, onDelete }) {
       onMouseEnter={() => setHovered(true)}
       onMouseLeave={() => setHovered(false)}
     >
-      <div style={{ fontSize: 14, color: 'var(--neon)', letterSpacing: 1, wordBreak: 'break-all', fontWeight: 500 }}>
+      <div style={{ fontSize: '1.08rem', color: 'var(--neon)', letterSpacing: 1, wordBreak: 'break-all', fontWeight: 500 }}>
         {project.name}
       </div>
-      <div style={{ fontSize: 10, color: 'var(--neon-dim)', lineHeight: 1.9 }}>
+      <div style={{ fontSize: '0.77rem', color: 'var(--neon-dim)', lineHeight: 1.9 }}>
         <div>criado em {formatDate(project.dataCriacao)}</div>
         <div>modificado em {formatDate(project.dataModificacao)}</div>
       </div>
       <div style={{ display: 'flex', gap: 6, marginTop: 4, flexWrap: 'wrap' }}>
         <button className="btn-neon" onClick={() => onOpen(project)}
-          style={{ flex: 1, minWidth: 70, padding: '6px 8px', fontSize: 11, letterSpacing: 1 }}>
+          style={{ flex: 1, minWidth: 70, padding: '6px 8px', fontSize: '0.85rem', letterSpacing: 1 }}>
           ABRIR
         </button>
         <button className="btn-neon" onClick={() => onExport(project)} disabled={!project.flow}
           title={project.flow ? undefined : 'Salve o projeto primeiro'}
-          style={{ flex: 1, minWidth: 90, padding: '6px 8px', fontSize: 10, letterSpacing: 0.5, opacity: project.flow ? 1 : 0.35, cursor: project.flow ? 'pointer' : 'not-allowed' }}>
+          style={{ flex: 1, minWidth: 90, padding: '6px 8px', fontSize: '0.77rem', letterSpacing: 0.5, opacity: project.flow ? 1 : 0.35, cursor: project.flow ? 'pointer' : 'not-allowed' }}>
           EXP .JSON
         </button>
         <button className="btn-neon btn-danger" onClick={() => onDelete(project)}
           aria-label={`Excluir projeto ${project.name}`}
-          style={{ flex: 0, padding: '6px 10px', fontSize: 11 }}>
+          style={{ flex: 0, padding: '6px 10px', fontSize: '0.85rem' }}>
           ⌫
         </button>
       </div>
@@ -528,10 +528,10 @@ export default function HomeScreen({
         {/* Branding */}
         <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: 16 }}>
           <div>
-            <div style={{ fontSize: 26, letterSpacing: 3 }} className="neon-text">
+            <div style={{ fontSize: '2rem', letterSpacing: 3 }} className="neon-text">
               ▌Orpen // URA<span className="blink">_</span>
             </div>
-            <div style={{ fontSize: 11, color: 'var(--neon-dim)', marginTop: 6, letterSpacing: 2, opacity: 0.8 }}>
+            <div style={{ fontSize: '0.85rem', color: 'var(--neon-dim)', marginTop: 6, letterSpacing: 2, opacity: 0.8 }}>
               ASTERISK DIALPLAN BUILDER
             </div>
           </div>
@@ -542,7 +542,7 @@ export default function HomeScreen({
       {/* ── Toolbar ─────────────────────────────────────────────────────────── */}
       <div style={{ padding: '16px 48px', display: 'flex', alignItems: 'center', gap: 10, borderBottom: '1px solid var(--line)', flexWrap: 'wrap' }}>
         <button className="btn-neon" onClick={() => setShowCreateModal(true)}
-          style={{ padding: '9px 20px', fontSize: 12, letterSpacing: 2 }}>
+          style={{ padding: '9px 20px', fontSize: '0.92rem', letterSpacing: 2 }}>
           + NOVO PROJETO
         </button>
 

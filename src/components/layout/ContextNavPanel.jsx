@@ -55,7 +55,7 @@ const CtxItem = memo(function CtxItem({
     >
       {/* Número de ordem / ícone config */}
       <span style={{
-        fontSize:   9,
+        fontSize:   '0.69rem',
         color:      'var(--neon)',
         opacity:    0.5,
         minWidth:   14,
@@ -69,7 +69,7 @@ const CtxItem = memo(function CtxItem({
       {/* Nome do contexto */}
       <span style={{
         flex:         1,
-        fontSize:     11,
+        fontSize:     '0.85rem',
         color:        'var(--neon)',
         letterSpacing: 0.5,
         overflow:     'hidden',
@@ -84,7 +84,7 @@ const CtxItem = memo(function CtxItem({
       <div style={{ display: 'flex', alignItems: 'center', gap: 4, flexShrink: 0 }}>
         {isDraft && (
           <span style={{
-            fontSize:     8,
+            fontSize:     '0.62rem',
             letterSpacing: 1,
             color:        '#888',
             border:       '1px solid #444',
@@ -97,7 +97,7 @@ const CtxItem = memo(function CtxItem({
         )}
         {hasNoChildren && (
           <span style={{
-            fontSize:     8,
+            fontSize:     '0.62rem',
             letterSpacing: 1,
             color:        '#ffcc00',
             border:       '1px solid rgba(255,204,0,0.35)',
@@ -110,7 +110,7 @@ const CtxItem = memo(function CtxItem({
         )}
         {!isConfig && (
           <span style={{
-            fontSize:     9,
+            fontSize:     '0.69rem',
             color:        'var(--neon)',
             opacity:      0.4,
             letterSpacing: 0.3,
@@ -185,7 +185,7 @@ export default function ContextNavPanel({ nodes, onNavigate }) {
       {/* ── Header ─────────────────────────────────────────────────────────── */}
       <div style={{ flexShrink: 0, marginBottom: 10 }}>
         <div style={{
-          fontSize:      11,
+          fontSize:      '0.85rem',
           color:         'var(--neon-dim)',
           letterSpacing: 1,
           marginBottom:  10,
@@ -202,7 +202,7 @@ export default function ContextNavPanel({ nodes, onNavigate }) {
           onChange={(e) => setQuery(e.target.value)}
           style={{
             width:      '100%',
-            fontSize:   10,
+            fontSize:   '0.77rem',
             padding:    '4px 8px',
             boxSizing:  'border-box',
           }}
@@ -243,7 +243,7 @@ export default function ContextNavPanel({ nodes, onNavigate }) {
         {/* ContextNodes */}
         {filteredContexts.length === 0 && q && (
           <div style={{
-            fontSize:   10,
+            fontSize:   '0.77rem',
             color:      'var(--panel-hint-color)',
             padding:    '14px 0',
             textAlign:  'center',
@@ -255,7 +255,7 @@ export default function ContextNavPanel({ nodes, onNavigate }) {
 
         {filteredContexts.length === 0 && !q && (
           <div style={{
-            fontSize:   10,
+            fontSize:   '0.77rem',
             color:      'var(--panel-hint-color)',
             padding:    '14px 0',
             textAlign:  'center',
@@ -288,7 +288,7 @@ export default function ContextNavPanel({ nodes, onNavigate }) {
         borderTop:     '1px solid var(--line)',
         paddingTop:    8,
         marginTop:     6,
-        fontSize:      9,
+        fontSize:      '0.69rem',
         color:         'var(--neon)',
         opacity:       0.4,
         letterSpacing: 0.5,

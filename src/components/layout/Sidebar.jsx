@@ -188,10 +188,10 @@ const Sidebar = memo(function Sidebar() {
       boxSizing: 'border-box',
     }}>
       {/* Logotipo */}
-      <div style={{ fontSize: 14, letterSpacing: 2 }} className="neon-text">
+      <div style={{ fontSize: '1.08rem', letterSpacing: 2 }} className="neon-text">
         ▌Orpen // URA<span className="blink">_</span>
       </div>
-      <div style={{ fontSize: 10, color: 'var(--neon-dim)', marginTop: 4, marginBottom: 12, letterSpacing: 1 }}>
+      <div style={{ fontSize: '0.77rem', color: 'var(--neon-dim)', marginTop: 4, marginBottom: 12, letterSpacing: 1 }}>
         ASTERISK DIALPLAN BUILDER
       </div>
 
@@ -214,7 +214,7 @@ const Sidebar = memo(function Sidebar() {
               padding: '6px 26px 6px 8px',
               color: 'var(--neon)',
               fontFamily: 'inherit',
-              fontSize: 11,
+              fontSize: '0.85rem',
               letterSpacing: 0.5,
               outline: 'none',
               boxSizing: 'border-box',
@@ -398,7 +398,7 @@ const Sidebar = memo(function Sidebar() {
                     }}
                   >
                     <div style={{
-                      fontSize: 11, color: accent,
+                      fontSize: '0.85rem', color: accent,
                       letterSpacing: mode === 'amigavel' ? 0.3 : 1,
                       fontWeight: 'bold',
                       display: 'flex', alignItems: 'center', gap: 6,
@@ -406,7 +406,7 @@ const Sidebar = memo(function Sidebar() {
                       <Icon size={13} /> {displayTitle}
                     </div>
                     <div style={{
-                      fontSize: 10,
+                      fontSize: '0.77rem',
                       color: 'var(--sidebar-desc-color)',
                       marginTop: 3, marginLeft: 19,
                       lineHeight: mode === 'amigavel' ? 1.5 : 1.3,
@@ -426,7 +426,7 @@ const Sidebar = memo(function Sidebar() {
         <div style={{
           marginTop: 14, padding: 10,
           border: '1px dashed var(--line)', borderRadius: 3,
-          fontSize: 10, color: 'var(--neon-dim)', lineHeight: 1.6,
+          fontSize: '0.77rem', color: 'var(--neon-dim)', lineHeight: 1.6,
         }}>
           <div style={{ color: 'var(--neon)', marginBottom: 4 }}>// DICA</div>
           Conecte os nós arrastando das saídas (●) para as entradas. Nós de ação (READ, AGI, NOOP…)

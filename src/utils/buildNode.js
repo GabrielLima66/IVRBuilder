@@ -136,6 +136,12 @@ export function buildNode(type, position) {
     case 'background':
       return { ...base, data: { filename: 'nome-do-audio', label: '' } };
 
+    // Elementos de formatação — criados apenas pelo parser durante importação
+    case 'blankline':
+      return { ...base, data: { count: 1 } };
+    case 'sectioncomment':
+      return { ...base, data: { text: ';; comentário de seção', style: 'double' } };
+
     default:
       return base;
   }

@@ -14,6 +14,9 @@ export const CTX_PAD_BOTTOM = 20; // px — padding inferior
 export const CTX_MIN_W     = 320; // px — largura mínima do contexto
 export { CTX_CHILD_GAP };         // re-exportado de contextDimensions
 
+// Tipos de nó de formatação — sem handles, sem separadores de categoria
+const FORMATTING_NODE_TYPES = new Set(['blankline', 'sectioncomment']);
+
 // ── Categorias de nó para separadores visuais ─────────────────────────────────
 const NODE_CATEGORY = {
   set: 'config', noop: 'config', answer: 'config', macro: 'config', config: 'config',
@@ -26,6 +29,8 @@ const NODE_CATEGORY = {
   read: 'data', saydigits: 'data', saynumber: 'data',
   menu: 'menu',
   raw: 'special', commented: 'special',
+  // Elementos de formatação — categoria própria, não gera separador de categoria
+  blankline: 'formatting', sectioncomment: 'formatting',
 };
 const getNodeCategory = (type) => NODE_CATEGORY[type] || 'other';
 
@@ -45,11 +50,20 @@ const ContextNode = memo(({ id, data, selected }) => {
   const [isDup, setIsDup] = useState(false);
 
   // Dimensões e tipos dos filhos
+  // Nós de formatação (blankline, sectioncomment) usam 0 como padrão quando não medidos,
+  // pois quando o toggle está OFF eles renderizam com height: 0 e não devem inflar o contexto.
   const childMeasures = useStore((s) => {
     const result = {};
     for (const cid of childOrder) {
       const n = s.nodeInternals.get(cid);
-      if (n) result[cid] = { w: n.width || 220, h: n.height || 60, type: n.type };
+      if (n) {
+        const isFormatting = FORMATTING_NODE_TYPES.has(n.type);
+        result[cid] = {
+          w: n.width || 220,
+          h: n.height != null ? n.height : (isFormatting ? 0 : 60),
+          type: n.type,
+        };
+      }
     }
     return result;
   });
@@ -73,13 +87,19 @@ const ContextNode = memo(({ id, data, selected }) => {
         const gapCenterY = y + CTX_CHILD_GAP / 2;
         const prevType   = childMeasures[childOrder[i - 1]]?.type;
         const currType   = childMeasures[cid]?.type;
+        // Não exibe separador de categoria quando um dos lados é nó de formatação
         const showLine   = !!(prevType && currType &&
+          !FORMATTING_NODE_TYPES.has(prevType) &&
+          !FORMATTING_NODE_TYPES.has(currType) &&
           getNodeCategory(prevType) !== getNodeCategory(currType));
         separators.push({ y: gapCenterY - 0.5, showLine });
         y += CTX_CHILD_GAP;
       }
       positions[cid] = { x: CTX_PAD_H, y };
-      y += childMeasures[cid]?.h || 60;
+      // Nós de formatação podem ter height 0 legitimamente (toggle OFF)
+      // Usar ?? em vez de || para não converter 0 em 60
+      const h = childMeasures[cid]?.h;
+      y += h != null ? h : 60;
     }
 
     const ctxH = y + CTX_PAD_BOTTOM;

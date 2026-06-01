@@ -1,5 +1,6 @@
 import React from 'react';
 import ActionNode from './ActionNode';
+import BlankLineNode from './BlankLineNode';
 import ConfigNode from './ConfigNode';
 import ContextNode from './ContextNode';
 import CommentedNode from './CommentedNode';
@@ -7,19 +8,23 @@ import IntegrationNode from './IntegrationNode';
 import MenuNode from './MenuNode';
 import RawNode from './RawNode';
 import RouteNode from './RouteNode';
+import SectionCommentNode from './SectionCommentNode';
 import TimeNode from './TimeNode';
 
 const mkActionType = (type) => (props) => <ActionNode {...props} type={type} />;
 
 export const nodeTypes = {
-  context:     ContextNode,
-  config:      ConfigNode,
-  menu:        MenuNode,
-  time:        TimeNode,
-  route:       RouteNode,
-  commented:   CommentedNode,
-  raw:         RawNode,
-  integration: IntegrationNode,
+  context:        ContextNode,
+  config:         ConfigNode,
+  menu:           MenuNode,
+  time:           TimeNode,
+  route:          RouteNode,
+  commented:      CommentedNode,
+  raw:            RawNode,
+  integration:    IntegrationNode,
+  // Elementos de formatação (importados do .conf — sem handles)
+  blankline:      BlankLineNode,
+  sectioncomment: SectionCommentNode,
   // Controle de Fluxo
   gosub:       mkActionType('gosub'),
   return:      mkActionType('return'),

@@ -610,7 +610,9 @@ function Canvas({ initialFlow, projectName, projectCreatedAt, currentProjectId, 
 
   // ── Atualização de dados e estilo ─────────────────────────────────────────
   const updateNodeData = useCallback((id, data) => {
-    setNodes((ns) => ns.map((n) => (n.id === id ? { ...n, data } : n)));
+    // isDirty: true indica que o usuário editou o nó → compilador reconstrói da estrutura,
+    // não usa rawArgs/appCasing preservados do .conf original
+    setNodes((ns) => ns.map((n) => (n.id === id ? { ...n, data: { ...data, isDirty: true } } : n)));
   }, [setNodes]);
 
   // Atualiza campos parciais do data de um nó (usado pelo ExportOrderPanel)
@@ -799,6 +801,7 @@ function Canvas({ initialFlow, projectName, projectCreatedAt, currentProjectId, 
   const doExport = () => {
     setExportText(generateDialplan(nodes, edges, {
       includeSectionComments: config.includeSectionComments,
+      highFidelityMode:       config.highFidelityMode,
     }));
     // Computa e armazena o layout para download junto ao .conf
     try {

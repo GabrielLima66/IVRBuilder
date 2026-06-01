@@ -391,6 +391,11 @@ export default function ConfigModal({ onClose }) {
             label="Incluir comentários de seção (;;)"
             hint="Se ON, o .conf exportado inclui separadores ;; entre os blocos"
           />
+          <ToggleRow
+            configKey="highFidelityMode"
+            label="Modo de fidelidade máxima (recomendado)"
+            hint="ON: nós importados não editados são emitidos literalmente (preserva formatação exata do original). OFF: reconstrói todas as linhas — útil para normalizar o arquivo"
+          />
           <SelectRow
             configKey="lineEnding"
             label="Encoding de fim de linha"

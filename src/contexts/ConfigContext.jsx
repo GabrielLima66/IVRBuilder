@@ -42,6 +42,7 @@ export const CONFIG_DEFAULTS = {
   contextPrefix:          'orpen-ivr',  // string — prefixo usado em nomes de contexto gerados
   includeSectionComments: true,         // bool — emitir comentários ;; no .conf exportado
   lineEnding:             'lf',         // 'lf' | 'crlf'
+  highFidelityMode:       true,         // bool — emitir originalLine para nós não editados (fidelidade literal)
 
   // Visualização
   showFormattingElements: false,        // bool — mostrar NóLinhaEmBranco e NóComentárioSeção no canvas

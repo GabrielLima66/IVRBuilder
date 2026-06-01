@@ -49,6 +49,91 @@ const Toggle = memo(function Toggle({ d, set, label, k }) {
   );
 });
 
+// ─── HangupCausePicker ───────────────────────────────────────────────────────
+
+const HANGUP_CAUSES = [
+  { value: '',           label: '(padrão) — sem código de causa',       group: null },
+  { value: '16',         label: '16 — Normal Clearing',                 group: 'ENCERRAMENTO NORMAL' },
+  { value: '17',         label: '17 — User Busy',                       group: 'ENCERRAMENTO NORMAL' },
+  { value: '18',         label: '18 — No User Responding',              group: 'ENCERRAMENTO NORMAL' },
+  { value: '19',         label: '19 — No Answer',                       group: 'ENCERRAMENTO NORMAL' },
+  { value: '20',         label: '20 — Subscriber Absent',               group: 'ENCERRAMENTO NORMAL' },
+  { value: '21',         label: '21 — Call Rejected',                   group: 'REJEIÇÃO' },
+  { value: '27',         label: '27 — Destination Out of Order',        group: 'REJEIÇÃO' },
+  { value: '34',         label: '34 — No Circuit Available',            group: 'REJEIÇÃO' },
+  { value: '38',         label: '38 — Network Out of Order',            group: 'REJEIÇÃO' },
+  { value: '28',         label: '28 — Invalid Number Format',           group: 'PROBLEMAS TÉCNICOS' },
+  { value: '29',         label: '29 — Facility Rejected',               group: 'PROBLEMAS TÉCNICOS' },
+  { value: '41',         label: '41 — Temporary Failure',               group: 'PROBLEMAS TÉCNICOS' },
+  { value: '42',         label: '42 — Switching Equipment Congestion',  group: 'PROBLEMAS TÉCNICOS' },
+  { value: '47',         label: '47 — Resource Unavailable',            group: 'PROBLEMAS TÉCNICOS' },
+  { value: '31',         label: '31 — Normal Unspecified',              group: 'OUTROS' },
+  { value: '96',         label: '96 — Invalid Message',                 group: 'OUTROS' },
+  { value: '__custom__', label: 'Personalizado',                        group: 'OUTROS' },
+];
+
+const HANGUP_KNOWN = new Set(
+  HANGUP_CAUSES.filter((c) => c.value && c.value !== '__custom__').map((c) => c.value)
+);
+
+const HANGUP_GROUPS = ['ENCERRAMENTO NORMAL', 'REJEIÇÃO', 'PROBLEMAS TÉCNICOS', 'OUTROS'];
+
+const HangupCausePicker = memo(function HangupCausePicker({ d, set }) {
+  const causeCode = d.causeCode ?? '';
+  const [customMode, setCustomMode] = useState(
+    () => causeCode !== '' && !HANGUP_KNOWN.has(causeCode)
+  );
+
+  const dropdownValue = customMode ? '__custom__' : causeCode;
+
+  const handleSelect = (e) => {
+    const val = e.target.value;
+    if (val === '__custom__') {
+      setCustomMode(true);
+      if (!customMode) set('causeCode', '');
+    } else {
+      setCustomMode(false);
+      set('causeCode', val);
+    }
+  };
+
+  const byGroup = {};
+  HANGUP_CAUSES.forEach((c) => {
+    const g = c.group ?? '__default__';
+    if (!byGroup[g]) byGroup[g] = [];
+    byGroup[g].push(c);
+  });
+
+  return (
+    <div style={{ marginBottom: 10 }}>
+      <label className="term-label">Código de Causa SIP (opcional)</label>
+      <select className="term-select" value={dropdownValue} onChange={handleSelect}>
+        {(byGroup['__default__'] ?? []).map((c) => (
+          <option key={c.value} value={c.value}>{c.label}</option>
+        ))}
+        {HANGUP_GROUPS.map((g) => (
+          <optgroup key={g} label={g}>
+            {(byGroup[g] ?? []).map((c) => (
+              <option key={c.value} value={c.value}>{c.label}</option>
+            ))}
+          </optgroup>
+        ))}
+      </select>
+      {customMode && (
+        <input
+          className="term-input"
+          type="text"
+          inputMode="numeric"
+          value={causeCode}
+          placeholder="ex: 99"
+          style={{ marginTop: 6 }}
+          onChange={(e) => set('causeCode', e.target.value)}
+        />
+      )}
+    </div>
+  );
+});
+
 // ─── Sub-componentes para o TimeConditionNode ────────────────────────────────
 
 const SECTION_HDR = {
@@ -86,7 +171,7 @@ const DayCheckbox = memo(function DayCheckbox({ id, label, checked, accent, onCh
         onChange={(e) => onChange(id, e.target.checked)}
         style={{ accentColor: accent || 'var(--neon)', margin: 0 }}
       />
-      <span style={{ fontSize: 8, letterSpacing: 0.5, color: checked ? (accent || 'var(--neon)') : '#555' }}>
+      <span style={{ fontSize: 8, letterSpacing: 0.5, color: checked ? (accent || 'var(--neon)') : 'var(--panel-hint-color)' }}>
         {label}
       </span>
     </label>
@@ -359,7 +444,7 @@ const MenuPropertiesPanel = memo(function MenuPropertiesPanel({ d, set, fl, onAu
 
 // ─── Painel principal ─────────────────────────────────────────────────────────
 
-export default function PropertiesPanel({ node, updateNodeData, deleteNode, toggleComment, patchNodeStyle, syncTrueContext, propagateContextRename, nodes = [], onContextNavigate, createContextForNewDigit }) {
+export default function PropertiesPanel({ node, updateNodeData, deleteNode, toggleComment, patchNodeStyle, syncTrueContext, propagateContextRename, nodes = [], onContextNavigate, createContextForNewDigit, isReviewMode }) {
   // Armazena o nome do contexto no momento do foco (para detectar rename via painel)
   const ctxNameOnFocus = useRef('');
   const [ctxNameDup, setCtxNameDup] = useState(false);
@@ -387,8 +472,39 @@ export default function PropertiesPanel({ node, updateNodeData, deleteNode, togg
   /** Retorna o label amigável do campo se estiver no modo AMIGÁVEL. */
   const fl = (defaultLabel, fieldKey) => getFieldLabel(node.type, fieldKey, defaultLabel, mode);
 
+  // Confidence level of the selected node in review mode
+  const reviewConfidence = isReviewMode
+    ? (node.type === 'raw' ? 'low'
+      : (node.type === 'commented' || node.data?._commented || node.type === 'execif' || node.type === 'execiftime' ? 'medium'
+      : 'high'))
+    : null;
+
   return (
     <aside style={panelStyle}>
+      {/* ── Banner modo revisão ─────────────────────────────────────────────── */}
+      {isReviewMode && (
+        <div style={{
+          background: 'rgba(255,204,0,0.07)',
+          border: '1px solid #ffcc0055',
+          borderRadius: 3, padding: '6px 8px',
+          marginBottom: 10, fontSize: 9, letterSpacing: 0.5,
+          color: '#ffcc00', lineHeight: 1.6,
+        }}>
+          ▌ MODO REVISÃO — somente leitura
+          {reviewConfidence === 'low' && (
+            <div style={{ marginTop: 4, color: '#ff8c00', fontSize: 9 }}>
+              ⚠ Nó de baixa confiança — comando não mapeado.
+            </div>
+          )}
+          {reviewConfidence === 'medium' && (
+            <div style={{ marginTop: 4, color: '#ffcc00', fontSize: 9 }}>
+              ? Nó de confiança parcial — verifique antes de confirmar.
+            </div>
+          )}
+        </div>
+      )}
+      {/* Content area — visually dimmed + non-interactive in review mode */}
+      <div style={isReviewMode ? { opacity: 0.72, pointerEvents: 'none', userSelect: 'none' } : {}}>
       <div style={{ fontSize: 11, color: 'var(--neon-dim)', letterSpacing: 1, marginBottom: 6 }}>
         ▌PROPRIEDADES
       </div>
@@ -397,12 +513,13 @@ export default function PropertiesPanel({ node, updateNodeData, deleteNode, togg
           ? `◆ ${getNodeLabel(node.type, 'amigavel')}`
           : (
             <>
-              {node.type === 'context' && '◆ Contexto (Container)'}
-              {node.type === 'config'  && '◆ Config / Start'}
-              {node.type === 'menu'    && '◆ Menu DTMF'}
-              {node.type === 'time'    && '◆ Condição de Tempo'}
-              {node.type === 'route'   && '◆ Destino / Roteamento'}
-              {ACTION_META[node.type]  && '◆ ' + ACTION_META[node.type].title}
+              {node.type === 'context'     && '◆ Contexto (Container)'}
+              {node.type === 'config'      && '◆ Config / Start'}
+              {node.type === 'menu'        && '◆ Menu DTMF'}
+              {node.type === 'time'        && '◆ Condição de Tempo'}
+              {node.type === 'route'       && '◆ Destino / Roteamento'}
+              {node.type === 'integration' && '◆ Bloco de Integração'}
+              {ACTION_META[node.type]      && '◆ ' + ACTION_META[node.type].title}
             </>
           )
         }
@@ -812,7 +929,7 @@ export default function PropertiesPanel({ node, updateNodeData, deleteNode, togg
         <Field d={d} set={set} label="Valor de Retorno (opcional)" k="value" placeholder="0" />
       )}
       {node.type === 'hangup' && (
-        <Field d={d} set={set} label="Código de Causa SIP (opcional)" k="causeCode" placeholder="17 = busy / 21 = rejected" />
+        <HangupCausePicker key={node.id} d={d} set={set} />
       )}
       {node.type === 'gotoif' && (() => {
         const errs = ACTION_META.gotoif?.validate ? ACTION_META.gotoif.validate(d) : [];
@@ -1079,7 +1196,8 @@ export default function PropertiesPanel({ node, updateNodeData, deleteNode, togg
           <Field d={d} set={set} label="Arquivo de Áudio" k="filename" placeholder="nome-do-audio" />
           <div style={{ fontSize: 9, color: 'var(--neon-dim)', marginTop: 6, lineHeight: 1.5, border: '1px dashed var(--line)', padding: 6, borderRadius: 3 }}>
             Aceita DTMF durante reprodução (sem travar o fluxo).<br />
-            <code style={{ color: '#a7ffba' }}>Background({'${SOUND_PATH}/'}{d.filename || '...'})</code>
+            Separe múltiplos arquivos com <code>&amp;</code> — ex: <code>audio1&amp;audio2</code><br />
+            <code style={{ color: '#a7ffba' }}>Background({d.filename || '...'})</code>
           </div>
         </>
       )}
@@ -1093,15 +1211,153 @@ export default function PropertiesPanel({ node, updateNodeData, deleteNode, togg
             <div style={{ color: 'var(--neon)', marginBottom: 4 }}>// COMPORTAMENTO</div>
             <span style={{ color: '#ffcc00' }}>Playback</span> trava a execução até o áudio terminar.
             Use <span style={{ color: '#ffcc00' }}>Background</span> (no nó Menu) se precisar receber dígitos enquanto o áudio toca.
+            <div style={{ marginTop: 4, fontSize: 9 }}>
+              Separe múltiplos arquivos com <code>&amp;</code> — ex: <code>arq1&amp;arq2</code>
+            </div>
             <div style={{ marginTop: 6 }}>
               <div style={{ fontSize: 9, color: 'var(--neon-dim)' }}>// PREVIEW</div>
               <code style={{ color: '#a7ffba', fontSize: 9 }}>
-                {'Playback(${SOUND_PATH}/'}{d.filename || '...'}{')'}
+                {'Playback('}{d.filename || '...'}{')'}
               </code>
             </div>
           </div>
         </>
       )}
+
+      {node.type === 'integration' && (() => {
+        const variables  = Array.isArray(d.variables)  ? d.variables  : [];
+        const agiParams  = Array.isArray(d.agiParams)  ? d.agiParams  : [];
+        const dest       = d.destination || {};
+        const destType   = dest.type || 'none';
+
+        const setVar = (idx, field, value) => {
+          const next = [...variables];
+          next[idx] = { ...next[idx], [field]: value };
+          set('variables', next);
+        };
+
+        return (
+          <>
+            {/* Variables */}
+            <div style={{ marginBottom: 6, fontSize: 10, color: 'var(--neon-dim)', letterSpacing: 1 }}>
+              ▌ VARIÁVEIS (Set)
+            </div>
+            {variables.map((v, idx) => (
+              <div key={idx} style={{ display: 'flex', gap: 4, marginBottom: 6, alignItems: 'center' }}>
+                <input
+                  className="term-input"
+                  style={{ flex: 1 }}
+                  value={v.key || ''}
+                  placeholder="VARIAVEL"
+                  onChange={(e) => setVar(idx, 'key', e.target.value)}
+                />
+                <span style={{ color: 'var(--neon-dim)', fontSize: 12, flexShrink: 0 }}>=</span>
+                <input
+                  className="term-input"
+                  style={{ flex: 2 }}
+                  value={v.value || ''}
+                  placeholder="valor"
+                  onChange={(e) => setVar(idx, 'value', e.target.value)}
+                />
+                <button
+                  className="btn-neon btn-danger"
+                  style={{ padding: '4px 8px', flexShrink: 0 }}
+                  onClick={() => set('variables', variables.filter((_, i) => i !== idx))}
+                >×</button>
+              </div>
+            ))}
+            <button
+              className="btn-neon"
+              style={{ width: '100%', padding: '4px 8px', marginBottom: 14 }}
+              onClick={() => set('variables', [...variables, { key: '', value: '' }])}
+            >+ VARIÁVEL</button>
+
+            {/* AGI */}
+            <div style={{ marginBottom: 6, fontSize: 10, color: 'var(--neon-dim)', letterSpacing: 1 }}>
+              ▌ SCRIPT AGI
+            </div>
+            <Field d={d} set={set} label="Nome do script" k="agiScript" placeholder="meuScript.php" />
+            {agiParams.map((p, idx) => (
+              <div key={idx} style={{ display: 'flex', gap: 6, marginBottom: 6, alignItems: 'center' }}>
+                <input
+                  className="term-input"
+                  style={{ flex: 1 }}
+                  value={p}
+                  placeholder={`parâmetro ${idx + 1}`}
+                  onChange={(e) => {
+                    const ps = [...agiParams]; ps[idx] = e.target.value;
+                    set('agiParams', ps);
+                  }}
+                />
+                <button
+                  className="btn-neon btn-danger"
+                  style={{ padding: '4px 8px' }}
+                  onClick={() => set('agiParams', agiParams.filter((_, i) => i !== idx))}
+                >×</button>
+              </div>
+            ))}
+            <button
+              className="btn-neon"
+              style={{ width: '100%', padding: '4px 8px', marginBottom: 14 }}
+              onClick={() => set('agiParams', [...agiParams, ''])}
+            >+ PARÂMETRO AGI</button>
+
+            {/* Destination */}
+            <div style={{ marginBottom: 6, fontSize: 10, color: 'var(--neon-dim)', letterSpacing: 1 }}>
+              ▌ DESTINO FINAL
+            </div>
+            <Field d={dest} set={(k, v) => set('destination', { ...dest, [k]: v })}
+              label="Tipo" k="type" options={['none', 'goto', 'queue']} />
+
+            {destType === 'goto' && (
+              <>
+                <Field d={dest} set={(k, v) => set('destination', { ...dest, [k]: v })}
+                  label="Contexto" k="context" placeholder="orpen-ivr-home" />
+                <Field d={dest} set={(k, v) => set('destination', { ...dest, [k]: v })}
+                  label="Extensão" k="extension" placeholder="s" />
+                <Field d={dest} set={(k, v) => set('destination', { ...dest, [k]: v })}
+                  label="Prioridade" k="priority" placeholder="1" />
+                <div style={{ fontSize: 9, color: '#00d4ff', border: '1px dashed #00d4ff33', padding: 6, borderRadius: 3, marginBottom: 10 }}>
+                  <code>Goto({dest.context || '...'},{ dest.extension || 's'},{dest.priority || '1'})</code>
+                </div>
+              </>
+            )}
+
+            {destType === 'queue' && (
+              <>
+                <Field d={dest} set={(k, v) => set('destination', { ...dest, [k]: v })}
+                  label="Fila" k="queue" placeholder="7000" />
+                <Field d={dest} set={(k, v) => set('destination', { ...dest, [k]: v })}
+                  label="Opções" k="queueOptions" placeholder="t" />
+                <div style={{ fontSize: 9, color: '#ff8c00', border: '1px dashed #ff8c0033', padding: 6, borderRadius: 3, marginBottom: 10 }}>
+                  <code>Queue({dest.queue || '...'}{dest.queueOptions ? ',' + dest.queueOptions : ''})</code>
+                </div>
+              </>
+            )}
+
+            {/* Preview */}
+            <div style={{ marginTop: 6, padding: 8, border: '1px dashed var(--line)', borderRadius: 3, fontSize: 9, lineHeight: 1.7 }}>
+              <div style={{ color: 'var(--neon-dim)', marginBottom: 4, letterSpacing: 1 }}>// PREVIEW</div>
+              {variables.map((v, i) => v.key && (
+                <div key={i}><code style={{ color: '#d4b8ff' }}>Set({v.key}={v.value || ''})</code></div>
+              ))}
+              {d.agiScript && (
+                <div>
+                  <code style={{ color: '#a78bfa' }}>
+                    AGI({'${AGI_PATH}/'}{d.agiScript}{agiParams.filter(Boolean).length ? ',' + agiParams.filter(Boolean).join(',') : ''})
+                  </code>
+                </div>
+              )}
+              {destType === 'goto' && dest.context && (
+                <div><code style={{ color: '#00d4ff' }}>Goto({dest.context},{dest.extension || 's'},{dest.priority || '1'})</code></div>
+              )}
+              {destType === 'queue' && dest.queue && (
+                <div><code style={{ color: '#ff8c00' }}>Queue({dest.queue}{dest.queueOptions ? ',' + dest.queueOptions : ''})</code></div>
+              )}
+            </div>
+          </>
+        );
+      })()}
 
       {node.type !== 'config' && node.type !== 'context' && (
         <button
@@ -1123,6 +1379,8 @@ export default function PropertiesPanel({ node, updateNodeData, deleteNode, togg
           ⌫ EXCLUIR NÓ
         </button>
       )}
+      </div>
+      {/* closes content wrapper div */}
     </aside>
   );
 }

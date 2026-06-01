@@ -40,7 +40,7 @@ export const ACTION_META = {
   hangup: {
     title: 'HANGUP', app: 'Hangup', icon: Scissors, color: '#ff5050', category: 'flow',
     terminal: true,
-    summary: (d) => [{ k: 'cause', v: d.causeCode || '(default)' }],
+    summary: (d) => [{ k: 'cause', v: d.causeCode || '(padrão)' }],
     validate: ok,
   },
   gotoif: {
@@ -221,6 +221,17 @@ export const ACTION_META = {
 
 export function actionLine(n) {
   const d = n.data || {};
+  const fmt = d._fmt;
+
+  // Fast path: reproduz linha exatamente quando o nó não foi editado pelo usuário.
+  // Usa appCasing e rawArgs do .conf original para fidelidade máxima.
+  if (!d.isDirty && fmt && fmt.rawArgs !== undefined && fmt.appCasing) {
+    if (fmt.hasParens !== false) {
+      return `${fmt.appCasing}(${fmt.rawArgs})`;
+    }
+    // Aplicação sem parênteses (forma bare — raro, ex: "Hangup" sem "()")
+    return fmt.appCasing;
+  }
 
   switch (n.type) {
     case 'gosub': {
@@ -248,10 +259,10 @@ export function actionLine(n) {
     case 'set':
       return `Set(${d.assignment || ''})`;
     case 'agi': {
-      // BUG 1: usa originalCasing (preservado no import) ou 'Agi' como padrão
-      // BUG 1: emite o script LITERALMENTE — sem prefixo ${AGI_PATH}/
+      // Usa originalCasing (preservado no import) ou 'AGI' como padrão
+      // Emite o script literalmente — sem adicionar ${AGI_PATH}/
       const params  = resolveParams(d.params, d.args);
-      const casing  = d.originalCasing || 'Agi';
+      const casing  = d.originalCasing || 'AGI';
       return `${casing}(${d.script || ''}${params ? ',' + params : ''})`;
     }
     case 'macro': {
@@ -304,10 +315,8 @@ export function actionLine(n) {
       const joined = files.map((f) => `\${SOUND_PATH}/${f}`).join('&');
       return `Background(${joined})`;
     }
-    // Diretiva include — sem prefixo exten => (detectado como isRaw no exportador)
     case 'include':
       return `include => ${d.contextName || ''}`;
-    // SIP header
     case 'sipaddheader':
       return `SIPAddHeader(${d.headerName || ''}: ${d.value || ''})`;
     default:

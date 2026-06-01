@@ -28,8 +28,10 @@ import { ActiveSelectionContext } from './contexts/ActiveSelectionContext';
 import { ThemeContext } from './contexts/ThemeContext';
 import { ModeContext } from './contexts/ModeContext';
 import { ConfigProvider, useConfig } from './contexts/ConfigContext';
+import { ReviewModeContext } from './contexts/ReviewModeContext';
 import ConfigModal from './components/canvas/ConfigModal';
 import { MenuActionsContext } from './contexts/MenuActionsContext';
+import DiffModal   from './components/canvas/DiffModal';
 import HomeScreen from './screens/HomeScreen';
 import { salvarProjeto, listarProjetos } from './services/projectStorage';
 import {
@@ -68,7 +70,7 @@ const EDGE_STYLE_MAP = { smooth: 'smoothstep', straight: 'straight', step: 'step
 // CANVAS — estado global do grafo + lógica de DnD / reparenting
 // Props de projeto (opcionais): permitem integração com HomeScreen.
 // ─────────────────────────────────────────────────────────────────────────────
-function Canvas({ initialFlow, projectName, projectCreatedAt, currentProjectId, onGoBack, onProjectSaved }) {
+function Canvas({ initialFlow, projectName, projectCreatedAt, currentProjectId, onGoBack, onProjectSaved, isReviewMode, onReviewConfirm, onReviewCancel, originalConf, onUpdateOriginal }) {
   // Lê configurações do ConfigContext
   const config = useConfig();
   const mode   = config.mode;
@@ -207,6 +209,7 @@ function Canvas({ initialFlow, projectName, projectCreatedAt, currentProjectId, 
   }), [activeEdgeIds, activeNodeIds]);
 
   const [showExport,           setShowExport]           = useState(false);
+  const [showDiff,             setShowDiff]             = useState(false);
   const [showOrderPanel,       setShowOrderPanel]       = useState(false);
   const [showConfigModal,      setShowConfigModal]      = useState(false);
   const [exportText,           setExportText]           = useState('');
@@ -226,6 +229,7 @@ function Canvas({ initialFlow, projectName, projectCreatedAt, currentProjectId, 
   const [saveStatus, setSaveStatus] = useState(null); // null | 'saving' | 'saved' | 'error'
 
   useEffect(() => {
+    if (isReviewMode) return; // don't auto-save unsaved review project
     if (skipDirtyRef.current) { skipDirtyRef.current = false; return; }
     if (!currentProjectId) return;
 
@@ -726,7 +730,9 @@ function Canvas({ initialFlow, projectName, projectCreatedAt, currentProjectId, 
 
   // ── Atualização de dados e estilo ─────────────────────────────────────────
   const updateNodeData = useCallback((id, data) => {
-    setNodes((ns) => ns.map((n) => (n.id === id ? { ...n, data } : n)));
+    // isDirty: true indica que o usuário editou o nó → compilador reconstrói da estrutura,
+    // não usa rawArgs/appCasing preservados do .conf original
+    setNodes((ns) => ns.map((n) => (n.id === id ? { ...n, data: { ...data, isDirty: true } } : n)));
   }, [setNodes]);
 
   // Atualiza campos parciais do data de um nó (usado pelo ExportOrderPanel)
@@ -1153,9 +1159,11 @@ function Canvas({ initialFlow, projectName, projectCreatedAt, currentProjectId, 
 
   // ── Exportação ────────────────────────────────────────────────────────────
   const doExport = () => {
-    setExportText(generateDialplan(nodes, edges, {
+    const text = generateDialplan(nodes, edges, {
       includeSectionComments: config.includeSectionComments,
-    }));
+      highFidelityMode:       config.highFidelityMode,
+    });
+    setExportText(text);
     // Computa e armazena o layout para download junto ao .conf
     try {
       const layout = extractLayout(
@@ -1167,7 +1175,22 @@ function Canvas({ initialFlow, projectName, projectCreatedAt, currentProjectId, 
     } catch (_) {
       setExportLayout(null);
     }
+    // Se o projeto tem originalConf e o diff está habilitado → mostra DiffModal
+    if (originalConf && config.showDiffBeforeExport) {
+      setShowDiff(true);
+      return;
+    }
     // Modo AMIGÁVEL: mostra aviso informativo na primeira exportação
+    if (mode === 'amigavel' && !localStorage.getItem('orpen-first-export-shown')) {
+      setShowFirstExportModal(true);
+    } else {
+      setShowExport(true);
+    }
+  };
+
+  // Chamado pelo DiffModal ao confirmar exportação
+  const handleDiffExport = () => {
+    setShowDiff(false);
     if (mode === 'amigavel' && !localStorage.getItem('orpen-first-export-shown')) {
       setShowFirstExportModal(true);
     } else {
@@ -1252,6 +1275,29 @@ function Canvas({ initialFlow, projectName, projectCreatedAt, currentProjectId, 
       })
     );
   }, [neonColor]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  // ── Revisão pós-importação ────────────────────────────────────────────────
+  const handleConfirmReview = useCallback(() => {
+    const flow = {
+      nodes:    rfInstance.getNodes(),
+      edges:    rfInstance.getEdges(),
+      viewport: rfInstance.getViewport(),
+    };
+    onReviewConfirm?.(flow);
+  }, [rfInstance, onReviewConfirm]);
+
+  const handleCancelReview = useCallback(() => {
+    onReviewCancel?.();
+  }, [onReviewCancel]);
+
+  const reviewMetrics = useMemo(() => {
+    if (!isReviewMode) return null;
+    const rawCount       = nodes.filter((n) => n.type === 'raw').length;
+    const commentedCount = nodes.filter((n) => n.type === 'commented' || n.data?._commented).length;
+    const ctxCount       = nodes.filter((n) => n.type === 'context').length;
+    return { rawCount, commentedCount, ctxCount, total: nodes.length };
+  }, [isReviewMode, nodes]);
+
 
   // defaultEdgeOptions reativo ao tema e ao estilo configurado
   const defaultEdgeOpts = useMemo(() => ({
@@ -1365,14 +1411,59 @@ function Canvas({ initialFlow, projectName, projectCreatedAt, currentProjectId, 
     <ThemeContext.Provider value={effectiveTheme}>
     <ActiveSelectionContext.Provider value={activeSelectionValue}>
     <EdgeModeContext.Provider value="grid">
+    <ReviewModeContext.Provider value={!!isReviewMode}>
     <div style={{ display: 'flex', height: '100%', width: '100%' }}>
       <Sidebar />
 
+      <div style={{ flex: 1, display: 'flex', flexDirection: 'column', minWidth: 0 }}>
+
+        {/* ── Banner modo de revisão pós-importação ──────────────────────── */}
+        {isReviewMode && reviewMetrics && (
+          <div style={{
+            flexShrink: 0,
+            background: 'rgba(255,204,0,0.06)',
+            borderBottom: '2px solid #ffcc00',
+            padding: '7px 14px',
+            display: 'flex', alignItems: 'center', gap: 16,
+            zIndex: 20,
+          }}>
+            <span style={{ fontSize: 10, letterSpacing: 2, color: '#ffcc00', fontWeight: 700, whiteSpace: 'nowrap' }}>
+              ▌ MODO REVISÃO
+            </span>
+            <span style={{ fontSize: 9, color: 'var(--neon-dim)', letterSpacing: 0.5 }}>
+              {reviewMetrics.total} nó(s) importado(s)
+              {reviewMetrics.rawCount > 0 && <span style={{ color: '#ff8c00' }}> · {reviewMetrics.rawCount} não mapeado(s)</span>}
+              {reviewMetrics.commentedCount > 0 && <span style={{ color: '#ffcc00' }}> · {reviewMetrics.commentedCount} comentado(s)</span>}
+              {' — verifique antes de confirmar'}
+            </span>
+            <div style={{ marginLeft: 'auto', display: 'flex', gap: 8 }}>
+              <button
+                type="button"
+                className="btn-neon"
+                onClick={handleCancelReview}
+                style={{ padding: '4px 14px', fontSize: 10, letterSpacing: 1, borderColor: '#ff5050', color: '#ff5050' }}
+                aria-label="Cancelar importação e voltar para home"
+              >
+                CANCELAR
+              </button>
+              <button
+                type="button"
+                className="btn-neon"
+                onClick={handleConfirmReview}
+                style={{ padding: '4px 14px', fontSize: 10, letterSpacing: 1, borderColor: '#ffcc00', color: '#ffcc00', boxShadow: '0 0 6px rgba(255,204,0,0.25)' }}
+                aria-label="Confirmar importação e salvar projeto"
+              >
+                ✓ CONFIRMAR IMPORTAÇÃO
+              </button>
+            </div>
+          </div>
+        )}
+
       <div
         ref={wrapperRef}
-        style={{ flex: 1, position: 'relative', height: '100%', minWidth: 0 }}
-        onDragOver={onDragOver}
-        onDrop={onDrop}
+        style={{ flex: 1, position: 'relative', minWidth: 0 }}
+        onDragOver={!isReviewMode ? onDragOver : undefined}
+        onDrop={!isReviewMode ? onDrop : undefined}
       >
         {/* Botão ← VOLTAR (apenas no modo projeto) */}
         {onGoBack && (
@@ -1529,7 +1620,9 @@ function Canvas({ initialFlow, projectName, projectCreatedAt, currentProjectId, 
           nodeTypes={nodeTypes}
           edgeTypes={edgeTypes}
           fitView
-          deleteKeyCode={['Backspace', 'Delete']}
+          nodesDraggable={!isReviewMode}
+          nodesConnectable={!isReviewMode}
+          deleteKeyCode={isReviewMode ? null : ['Backspace', 'Delete']}
           edgesFocusable
           elementsSelectable
           multiSelectionKeyCode={['Meta', 'Control']}
@@ -1650,6 +1743,9 @@ function Canvas({ initialFlow, projectName, projectCreatedAt, currentProjectId, 
         </button>
 
       </div>
+      {/* closes wrapperRef canvas div */}
+      </div>
+      {/* closes flex-column column div */}
 
       <PropertiesPanel
         node={selectedNode}
@@ -1662,6 +1758,7 @@ function Canvas({ initialFlow, projectName, projectCreatedAt, currentProjectId, 
         propagateContextRename={propagateContextRename}
         onContextNavigate={onContextNavigate}
         createContextForNewDigit={createContextForNewDigit}
+        isReviewMode={isReviewMode}
       />
 
       {/* ── Context menu de edge (botão direito) ─────────────────────────── */}
@@ -1891,14 +1988,14 @@ function Canvas({ initialFlow, projectName, projectCreatedAt, currentProjectId, 
               letterSpacing: 0.5,
               lineHeight: 2.2,
             }}>
-              <span style={{ color: '#555', letterSpacing: 1 }}>{'// arquivos gerados:'}</span>
+              <span style={{ color: 'var(--panel-hint-color)', letterSpacing: 1 }}>{'// arquivos gerados:'}</span>
               <br />
               <span style={{ color: 'var(--neon)' }}>{confFileName}</span>
               {' — dialplan para o Asterisk'}
               <br />
               <span style={{ color: 'var(--neon)' }}>{confFileName.replace(/\.conf$/, '.layout.json')}</span>
               {' — layout do canvas '}
-              <span style={{ color: '#555' }}>(mantenha junto ao .conf)</span>
+              <span style={{ color: 'var(--panel-hint-color)' }}>(mantenha junto ao .conf)</span>
             </div>
 
             {/* Preview do .conf */}
@@ -1952,7 +2049,21 @@ function Canvas({ initialFlow, projectName, projectCreatedAt, currentProjectId, 
       {/* Modal de configurações */}
       {showConfigModal && <ConfigModal onClose={() => setShowConfigModal(false)} />}
 
+      {/* Modal de diff — comparação original × exportação */}
+      {showDiff && originalConf && (
+        <DiffModal
+          originalText={originalConf}
+          exportedText={exportText}
+          onExport={handleDiffExport}
+          onBack={() => setShowDiff(false)}
+          onUpdateOriginal={(newConf) => {
+            onUpdateOriginal?.(newConf);
+          }}
+        />
+      )}
+
     </div>
+    </ReviewModeContext.Provider>
     </EdgeModeContext.Provider>
     </ActiveSelectionContext.Provider>
     </ThemeContext.Provider>
@@ -1971,6 +2082,7 @@ export default function App() {
   const [pendingFlow,    setPendingFlow]    = useState(null);
   const [importError,    setImportError]    = useState(null);
   const [confImportData, setConfImportData] = useState(null); // { nodes, edges, stats, suggestedName }
+  const [isReviewMode,   setIsReviewMode]   = useState(false);
 
   // Modo de interface agora gerenciado pelo ConfigContext (ConfigProvider)
   // Tema gerenciado pelo ConfigContext via colorTheme ('terminal'|'matrix'|'dark')
@@ -2099,6 +2211,7 @@ export default function App() {
           validation:    result.validation,
           fileName:      confFile.name,
           layoutApplied,
+          rawContent:    e.target.result, // texto bruto do .conf — para diff na exportação
         });
         setImportError(null);
       } catch (err) {
@@ -2132,14 +2245,72 @@ export default function App() {
         edges:    confImportData.edges,
         viewport: confImportData.viewport || { x: 0, y: 0, zoom: 0.7 },
       },
+      // Preserva o .conf original para diff visual na exportação
+      originalConf: confImportData.rawContent || null,
     };
     await salvarProjeto(project);
     setCurrentProject(project);
     setPendingFlow(project.flow);
     setConfImportData(null);
+    setIsReviewMode(false);
     refreshProjects();
     setScreen('canvas');
   }, [confImportData, refreshProjects]);
+
+  // Abre o canvas em modo de revisão — NÃO salva ainda; aguarda confirmação.
+  const handleConfImportReview = useCallback((name) => {
+    if (!confImportData) return;
+    const now     = new Date().toISOString();
+    const project = {
+      id:              Date.now().toString(),
+      name,
+      dataCriacao:     now,
+      dataModificacao: now,
+      flow: {
+        nodes:    confImportData.nodes,
+        edges:    confImportData.edges,
+        viewport: confImportData.viewport || { x: 0, y: 0, zoom: 0.7 },
+      },
+      originalConf: confImportData.rawContent || null,
+    };
+    setCurrentProject(project);
+    setPendingFlow(project.flow);
+    setConfImportData(null);
+    setIsReviewMode(true);
+    setScreen('canvas');
+  }, [confImportData]);
+
+  // Confirmação da revisão — salva o projeto no IndexedDB e sai do modo revisão.
+  const handleReviewConfirm = useCallback(async (flow) => {
+    if (!currentProject) return;
+    const now     = new Date().toISOString();
+    const project = {
+      ...currentProject,
+      dataModificacao: now,
+      flow: flow || currentProject.flow,
+    };
+    await salvarProjeto(project);
+    setCurrentProject(project);
+    refreshProjects();
+    setIsReviewMode(false);
+  }, [currentProject, refreshProjects]);
+
+  // Atualiza o originalConf do projeto atual com o texto exportado.
+  // Chamado pelo Canvas quando o usuário clica em "ATUALIZAR ORIGINAL" no diff.
+  const handleUpdateOriginal = useCallback(async (newOriginalConf) => {
+    if (!currentProject) return;
+    const updated = { ...currentProject, originalConf: newOriginalConf };
+    await salvarProjeto(updated);
+    setCurrentProject(updated);
+  }, [currentProject]);
+
+  // Cancelamento da revisão — descarta o projeto (não salvo) e volta para home.
+  const handleReviewCancel = useCallback(() => {
+    setIsReviewMode(false);
+    setCurrentProject(null);
+    setPendingFlow(null);
+    setScreen('home');
+  }, []);
 
   // ── Excluir projeto ───────────────────────────────────────────────────────
   const handleDeleteProject = useCallback(async (id) => {
@@ -2163,6 +2334,7 @@ export default function App() {
           importError={importError}
           confImportData={confImportData}
           onConfImportConfirm={handleConfImportConfirm}
+          onConfImportReview={handleConfImportReview}
           onConfImportCancel={() => setConfImportData(null)}
         />
       ) : (
@@ -2177,6 +2349,11 @@ export default function App() {
               currentProjectId={currentProject?.id}
               onGoBack={handleGoBack}
               onProjectSaved={handleProjectSaved}
+              isReviewMode={isReviewMode}
+              onReviewConfirm={handleReviewConfirm}
+              onReviewCancel={handleReviewCancel}
+              originalConf={currentProject?.originalConf || null}
+              onUpdateOriginal={handleUpdateOriginal}
             />
           </ReactFlowProvider>
         </div>

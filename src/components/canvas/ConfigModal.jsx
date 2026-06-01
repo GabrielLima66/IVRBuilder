@@ -65,7 +65,7 @@ const ToggleRow = memo(function ToggleRow({ configKey, label, hint }) {
     <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: 12, marginBottom: 14 }}>
       <div style={{ flex: 1 }}>
         <div style={{ fontSize: 11, color: 'var(--neon)', letterSpacing: 0.5, lineHeight: 1.4 }}>{label}</div>
-        {hint && <div style={{ fontSize: 9, color: '#555', marginTop: 2, lineHeight: 1.5 }}>{hint}</div>}
+        {hint && <div style={{ fontSize: 9, color: 'var(--panel-hint-color)', marginTop: 2, lineHeight: 1.5 }}>{hint}</div>}
       </div>
       <NeonToggle id={id} checked={!!value} onChange={(v) => setConfig(configKey, v)} />
     </div>
@@ -90,7 +90,7 @@ const SelectRow = memo(function SelectRow({ configKey, label, options, hint }) {
           <option key={o.value} value={o.value}>{o.label}</option>
         ))}
       </select>
-      {hint && <div style={{ fontSize: 9, color: '#555', marginTop: 4, lineHeight: 1.5 }}>{hint}</div>}
+      {hint && <div style={{ fontSize: 9, color: 'var(--panel-hint-color)', marginTop: 4, lineHeight: 1.5 }}>{hint}</div>}
     </div>
   );
 });
@@ -114,7 +114,7 @@ const SliderRow = memo(function SliderRow({ configKey, label, min, max, step = 1
         onChange={(e) => setConfig(configKey, step < 1 ? parseFloat(e.target.value) : parseInt(e.target.value, 10))}
         style={{ width: '100%', accentColor: 'var(--neon)', cursor: 'pointer' }}
       />
-      {hint && <div style={{ fontSize: 9, color: '#555', marginTop: 3, lineHeight: 1.5 }}>{hint}</div>}
+      {hint && <div style={{ fontSize: 9, color: 'var(--panel-hint-color)', marginTop: 3, lineHeight: 1.5 }}>{hint}</div>}
     </div>
   );
 });
@@ -140,9 +140,9 @@ const NumberRow = memo(function NumberRow({ configKey, label, min, max, suffix, 
           className="term-input"
           style={{ width: 80, fontSize: 11 }}
         />
-        {suffix && <span style={{ fontSize: 10, color: '#555' }}>{suffix}</span>}
+        {suffix && <span style={{ fontSize: 10, color: 'var(--panel-hint-color)' }}>{suffix}</span>}
       </div>
-      {hint && <div style={{ fontSize: 9, color: '#555', marginTop: 4, lineHeight: 1.5 }}>{hint}</div>}
+      {hint && <div style={{ fontSize: 9, color: 'var(--panel-hint-color)', marginTop: 4, lineHeight: 1.5 }}>{hint}</div>}
     </div>
   );
 });
@@ -165,7 +165,7 @@ const TextRow = memo(function TextRow({ configKey, label, placeholder, hint }) {
         autoComplete="off"
         spellCheck={false}
       />
-      {hint && <div style={{ fontSize: 9, color: '#555', marginTop: 4, lineHeight: 1.5 }}>{hint}</div>}
+      {hint && <div style={{ fontSize: 9, color: 'var(--panel-hint-color)', marginTop: 4, lineHeight: 1.5 }}>{hint}</div>}
     </div>
   );
 });
@@ -219,7 +219,7 @@ const ColorThemeRow = memo(function ColorThemeRow() {
           );
         })}
       </div>
-      <div style={{ fontSize: 9, color: '#555', marginTop: 5, lineHeight: 1.5 }}>
+      <div style={{ fontSize: 9, color: 'var(--panel-hint-color)', marginTop: 5, lineHeight: 1.5 }}>
         Hacking = verde neon clássico · Orpen = roxo/violeta · Dark = paleta VS Code
       </div>
     </div>
@@ -272,7 +272,7 @@ const ModeToggleRow = memo(function ModeToggleRow() {
           AMIGÁVEL
         </button>
       </div>
-      <div style={{ fontSize: 9, color: '#555', marginTop: 5, lineHeight: 1.5 }}>
+      <div style={{ fontSize: 9, color: 'var(--panel-hint-color)', marginTop: 5, lineHeight: 1.5 }}>
         Sincronizado com o toggle do header. PRO = interface técnica completa.
       </div>
     </div>
@@ -393,6 +393,16 @@ export default function ConfigModal({ onClose }) {
             label="Incluir comentários de seção (;;)"
             hint="Se ON, o .conf exportado inclui separadores ;; entre os blocos"
           />
+          <ToggleRow
+            configKey="highFidelityMode"
+            label="Modo de fidelidade máxima (recomendado)"
+            hint="ON: nós importados não editados são emitidos literalmente (preserva formatação exata do original). OFF: reconstrói todas as linhas — útil para normalizar o arquivo"
+          />
+          <ToggleRow
+            configKey="showDiffBeforeExport"
+            label="Mostrar diff antes de exportar"
+            hint="ON: compara o .conf original importado com o que será exportado antes de baixar (disponível apenas em projetos importados)"
+          />
           <SelectRow
             configKey="lineEnding"
             label="Encoding de fim de linha"
@@ -403,17 +413,30 @@ export default function ConfigModal({ onClose }) {
             hint="Define o caractere de fim de linha no .conf gerado"
           />
 
+          {/* ── VISUALIZAÇÃO ── */}
+          <SectionHeader label="VISUALIZAÇÃO" />
+          <ToggleRow
+            configKey="showFormattingElements"
+            label="Mostrar elementos de formatação"
+            hint="ON: exibe NóLinhaEmBranco e NóComentárioSeção no canvas. OFF: ocultos mas preservados na exportação"
+          />
+
           {/* ── IMPORTAÇÃO ── */}
           <SectionHeader label="IMPORTAÇÃO" />
           <ToggleRow
             configKey="rawOnUnknown"
-            label="Criar NóRaw para comandos não reconhecidos"
-            hint="Se OFF, linhas não reconhecidas são ignoradas na importação de .conf"
+            label="Modo tolerante (recomendado)"
+            hint="ON: comandos não reconhecidos viram NóRaw e a importação continua. OFF: a importação pausa e exige confirmação antes de continuar."
           />
           <ToggleRow
             configKey="preserveComments"
             label="Preservar comentários como NóComentado"
             hint="Se OFF, linhas comentadas (;exten =>) são ignoradas na importação"
+          />
+          <ToggleRow
+            configKey="reviewModeOnImport"
+            label="Modo de revisão ao importar .conf"
+            hint="ON: abre o canvas em modo de revisão antes de salvar — permite inspecionar os nós importados. OFF: abre direto para edição."
           />
 
           {/* ── PROJETO ── */}

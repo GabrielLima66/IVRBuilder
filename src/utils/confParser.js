@@ -9,6 +9,29 @@
  *  - Macro(logIvr,...): cria nó Macro normal em cada contexto onde aparecer
  *  - include => hangup-ivr e similares → RawNode
  *  - Contextos [macro-*]: ContextNode normal com data.isMacro = true
+ *
+ * Metadados de formatação:
+ *  Cada nó importado recebe data._fmt com:
+ *    appCasing     — capitalização exata da aplicação ("Agi", "AGI", "Hangup" etc.)
+ *    hasParens     — true = tinha parênteses, false = forma bare (ex: "Hangup")
+ *    rawArgs       — string bruta dos argumentos exatamente como no .conf original
+ *    gotoArgs      — para Goto: array dos args exatos ["ctx","s","1"] ou ["s","menu"]
+ *    lineLabel     — label entre parênteses na prioridade: n(bv) → "bv"
+ *    inlineComment — comentário inline após ";;": ";;TRANFERE PARA FILA"
+ *    linePriority  — prioridade exata da linha original: "1" ou "n"
+ *  O compilador usa esses campos quando data.isDirty === false para reproduzir
+ *  a linha exatamente como estava.
+ *
+ * originalLine em cada nó importado:
+ *  data.originalLine — a linha exten => ... exata do .conf original (trimmed).
+ *  Usado pelo compilador em modo de fidelidade máxima (highFidelityMode) como
+ *  fallback final: emite a linha verbatim sem nenhuma reconstrução. Garante que
+ *  qualquer formato não capturado pelos metadados seja preservado literalmente.
+ *
+ *  rawDigitLines no MenuNode.data:
+ *    Mapa ext → [{ priority, cmdFull, inlineComment }] com TODAS as linhas
+ *    de cada extensão DTMF (1-9, i, t). Usado pelo compilador quando o dígito
+ *    não tem edge explícita no canvas.
  */
 
 import { uid } from './common';
@@ -26,7 +49,22 @@ const CTX_ROW_Y      = 220;  // Y fixo de todos os ContextNodes (abaixo do Globa
 const CTX_WIDTH = CTX_MIN_WIDTH;
 const CTX_GAP   = CTX_COL_GAP;
 
+// Tipos de nó que aceitam campo label (usado para propagar lineLabel → data.label)
+const LABEL_NODE_TYPES = new Set([
+  'background', 'waitexten', 'noop', 'playback', 'set', 'agi', 'macro', 'gosub', 'read',
+]);
+
 // ── 1. Extração de contextos ──────────────────────────────────────────────────
+//
+// ctx.lines agora é um array de objetos { lineType, raw, count? }:
+//   { lineType: 'exten',            raw: 'exten => s,n,Answer()' }
+//   { lineType: 'include',          raw: 'include => hangup-ivr' }
+//   { lineType: 'commented_exten',  raw: ';exten => s,n,Answer()' }
+//   { lineType: 'sectioncomment',   raw: ';;------ TITULO ------' }
+//   { lineType: 'blankline',        raw: '', count: N }   ← linhas em branco consecutivas
+//
+// Linhas em branco consecutivas são fundidas em um único objeto { blankline, count: N }.
+// Comentários decorativos (;; ou ;, mas não ;exten =>) viram sectioncomment.
 
 function extractContexts(lines) {
   const contexts = [];
@@ -34,9 +72,21 @@ function extractContexts(lines) {
 
   for (const raw of lines) {
     const line = raw.trim();
-    if (!line) continue;
-    if (line.startsWith(';;')) continue;
 
+    // Linha em branco — dentro de um contexto vira marcador blankline
+    if (!line) {
+      if (current) {
+        const last = current.lines[current.lines.length - 1];
+        if (last && last.lineType === 'blankline') {
+          last.count = (last.count || 1) + 1; // funde linhas em branco consecutivas
+        } else {
+          current.lines.push({ lineType: 'blankline', raw: '', count: 1 });
+        }
+      }
+      continue;
+    }
+
+    // Cabeçalho de contexto [nome]
     const ctxMatch = line.match(/^\[([^\]]+)\]$/);
     if (ctxMatch) {
       current = { name: ctxMatch[1], lines: [] };
@@ -48,7 +98,18 @@ function extractContexts(lines) {
       const isExten     = /^exten\s*=>/i.test(line);
       const isCommented = /^;+\s*exten\s*=>/i.test(line);
       const isInclude   = /^include\s*=>/i.test(line);
-      if (isExten || isCommented || isInclude) current.lines.push(line);
+
+      if (isCommented) {
+        current.lines.push({ lineType: 'commented_exten', raw: line });
+      } else if (isExten) {
+        current.lines.push({ lineType: 'exten', raw: line });
+      } else if (isInclude) {
+        current.lines.push({ lineType: 'include', raw: line });
+      } else if (line.startsWith(';')) {
+        // Comentário decorativo de seção (;; TITULO, ;;----, ; Opcao X, etc.)
+        current.lines.push({ lineType: 'sectioncomment', raw: line });
+      }
+      // Outros (ex: linhas de configuração fora de exten) → descartados
     }
   }
 
@@ -68,7 +129,10 @@ function extractGlobalConfig(firstCtx) {
   };
   if (!firstCtx) return cfg;
 
-  for (const rawLine of firstCtx.lines) {
+  // ctx.lines agora é array de { lineType, raw } — iterar apenas linhas exten
+  for (const item of firstCtx.lines) {
+    if (item.lineType !== 'exten' && item.lineType !== 'commented_exten') continue;
+    const rawLine = item.raw;
     const line = rawLine.trim();
     if (/^include\s*=>/i.test(line)) continue;
 
@@ -105,6 +169,14 @@ function isGlobalLine(nodeData, globalConfig) {
 }
 
 // ── 4. Parser de uma linha exten => ───────────────────────────────────────────
+//
+// Retorna:
+//   { _commented, originalLine }          — linha comentada (;exten => ...)
+//   { _dtmf, extension, cmdFull,
+//     priority, lineLabel, inlineComment } — extensão DTMF (1-9, i, t)
+//   { extension, priority, cmdFull,
+//     lineLabel, inlineComment }           — linha sequencial normal
+//   null                                  — não é exten =>
 
 function parseExtenLine(line) {
   const commentedMatch = line.match(/^;+\s*(exten\s*=>.+)$/i);
@@ -115,61 +187,80 @@ function parseExtenLine(line) {
   const m = line.match(/^exten\s*=>\s*([^,]+),([^,]+),(.+)$/i);
   if (!m) return null;
 
-  const extension = m[1].trim();
-  const priority  = m[2].trim();
+  const extension   = m[1].trim();
+  const rawPriority = m[2].trim();
 
-  // Strip inline ;; comments do cmdFull (ex: "Set(X=Y) ;;comentário")
+  // Extrai label da prioridade: "n(bv)" → priority='n', lineLabel='bv'
+  const priLabelMatch = rawPriority.match(/^([^(]+)\(([^)]+)\)$/);
+  const priority  = priLabelMatch ? priLabelMatch[1].trim() : rawPriority;
+  const lineLabel = priLabelMatch ? priLabelMatch[2].trim() : '';
+
+  // Captura comentário inline após ";;", preserva o restante como cmdFull
   let cmdFull = m[3].trim();
+  let inlineComment = '';
   const commentIdx = cmdFull.indexOf(';;');
-  if (commentIdx >= 0) cmdFull = cmdFull.substring(0, commentIdx).trim();
-
-  if (/^[0-9]$/.test(extension) || extension === 'i' || extension === 't') {
-    return { _dtmf: true, extension, cmdFull };
+  if (commentIdx >= 0) {
+    inlineComment = cmdFull.substring(commentIdx).trim();
+    cmdFull = cmdFull.substring(0, commentIdx).trim();
   }
 
-  return { extension, priority, cmdFull };
+  if (/^[0-9]$/.test(extension) || extension === 'i' || extension === 't') {
+    return { _dtmf: true, extension, cmdFull, priority, lineLabel, inlineComment };
+  }
+
+  return { extension, priority, cmdFull, lineLabel, inlineComment };
 }
 
 // ── 5. Mapeamento de comando → dados de nó ────────────────────────────────────
+//
+// Retorna { type, data, fmt } ou { _configField, _configVal, fmt }.
+// fmt = { appCasing, hasParens, rawArgs, gotoArgs? } — metadados de formatação.
 
 function cmdToNodeData(cmdFull) {
-  const m      = cmdFull.match(/^(\w+)\(([\s\S]*)\)$/);
-  const cmd    = m ? m[1] : cmdFull.split('(')[0];
-  const params = m ? m[2] : '';
+  const m       = cmdFull.match(/^(\w+)\(([\s\S]*)\)$/);
+  const appName = m ? m[1] : (cmdFull.split(/[(,\s]/)[0] || cmdFull);
+  const params  = m ? m[2] : '';
 
-  switch (cmd.toLowerCase()) {
+  // Metadados de formatação base — propagados para data._fmt pelo chamador
+  const fmt = {
+    appCasing: appName,
+    hasParens: cmdFull.includes('('),
+    rawArgs:   params,
+  };
+
+  switch (appName.toLowerCase()) {
     case 'answer':
-      return { type: 'answer', data: {} };
+      return { type: 'answer', data: {}, fmt };
 
     case 'hangup':
-      return { type: 'hangup', data: { causeCode: params || '' } };
+      return { type: 'hangup', data: { causeCode: params || '' }, fmt };
 
     case 'wait': {
       const s = parseFloat(params) || 1;
-      return { type: 'wait', data: { seconds: s } };
+      return { type: 'wait', data: { seconds: s }, fmt };
     }
 
     case 'waitexten': {
       const s = parseFloat(params) || 4;
-      return { type: 'waitexten', data: { seconds: s, label: '' } };
+      return { type: 'waitexten', data: { seconds: s, label: '' }, fmt };
     }
 
     case 'noop':
-      return { type: 'noop', data: { text: params, label: '' } };
+      return { type: 'noop', data: { text: params, label: '' }, fmt };
 
     case 'playback': {
       const fname = params.split('/').pop();
-      return { type: 'playback', data: { filename: fname, label: '' } };
+      return { type: 'playback', data: { filename: fname, label: '' }, fmt };
     }
 
     case 'background': {
       const fname = params.split('/').pop();
-      return { type: 'background', data: { filename: fname, label: '' } };
+      return { type: 'background', data: { filename: fname, label: '' }, fmt };
     }
 
     case 'gotoiftime': {
       const qi = params.indexOf('?');
-      if (qi < 0) return { type: 'raw', data: { rawLine: cmdFull } };
+      if (qi < 0) return { type: 'raw', data: { rawLine: cmdFull }, fmt };
       const spec  = params.substring(0, qi).split(',');
       const dest  = params.substring(qi + 1).split(',')[0];
       const [ts, weekdays, mdays, months] = spec;
@@ -185,6 +276,7 @@ function cmdToNodeData(cmdFull) {
           trueContext: dest || '',
           label:       '',
         },
+        fmt,
       };
     }
 
@@ -199,6 +291,8 @@ function cmdToNodeData(cmdFull) {
           priority:  parts[2] || '1',
           queue: '7000', queueOptions: '',
         },
+        // gotoArgs preserva os argumentos exatos (pode ser 2 ou 3)
+        fmt: { ...fmt, gotoArgs: parts.map((p) => p.trim()) },
       };
     }
 
@@ -212,6 +306,7 @@ function cmdToNodeData(cmdFull) {
           queueOptions: parts[1] || '',
           context: '', extension: 's', priority: '1',
         },
+        fmt,
       };
     }
 
@@ -219,12 +314,12 @@ function cmdToNodeData(cmdFull) {
       const parts  = params.split(',');
       // Strip path prefix — script may be ${AGI_PATH}/name or /full/path/name
       const script = (parts[0] || '').split('/').pop();
-      return { type: 'agi', data: { script, params: parts.slice(1).filter(Boolean), label: '' } };
+      return { type: 'agi', data: { script, params: parts.slice(1).filter(Boolean), label: '' }, fmt };
     }
 
     case 'macro': {
       const parts = params.split(',');
-      return { type: 'macro', data: { name: parts[0] || '', params: parts.slice(1).filter(Boolean), label: '' } };
+      return { type: 'macro', data: { name: parts[0] || '', params: parts.slice(1).filter(Boolean), label: '' }, fmt };
     }
 
     case 'gosub': {
@@ -244,32 +339,33 @@ function cmdToNodeData(cmdFull) {
           priority,
           params:    gosubArgs,
         },
+        fmt,
       };
     }
 
     case 'return':
-      return { type: 'return', data: { value: params || '' } };
+      return { type: 'return', data: { value: params || '' }, fmt };
 
     case 'gotoif': {
       const qi = params.indexOf('?');
-      if (qi < 0) return { type: 'raw', data: { rawLine: cmdFull } };
+      if (qi < 0) return { type: 'raw', data: { rawLine: cmdFull }, fmt };
       const expr  = params.substring(0, qi).replace(/^\$\[/, '').replace(/\]$/, '');
       const dests = params.substring(qi + 1).split(':');
-      return { type: 'gotoif', data: { expression: expr, trueDestination: dests[0] || '', falseDestination: dests[1] || '' } };
+      return { type: 'gotoif', data: { expression: expr, trueDestination: dests[0] || '', falseDestination: dests[1] || '' }, fmt };
     }
 
     case 'dial': {
       const parts = params.split(',');
-      return { type: 'dial', data: { destination: parts[0] || '', timeout: parts[1] || '', options: parts[2] || '' } };
+      return { type: 'dial', data: { destination: parts[0] || '', timeout: parts[1] || '', options: parts[2] || '' }, fmt };
     }
 
     case 'set': {
-      if (/^__IVR=/i.test(params))               return { _configField: 'ivr',          _configVal: params.split('=').slice(1).join('=') };
-      if (/^SOUND_PATH=/i.test(params))           return { _configField: 'soundPath',    _configVal: params.split('=').slice(1).join('=') };
-      if (/^AGI_PATH=/i.test(params))             return { _configField: 'agiPath',      _configVal: params.split('=').slice(1).join('=') };
-      if (/^CHANNEL\(language\)=/i.test(params))  return { _configField: 'language',     _configVal: params.split('=').slice(1).join('=') };
-      if (/^__NUMBER_DIALED=/i.test(params))      return { _configField: 'numberDialed', _configVal: true };
-      return { type: 'set', data: { assignment: params, label: '' } };
+      if (/^__IVR=/i.test(params))               return { _configField: 'ivr',          _configVal: params.split('=').slice(1).join('='), fmt };
+      if (/^SOUND_PATH=/i.test(params))           return { _configField: 'soundPath',    _configVal: params.split('=').slice(1).join('='), fmt };
+      if (/^AGI_PATH=/i.test(params))             return { _configField: 'agiPath',      _configVal: params.split('=').slice(1).join('='), fmt };
+      if (/^CHANNEL\(language\)=/i.test(params))  return { _configField: 'language',     _configVal: params.split('=').slice(1).join('='), fmt };
+      if (/^__NUMBER_DIALED=/i.test(params))      return { _configField: 'numberDialed', _configVal: true, fmt };
+      return { type: 'set', data: { assignment: params, label: '' }, fmt };
     }
 
     case 'verbose': {
@@ -279,40 +375,47 @@ function cmdToNodeData(cmdFull) {
       const hasLevel  = !isNaN(firstNum) && String(firstNum) === parts[0].trim();
       const level     = hasLevel ? firstNum : 3;
       const message   = hasLevel ? parts.slice(1).join(',') : params;
-      return { type: 'verbose', data: { level, message } };
+      return { type: 'verbose', data: { level, message }, fmt };
     }
 
     case 'execif': {
       const qi     = params.indexOf('?');
       const expr   = qi >= 0 ? params.substring(0, qi).replace(/^\$\[/, '').replace(/\]$/, '') : params;
       const action = qi >= 0 ? params.substring(qi + 1) : '';
-      return { type: 'execif', data: { expression: expr, action } };
+      return { type: 'execif', data: { expression: expr, action }, fmt };
     }
 
     case 'chanspy': {
       const parts = params.split(',');
-      return { type: 'chanspy', data: { target: parts[0]?.replace(/^SIP\//, '') || '', options: parts[1] || '' } };
+      return { type: 'chanspy', data: { target: parts[0]?.replace(/^SIP\//, '') || '', options: parts[1] || '' }, fmt };
     }
 
     case 'mixmonitor': {
       const base = params.split('/').pop();
       const dot  = base.lastIndexOf('.');
-      return { type: 'mixmonitor', data: { filename: dot >= 0 ? base.slice(0, dot) : base, extension: dot >= 0 ? base.slice(dot + 1) : 'wav' } };
+      return { type: 'mixmonitor', data: { filename: dot >= 0 ? base.slice(0, dot) : base, extension: dot >= 0 ? base.slice(dot + 1) : 'wav' }, fmt };
     }
 
     case 'stopmonitor':
-      return { type: 'stopmonitor', data: {} };
+      return { type: 'stopmonitor', data: {}, fmt };
 
     case 'saydigits':
-      return { type: 'saydigits', data: { value: params } };
+      return { type: 'saydigits', data: { value: params }, fmt };
 
     case 'saynumber':
-      return { type: 'saynumber', data: { value: params.split(',')[0], gender: params.split(',')[1] || 'm' } };
+      return { type: 'saynumber', data: { value: params.split(',')[0], gender: params.split(',')[1] || 'm' }, fmt };
 
     default:
-      return { type: 'raw', data: { rawLine: cmdFull } };
+      return { type: 'raw', data: { rawLine: cmdFull }, fmt };
   }
 }
+
+// Tipos de nó de formatação — não têm handles, não influenciam lógica de fluxo
+const FORMATTING_TYPES = new Set(['blankline', 'sectioncomment']);
+
+// Alturas estimadas dos elementos de formatação (quando visíveis)
+const BLANKLINE_H_PER   = 8;   // px por linha em branco
+const SECTION_COMMENT_H = 24;  // px para um comentário de seção
 
 // ── 6. Processa um contexto → nós + edges ────────────────────────────────────
 
@@ -320,22 +423,63 @@ function processContext(ctx, xOffset, stats, globalConfig, isFirstContext) {
   const ctxId      = `ctx-${uid()}`;
   const nodes      = [];
   const edges      = [];
-  const dtmfGroups = new Map(); // extension → [cmdFull, ...]
+  // dtmfGroups: extension → [{ cmdFull, priority, inlineComment }]
+  const dtmfGroups = new Map();
   let   yChild     = CTX_PAD_TOP;
   const sequential = [];
   const isMacro    = /^macro-/i.test(ctx.name);
 
-  for (const rawLine of ctx.lines) {
-    const line = rawLine.trim();
+  // ctx.lines agora é array de { lineType, raw, count? }
+  for (const item of ctx.lines) {
+    const { lineType, raw: rawLine } = item;
+    const line = rawLine ? rawLine.trim() : '';
+
+    // ── Linha em branco → NóLinhaEmBranco ─────────────────────────────────────
+    if (lineType === 'blankline') {
+      const count = item.count || 1;
+      const nid = `n_${uid()}`;
+      nodes.push({
+        id:       nid,
+        type:     'blankline',
+        position: { x: CTX_PAD_H, y: yChild },
+        data:     { count, isDirty: false },
+        parentNode: ctxId,
+        extent:   'parent',
+        draggable: false,
+      });
+      sequential.push(nid);
+      yChild += BLANKLINE_H_PER * count;
+      stats.nodesByType['blankline'] = (stats.nodesByType['blankline'] || 0) + 1;
+      continue;
+    }
+
+    // ── Comentário de seção → NóComentárioSeção ───────────────────────────────
+    if (lineType === 'sectioncomment') {
+      const style = rawLine.startsWith(';;') ? 'double' : 'single';
+      const nid = `n_${uid()}`;
+      nodes.push({
+        id:       nid,
+        type:     'sectioncomment',
+        position: { x: CTX_PAD_H, y: yChild },
+        data:     { text: rawLine, style, isDirty: false },
+        parentNode: ctxId,
+        extent:   'parent',
+        draggable: false,
+      });
+      sequential.push(nid);
+      yChild += SECTION_COMMENT_H;
+      stats.nodesByType['sectioncomment'] = (stats.nodesByType['sectioncomment'] || 0) + 1;
+      continue;
+    }
 
     // include => → RawNode (não é uma exten, handle antes do parseExtenLine)
-    if (/^include\s*=>/i.test(line)) {
+    if (lineType === 'include' || /^include\s*=>/i.test(line)) {
       const nid = `n_${uid()}`;
       nodes.push({
         id:       nid,
         type:     'raw',
         position: { x: CTX_PAD_H, y: yChild },
-        data:     { rawLine: line },
+        data:     { rawLine: line, isDirty: false },
         parentNode: ctxId,
         extent:   'parent',
         draggable: false,
@@ -369,7 +513,7 @@ function processContext(ctx, xOffset, stats, globalConfig, isFirstContext) {
         id:         cid,
         type:       realType,
         position:   { x: CTX_PAD_H, y: yChild },
-        data:       { ...realData, _commented: true, _origLine: rawLine },
+        data:       { ...realData, _commented: true, _origLine: rawLine, isDirty: false },
         parentNode: ctxId,
         extent:     'parent',
         draggable:  false,
@@ -381,10 +525,15 @@ function processContext(ctx, xOffset, stats, globalConfig, isFirstContext) {
       continue;
     }
 
-    // Linha DTMF → agrupada por extensão para construção do MenuNode
+    // Linha DTMF → agrupada por extensão
+    // Cada item armazena { cmdFull, priority, inlineComment } para reconstrução fiel
     if (parsed._dtmf) {
       if (!dtmfGroups.has(parsed.extension)) dtmfGroups.set(parsed.extension, []);
-      dtmfGroups.get(parsed.extension).push(parsed.cmdFull);
+      dtmfGroups.get(parsed.extension).push({
+        cmdFull:       parsed.cmdFull,
+        priority:      parsed.priority     || 'n',
+        inlineComment: parsed.inlineComment || '',
+      });
       continue;
     }
 
@@ -402,7 +551,21 @@ function processContext(ctx, xOffset, stats, globalConfig, isFirstContext) {
         id:       nid,
         type:     'set',
         position: { x: CTX_PAD_H, y: yChild },
-        data:     { assignment, label: '' },
+        data:     {
+          assignment,
+          label: '',
+          isDirty:      false,
+          originalLine: rawLine, // linha exata do .conf — usada como fallback de fidelidade
+          _fmt: {
+            appCasing:    nodeData.fmt?.appCasing    || 'Set',
+            hasParens:    nodeData.fmt?.hasParens    ?? true,
+            rawArgs:      nodeData.fmt?.rawArgs      || assignment,
+            lineLabel:    parsed.lineLabel    || '',
+            inlineComment: parsed.inlineComment || '',
+            linePriority: parsed.priority     || 'n',
+          },
+          ...(parsed.inlineComment ? { inlineComment: parsed.inlineComment } : {}),
+        },
         parentNode: ctxId,
         extent:   'parent',
         draggable: false,
@@ -423,13 +586,39 @@ function processContext(ctx, xOffset, stats, globalConfig, isFirstContext) {
       continue;
     }
 
-    // Nó regular
+    // Monta _fmt combinando metadados do token com metadados da linha
+    const nodeFmt = {
+      ...(nodeData.fmt || {}),
+      lineLabel:    parsed.lineLabel    || '',
+      inlineComment: parsed.inlineComment || '',
+      linePriority: parsed.priority     || 'n',
+    };
+
+    // Dados finais do nó
+    const finalData = {
+      ...nodeData.data || {},
+      _fmt:         nodeFmt,
+      isDirty:      false,
+      originalLine: rawLine, // linha exata do .conf — fallback de fidelidade máxima
+    };
+
+    // Propaga lineLabel → data.label para tipos que suportam label
+    // (evita perder o (bv) / (menu) da linha original)
+    if (parsed.lineLabel && LABEL_NODE_TYPES.has(nodeData.type)) {
+      finalData.label = parsed.lineLabel;
+    }
+
+    // Propaga inlineComment para data.inlineComment (lido pelo compilador)
+    if (parsed.inlineComment) {
+      finalData.inlineComment = parsed.inlineComment;
+    }
+
     const nid = `n_${uid()}`;
     nodes.push({
       id:       nid,
       type:     nodeData.type,
       position: { x: CTX_PAD_H, y: yChild },
-      data:     nodeData.data || {},
+      data:     finalData,
       parentNode: ctxId,
       extent:   'parent',
       draggable: false,
@@ -460,28 +649,44 @@ function processContext(ctx, xOffset, stats, globalConfig, isFirstContext) {
   // ── MenuNode: converte bloco DTMF completo em um único MenuNode ─────────────
   if (dtmfGroups.size > 0) {
     // 1. Absorve WaitExten e Background imediatamente antes do bloco DTMF.
-    //    Esses conceitos são embutidos no MenuNode — não existem como nós separados.
+    //    Elementos de formatação (blankline, sectioncomment) entre Background/WaitExten
+    //    e o bloco DTMF são ignorados na busca mas permanecem no sequential.
     const localById = {};
     for (const n of nodes) localById[n.id] = n;
 
-    let menuWaitExten = 4;
-    let greeting      = '';
-    let seqPtr        = sequential.length - 1;
+    let menuWaitExten  = 4;
+    let greeting       = '';
+    let greetingLabel  = 'menu';
 
-    if (seqPtr >= 0 && localById[sequential[seqPtr]]?.type === 'waitexten') {
-      menuWaitExten = localById[sequential[seqPtr]].data?.seconds ?? 4;
-      nodes.splice(nodes.findIndex((n) => n.id === sequential[seqPtr]), 1);
-      sequential.splice(seqPtr, 1);
+    // Função auxiliar: avança ptr para trás, pulando elementos de formatação
+    const skipFormatting = (ptr) => {
+      while (ptr >= 0 && FORMATTING_TYPES.has(localById[sequential[ptr]]?.type)) ptr--;
+      return ptr;
+    };
+
+    // Busca WaitExten (pulando formatação)
+    let ptr = skipFormatting(sequential.length - 1);
+
+    if (ptr >= 0 && localById[sequential[ptr]]?.type === 'waitexten') {
+      menuWaitExten = localById[sequential[ptr]].data?.seconds ?? 4;
+      nodes.splice(nodes.findIndex((n) => n.id === sequential[ptr]), 1);
+      sequential.splice(ptr, 1);
       yChild -= NODE_H + NODE_GAP;
-      seqPtr--;
+      ptr = skipFormatting(sequential.length - 1);
     }
-    if (seqPtr >= 0 && localById[sequential[seqPtr]]?.type === 'background') {
-      greeting = localById[sequential[seqPtr]].data?.filename || '';
-      nodes.splice(nodes.findIndex((n) => n.id === sequential[seqPtr]), 1);
-      sequential.splice(seqPtr, 1);
+
+    // Busca Background (pulando formatação)
+    if (ptr >= 0 && localById[sequential[ptr]]?.type === 'background') {
+      const bgNode = localById[sequential[ptr]];
+      greeting = bgNode.data?._fmt?.rawArgs !== undefined
+        ? bgNode.data._fmt.rawArgs
+        : (bgNode.data?.filename || '');
+      greetingLabel = bgNode.data?._fmt?.lineLabel || bgNode.data?.label || 'menu';
+      nodes.splice(nodes.findIndex((n) => n.id === sequential[ptr]), 1);
+      sequential.splice(ptr, 1);
       yChild -= NODE_H + NODE_GAP;
-      seqPtr--;
     }
+    const seqPtr = sequential.length - 1; // referência final após absorções
 
     // 2. Extrai dígitos numéricos (1-9, 0) e respectivos destinos Goto
     const DIGIT_ORDER = ['1', '2', '3', '4', '5', '6', '7', '8', '9', '0'];
@@ -490,9 +695,9 @@ function processContext(ctx, xOffset, stats, globalConfig, isFirstContext) {
 
     for (const dig of DIGIT_ORDER) {
       if (!dtmfGroups.has(dig)) continue;
-      const gotoCmd = dtmfGroups.get(dig).find((c) => /^Goto\(/i.test(c));
+      const gotoCmd = dtmfGroups.get(dig).find((c) => /^Goto\(/i.test(c.cmdFull));
       if (gotoCmd) {
-        const m = gotoCmd.match(/^Goto\(([^,)]+)/i);
+        const m = gotoCmd.cmdFull.match(/^Goto\(([^,)]+)/i);
         if (m) dtmfGotos[dig] = m[1];
       }
       menuDigits.push({ id: dig, label: `Opcao ${dig}` });
@@ -511,11 +716,11 @@ function processContext(ctx, xOffset, stats, globalConfig, isFirstContext) {
     for (const ext of ['i', 't']) {
       if (!dtmfGroups.has(ext)) continue;
       const cmds     = dtmfGroups.get(ext);
-      const macroCmd = cmds.find((c) => /^Macro\(/i.test(c));
-      const gotoCmd  = cmds.find((c) => /^Goto\(/i.test(c));
+      const macroCmd = cmds.find((c) => /^Macro\(/i.test(c.cmdFull));
+      const gotoCmd  = cmds.find((c) => /^Goto\(/i.test(c.cmdFull));
 
       if (macroCmd) {
-        const raw   = macroCmd.replace(/^Macro\(/i, '').replace(/\)$/, '');
+        const raw   = macroCmd.cmdFull.replace(/^Macro\(/i, '').replace(/\)$/, '');
         const parts = raw.split(',');
         const name  = parts[0] || '';
         if (ext === 'i') invalidMacro = name;
@@ -526,7 +731,7 @@ function processContext(ctx, xOffset, stats, globalConfig, isFirstContext) {
           id:         mnId,
           type:       'macro',
           position:   { x: CTX_PAD_H, y: macroStackY },
-          data:       { name, params: parts.slice(1).filter(Boolean), label: '' },
+          data:       { name, params: parts.slice(1).filter(Boolean), label: '', isDirty: false },
           parentNode: ctxId,
           extent:     'parent',
           draggable:  false,
@@ -545,27 +750,41 @@ function processContext(ctx, xOffset, stats, globalConfig, isFirstContext) {
         macroStackY += NODE_H + NODE_GAP;
         stats.nodesByType['macro'] = (stats.nodesByType['macro'] || 0) + 1;
       } else if (gotoCmd) {
-        const m = gotoCmd.match(/^Goto\(([^,)]+)/i);
+        const m = gotoCmd.cmdFull.match(/^Goto\(([^,)]+)/i);
         if (m) dtmfGotos[ext] = m[1];
       }
     }
 
-    // 4. Cria o MenuNode no lugar do bloco DTMF na sequência vertical
+    // 4. Constrói rawDigitLines: todas as linhas brutas de cada extensão DTMF
+    //    O compilador usa esses dados quando o dígito não tem edge no canvas.
+    const rawDigitLines = {};
+    for (const [ext, cmds] of dtmfGroups.entries()) {
+      rawDigitLines[ext] = cmds.map(({ cmdFull, priority, inlineComment }) => ({
+        priority,
+        cmdFull,
+        inlineComment,
+      }));
+    }
+
+    // 5. Cria o MenuNode no lugar do bloco DTMF na sequência vertical
     nodes.push({
       id:         menuId,
       type:       'menu',
       position:   { x: CTX_PAD_H, y: yChild },
       data: {
-        contextName:  ctx.name,
+        contextName:   ctx.name,
         greeting,
-        waitExten:    menuWaitExten,
-        digits:       menuDigits,
+        greetingLabel, // label da linha Background: 'menu', 'inicio', etc.
+        waitExten:     menuWaitExten,
+        digits:        menuDigits,
         invalidMacro,
         timeoutMacro,
-        maxRetry:     2,
-        retryGoto:    '',
-        invalidSound: '',
-        _dtmfGotos:   dtmfGotos, // consumido por resolveReferences, ignorado pelo exporter
+        maxRetry:      2,
+        retryGoto:     '',
+        invalidSound:  '',
+        rawDigitLines, // todas as linhas brutas por extensão DTMF
+        _dtmfGotos:    dtmfGotos, // consumido por resolveReferences, ignorado pelo exporter
+        isDirty:       false,
       },
       parentNode: ctxId,
       extent:     'parent',
@@ -753,6 +972,7 @@ export function parseConfFile(text) {
       numberDialed: globalConfig.numberDialed,
       logIvr:       false,
       customerAgi:  false,
+      isDirty:      false,
     },
   };
   allNodes.push(configNode);

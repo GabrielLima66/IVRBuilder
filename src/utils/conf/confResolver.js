@@ -95,10 +95,9 @@ function appToNodeData(application, args, hasParens = true) {
     case 'noop':
       return { type: 'noop', data: { text: params, label: '' } };
 
-    case 'playback': {
-      const fname = params.split('/').pop();
-      return { type: 'playback', data: { filename: fname, label: '' } };
-    }
+    case 'playback':
+      // Store the full path as-is — exporter emits Playback(filename) without adding ${SOUND_PATH}/
+      return { type: 'playback', data: { filename: params, label: '' } };
 
     case 'background': {
       // Suporta múltiplos arquivos separados por &:
@@ -186,9 +185,8 @@ function appToNodeData(application, args, hasParens = true) {
 
     case 'agi': {
       const parts  = params.split(',');
-      // BUG 1: preserva o path completo SEM adicionar ${AGI_PATH}/ e SEM strip de prefixo
+      // Preserva o path completo sem strip — exporter emite o path literalmente como no .conf
       const script = (parts[0] || '').trim();
-      // BUG 1: preserva capitalização original da aplicação (Agi vs AGI)
       return { type: 'agi', data: { script, originalCasing: application, params: parts.slice(1).filter(Boolean), label: '' } };
     }
 
@@ -553,18 +551,18 @@ function resolveContext(rawCtx, globalConfig, isFirstContext) {
       continue;
     }
 
-    // BUG 7: preserva o label da extensão no data do nó (usado para distinguir
-    // Background standalone de Background de menu no passo 4)
+    // Preserva _label (distingue Background standalone de menu) e inlineComment
     const nodeData = { ...nd.data };
     if (ext.label) nodeData._label = ext.label;
+    if (ext.inlineComment) nodeData.inlineComment = ext.inlineComment;
     childNodes.push({ type: nd.type, data: nodeData });
   }
 
   // ── 3. Process commented extensions ────────────────────────────────────
   for (const rawLine of rawCtx.commentedLines) {
     const resolved = resolveCommentedLine(rawLine);
-    // Reconstruct the original commented line for _origLine
-    const origLine = `;exten => ${rawLine}`;
+    // rawLine from the lexer already contains 'exten => ...', so just prepend ';'
+    const origLine = `;${rawLine}`;
     childNodes.push({
       type: resolved.type,
       data: resolved.data,
@@ -631,10 +629,13 @@ function resolveContext(rawCtx, globalConfig, isFirstContext) {
     const DIGIT_ORDER = ['1', '2', '3', '4', '5', '6', '7', '8', '9', '0'];
     const menuDigits = [];
 
+    let invalidMacro = '';
+    let timeoutMacro = '';
+
     for (const dig of DIGIT_ORDER) {
       if (!dtmfMap.has(dig)) continue;
       const block = dtmfMap.get(dig);
-      const { actions, finalDest, logIvrLabel } = processOptionLines(block.lines); // BUG 2
+      const { actions, finalDest, logIvrLabel } = processOptionLines(block.lines);
 
       if (finalDest?.type === 'context') dtmfGotos[dig] = finalDest.contextName;
       else if (finalDest?.type === 'queue') dtmfGotos[dig] = finalDest.ctx;
@@ -645,20 +646,18 @@ function resolveContext(rawCtx, globalConfig, isFirstContext) {
         comment:          block.comment || null,
         actions,
         finalDestination: finalDest,
-        logIvrLabel:      logIvrLabel || null,   // BUG 2: label original do Macro(logIvr,...)
+        logIvrLabel:      logIvrLabel || null,
       });
     }
 
-    // ── Opções i (inválido) e t (timeout) ───────────────────────────────────
-    let invalidMacro = '';
-    let timeoutMacro = '';
+    // ── Opções i (inválido) e t (timeout) ────────────────────────────────────
     let invalidOption = null;
     let timeoutOption = null;
 
     for (const ext of ['i', 't']) {
       if (!dtmfMap.has(ext)) continue;
       const block = dtmfMap.get(ext);
-      const { actions, finalDest, logIvrLabel } = processOptionLines(block.lines); // BUG 2
+      const { actions, finalDest, logIvrLabel } = processOptionLines(block.lines);
 
       if (finalDest?.type === 'context') dtmfGotos[ext] = finalDest.contextName;
       else if (finalDest?.type === 'queue') dtmfGotos[ext] = finalDest.ctx;
@@ -697,8 +696,8 @@ function resolveContext(rawCtx, globalConfig, isFirstContext) {
         digits:           menuDigits,
         invalidMacro,
         timeoutMacro,
-        invalidMacroName: invalidMacro,  // nome exato preservado (sem replace)
-        timeoutMacroName: timeoutMacro,  // nome exato preservado (sem replace)
+        invalidMacroName: invalidMacro,
+        timeoutMacroName: timeoutMacro,
         invalidOption,
         timeoutOption,
         maxRetry:         2,
@@ -715,7 +714,7 @@ function resolveContext(rawCtx, globalConfig, isFirstContext) {
     childNodes.push(inc);
   }
 
-  return { childNodes, dtmfGotos, directives: rawCtx.directives };
+  return { childNodes: detectIntegrationBlocks(childNodes), dtmfGotos, directives: rawCtx.directives };
 }
 
 // ── Résolution des références cross-contexte ─────────────────────────────────
@@ -773,6 +772,14 @@ function buildCrossRefs(resolvedContexts) {
           break;
         }
 
+        case 'integration': {
+          const dest = node.data?.destination || {};
+          if (dest.type === 'goto' && dest.context) {
+            refs.push({ sourceCtxName: ctx.name, sourceNodeIdx: String(i), sourceHandle: 'out', targetCtxName: dest.context, color: 'green' });
+          }
+          break;
+        }
+
         default:
           break;
       }
@@ -781,6 +788,104 @@ function buildCrossRefs(resolvedContexts) {
 
   // Filter out refs to contexts not in the imported file (will become unresolvedRefs)
   return refs;
+}
+
+// ── IntegrationBlock detection ───────────────────────────────────────────────
+
+/**
+ * Scans childNodes for the pattern: ≥2 consecutive Set nodes + AGI + optional Route.
+ * Collapses matching runs into a single integration node.
+ *
+ * The detection skips commented nodes so that a single ;exten comment in the
+ * middle of a set block does NOT break the pattern.
+ *
+ * @param {ResolvedNodeData[]} childNodes
+ * @returns {ResolvedNodeData[]}
+ */
+function detectIntegrationBlocks(childNodes) {
+  const result = [];
+  let i = 0;
+
+  while (i < childNodes.length) {
+    const cur = childNodes[i];
+
+    // Only look for runs starting with a non-commented set node
+    if (cur.type === 'set' && !cur.commented) {
+      // Collect consecutive (non-commented) set nodes
+      let j = i;
+      while (j < childNodes.length && childNodes[j].type === 'set' && !childNodes[j].commented) {
+        j++;
+      }
+      const setCount = j - i;
+
+      // Need ≥2 sets followed immediately by an AGI node
+      if (
+        setCount >= 2 &&
+        j < childNodes.length &&
+        childNodes[j].type === 'agi' &&
+        !childNodes[j].commented
+      ) {
+        const agiNode = childNodes[j];
+        let endIdx = j + 1;
+        let destination = { type: 'none', context: '', extension: 's', priority: '1', queue: '', queueOptions: '' };
+
+        // Optional: a route node (goto or queue) immediately after AGI
+        if (
+          endIdx < childNodes.length &&
+          childNodes[endIdx].type === 'route' &&
+          !childNodes[endIdx].commented
+        ) {
+          const routeNode = childNodes[endIdx];
+          if (routeNode.data?.routeMode === 'fila') {
+            destination = {
+              type: 'queue',
+              queue: routeNode.data.queue || '',
+              queueOptions: routeNode.data.queueOptions || '',
+              context: '', extension: 's', priority: '1',
+            };
+          } else if (routeNode.data?.routeMode === 'contexto') {
+            destination = {
+              type: 'goto',
+              context:   routeNode.data.context   || '',
+              extension: routeNode.data.extension || 's',
+              priority:  routeNode.data.priority  || '1',
+              queue: '', queueOptions: '',
+            };
+          }
+          // routeMode === 'macro' is not absorbed — leave as separate node
+          if (destination.type !== 'none') endIdx++;
+        }
+
+        // Build variables from the consecutive set nodes
+        const variables = [];
+        for (let k = i; k < j; k++) {
+          const assignment = childNodes[k].data?.assignment || '';
+          const eqIdx = assignment.indexOf('=');
+          const key   = eqIdx >= 0 ? assignment.slice(0, eqIdx) : assignment;
+          const value = eqIdx >= 0 ? assignment.slice(eqIdx + 1) : '';
+          variables.push({ key, value });
+        }
+
+        result.push({
+          type: 'integration',
+          data: {
+            variables,
+            agiScript:  agiNode.data?.script || '',
+            agiParams:  Array.isArray(agiNode.data?.params) ? agiNode.data.params : [],
+            destination,
+          },
+        });
+
+        i = endIdx;
+        continue;
+      }
+    }
+
+    result.push(cur);
+    i++;
+  }
+
+  return result;
 }
 
 // ── Entry point ──────────────────────────────────────────────────────────────
@@ -799,7 +904,7 @@ export function resolve(rawContexts) {
       contexts: [],
       crossRefs: [],
       unresolvedRefs: [],
-      stats: { contexts: 0, nodesByType: {}, commented: [], raw: [], unresolvedRefs: [] },
+      stats: { contexts: 0, nodesByType: {}, commented: [], raw: [], naoReconhecidos: [], unresolvedRefs: [] },
     };
   }
 
@@ -820,6 +925,7 @@ export function resolve(rawContexts) {
     nodesByType: {},
     commented: [],
     raw: [],
+    naoReconhecidos: [], // [{ comando, args, exemplo, contextoOrigem, extensaoOrigem, ocorrencias }]
   };
 
   for (let i = 0; i < rawContexts.length; i++) {
@@ -836,7 +942,26 @@ export function resolve(rawContexts) {
       }
       const t = n.type;
       stats.nodesByType[t] = (stats.nodesByType[t] || 0) + 1;
-      if (t === 'raw') stats.raw.push(n.data?.rawLine || '');
+      if (t === 'raw' && n.data?.rawLine) {
+        const rawLine  = n.data.rawLine;
+        stats.raw.push(rawLine);
+        const parenIdx = rawLine.indexOf('(');
+        const comando  = (parenIdx >= 0 ? rawLine.slice(0, parenIdx) : rawLine).trim();
+        const args     = parenIdx >= 0 ? rawLine.slice(parenIdx + 1).replace(/\)$/, '') : '';
+        const existing = stats.naoReconhecidos.find((x) => x.comando === comando);
+        if (existing) {
+          existing.ocorrencias++;
+        } else {
+          stats.naoReconhecidos.push({
+            comando,
+            args,
+            exemplo: rawLine,
+            contextoOrigem: rawCtx.name,
+            extensaoOrigem: 's',
+            ocorrencias: 1,
+          });
+        }
+      }
     }
 
     resolvedContexts.push({

@@ -7,6 +7,8 @@ import { useThemeContext } from '../../contexts/ThemeContext';
 import { resolveNodeColor } from '../../utils/nodeColors';
 import { useModeContext } from '../../contexts/ModeContext';
 import { getNodeLabel } from '../../config/nodeModeConfig';
+import { useReviewMode } from '../../contexts/ReviewModeContext';
+import { useConfig } from '../../contexts/ConfigContext';
 
 const btnStyle = (color) => ({
   flex: 1,
@@ -33,10 +35,20 @@ const ActionNode = memo(({ id, data, selected, type }) => {
   // ── Cor resolvida para o tema atual ─────────────────────────────────────────
   // Remapeia cores que colidiriam com o chrome do tema (verde no matrix,
   // roxo no orpen), garantindo contraste adequado em ambos os temas.
-  const theme   = useThemeContext();
-  const modeCtx = useModeContext();
-  const color   = resolveNodeColor(meta.color, theme);
+  const theme      = useThemeContext();
+  const modeCtx    = useModeContext();
+  const reviewMode = useReviewMode();
+  const { highFidelityMode } = useConfig();
+  const color      = resolveNodeColor(meta.color, theme);
   const displayTitle = getNodeLabel(type, modeCtx);
+
+  // Nó preservado: importado, não editado, highFidelityMode ativo
+  const isPreserved = highFidelityMode && !data.isDirty && !!data.originalLine;
+
+  // confidence badge in review mode
+  const confidenceLevel = reviewMode
+    ? (data._commented || type === 'execif' || type === 'execiftime' ? 'medium' : 'high')
+    : null;
 
   const handleActivate = useCallback(() => {
     setNodes((ns) =>
@@ -88,12 +100,23 @@ const ActionNode = memo(({ id, data, selected, type }) => {
         <span style={{ display: 'flex', alignItems: 'center', gap: 6, textShadow: `0 0 5px ${color}` }}>
           <Icon size={12} /> {data._commented ? `// ${displayTitle}` : displayTitle}
         </span>
-        {data._commented
-          ? <span className="badge" style={{ borderColor: '#ff505088', color: '#ff5050' }}>DESATIVADO</span>
-          : modeCtx !== 'amigavel' && (
-              <span className="badge" style={{ borderColor: color, color }}>{meta.app}</span>
-            )
-        }
+        <span style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
+          {confidenceLevel === 'medium' && (
+            <span className="badge" style={{ borderColor: '#ffcc0099', color: '#ffcc00', fontSize: 9 }} title="Mapeamento parcial — verifique este nó">?</span>
+          )}
+          {confidenceLevel === 'high' && (
+            <span className="badge" style={{ borderColor: '#00cc4499', color: '#00cc44', fontSize: 9 }} title="Mapeamento bem-sucedido">✓</span>
+          )}
+          {isPreserved && (
+            <span className="node-preserved-badge" title="Linha original preservada — não editado">⬤</span>
+          )}
+          {data._commented
+            ? <span className="badge" style={{ borderColor: '#ff505088', color: '#ff5050' }}>DESATIVADO</span>
+            : modeCtx !== 'amigavel' && (
+                <span className="badge" style={{ borderColor: color, color }}>{meta.app}</span>
+              )
+          }
+        </span>
       </div>
 
       {meta.supportsLabel && data.label?.trim() && (

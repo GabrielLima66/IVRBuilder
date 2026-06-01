@@ -4,6 +4,7 @@ import { cls } from '../../utils/common';
 import { useActiveSelection } from '../../contexts/ActiveSelectionContext';
 import { useModeContext } from '../../contexts/ModeContext';
 import { getNodeLabel } from '../../config/nodeModeConfig';
+import { useConfig } from '../../contexts/ConfigContext';
 
 const MODE_COLOR = { contexto: '#00d4ff', fila: '#ff8c00', macro: '#a78bfa' };
 const MODE_LABEL = { contexto: 'CONTEXTO', fila: 'FILA', macro: 'MACRO+FILA' };
@@ -32,6 +33,8 @@ const RouteNode = memo(({ id, data, selected }) => {
   const isConnectedActive = activeNodeIds.has(id);
   const modeCtx     = useModeContext();
   const displayTitle = getNodeLabel('route', modeCtx);
+  const { highFidelityMode } = useConfig();
+  const isPreserved = highFidelityMode && !data.isDirty && !!data.originalLine;
 
   const handleActivate = useCallback(() => {
     setNodes((ns) =>
@@ -73,6 +76,7 @@ const RouteNode = memo(({ id, data, selected }) => {
         <span style={{ textShadow: `0 0 5px ${color}` }}>
           {data._commented ? `// ${displayTitle}` : `▶ ${displayTitle}`}
         </span>
+        {isPreserved && <span className="node-preserved-badge" title="Linha original preservada — não editado">⬤</span>}
         {data._commented
           ? <span className="badge" style={{ borderColor: '#ff505088', color: '#ff5050' }}>DESATIVADO</span>
           : modeCtx !== 'amigavel' && (

@@ -82,8 +82,9 @@ export function map(tokens) {
           priority:  token.priority,
           label:     token.label,
           application: token.application,
-          args:      token.args,
-          hasParens: token.hasParens ?? true,
+          args:          token.args,
+          hasParens:     token.hasParens ?? true,
+          inlineComment: token.inlineComment || null,
           lineNumber: token.lineNumber,
         });
         break;
@@ -91,15 +92,16 @@ export function map(tokens) {
       case 'extension_dtmf': {
         if (!current) break;
         const block = getDtmfBlock(token.digit);
-        // Associa o comentário de linha ao primeiro token do bloco
         if (block.lines.length === 0 && pendingComment !== null) {
           block.comment = pendingComment;
         }
         pendingComment = null;
         block.lines.push({
-          application: token.application,
-          args:        token.args,
-          hasParens:   token.hasParens ?? true,
+          priority:     token.priority,
+          application:  token.application,
+          args:         token.args,
+          hasParens:    token.hasParens ?? true,
+          inlineComment: token.inlineComment || null,
         });
         break;
       }

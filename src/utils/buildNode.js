@@ -129,6 +129,17 @@ export function buildNode(type, position) {
     case 'dial':
       return { ...base, data: { destination: 'SIP/ramal', timeout: '30', options: '' } };
 
+    case 'integration':
+      return {
+        ...base,
+        data: {
+          variables:  [],
+          agiScript:  '',
+          agiParams:  [],
+          destination: { type: 'none', context: '', extension: 's', priority: '1', queue: '', queueOptions: '' },
+        },
+      };
+
     // Sistema / Áudio
     case 'answer':
       return { ...base, data: {} };
@@ -140,6 +151,12 @@ export function buildNode(type, position) {
       return { ...base, data: { filename: 'nome-do-audio', label: '' } };
     case 'background':
       return { ...base, data: { filename: 'nome-do-audio', filenames: ['nome-do-audio'], label: '' } };
+
+    // Elementos de formatação — criados apenas pelo parser durante importação
+    case 'blankline':
+      return { ...base, data: { count: 1 } };
+    case 'sectioncomment':
+      return { ...base, data: { text: ';; comentário de seção', style: 'double' } };
 
     default:
       return base;

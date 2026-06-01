@@ -10,7 +10,7 @@ import React, { useState, useRef, useCallback, useMemo } from 'react';
 // ── Constantes de layout ──────────────────────────────────────────────────────
 const PANEL_W     = 320;
 const ITEM_H      = 48; // px — altura de cada item da lista
-const DRAFT_COLOR = '#666';
+const DRAFT_COLOR = '#909090';
 
 // ── Utilitário: reordena e normaliza exportOrder de 1..N ─────────────────────
 function reorderList(list, fromIdx, toIdx) {
@@ -333,7 +333,7 @@ export default function ExportOrderPanel({ nodes, onClose, onUpdateNode }) {
                 title={item.isDraft ? 'Ativar para exportação' : 'Marcar como rascunho (excluir da exportação)'}
                 style={{
                   background: item.isDraft ? 'rgba(100,100,100,0.2)' : 'transparent',
-                  border: item.isDraft ? '1px solid #555' : '1px solid var(--line)',
+                  border: item.isDraft ? '1px solid #777' : '1px solid var(--line)',
                   color: item.isDraft ? DRAFT_COLOR : 'var(--neon-dim)',
                   fontFamily: 'inherit', fontSize: 8, cursor: 'pointer',
                   padding: '2px 5px', borderRadius: 2, letterSpacing: 0.5,

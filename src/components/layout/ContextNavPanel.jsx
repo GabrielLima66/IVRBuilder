@@ -37,7 +37,7 @@ const CtxItem = memo(function CtxItem({
         gap:        5,
         width:      '100%',
         padding:    '5px 6px',
-        background: active ? 'rgba(0,255,65,0.07)' : hov ? 'var(--hover-bg)' : 'transparent',
+        background: active ? 'var(--neon-glow-faint)' : hov ? 'var(--hover-bg)' : 'transparent',
         border:         'none',
         borderLeft:     active
           ? '2px solid var(--neon)'
@@ -234,7 +234,7 @@ export default function ContextNavPanel({ nodes, onNavigate }) {
             {/* Separador entre config e contextos */}
             <div style={{
               height:     1,
-              background: 'rgba(0,255,65,0.15)',
+              background: 'var(--neon-glow-soft)',
               margin:     '5px 2px 5px',
             }} />
           </>
@@ -244,7 +244,7 @@ export default function ContextNavPanel({ nodes, onNavigate }) {
         {filteredContexts.length === 0 && q && (
           <div style={{
             fontSize:   10,
-            color:      '#555',
+            color:      'var(--panel-hint-color)',
             padding:    '14px 0',
             textAlign:  'center',
             letterSpacing: 0.5,
@@ -256,7 +256,7 @@ export default function ContextNavPanel({ nodes, onNavigate }) {
         {filteredContexts.length === 0 && !q && (
           <div style={{
             fontSize:   10,
-            color:      '#555',
+            color:      'var(--panel-hint-color)',
             padding:    '14px 0',
             textAlign:  'center',
             letterSpacing: 0.5,

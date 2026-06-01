@@ -125,9 +125,13 @@ export function lex(content) {
       const priorityRaw = extenMatch[2].trim();
       let cmdFull = extenMatch[3].trim();
 
-      // Strip trailing ;; inline comments from cmdFull
+      // Extract ;; inline comment from cmdFull — store it, don't discard
+      let inlineComment = null;
       const commentIdx = cmdFull.indexOf(';;');
-      if (commentIdx >= 0) cmdFull = cmdFull.slice(0, commentIdx).trim();
+      if (commentIdx >= 0) {
+        inlineComment = cmdFull.slice(commentIdx).trim(); // keeps ';;comment'
+        cmdFull = cmdFull.slice(0, commentIdx).trim();
+      }
 
       // Extract label from priority like n(label)
       let priority = priorityRaw;
@@ -155,6 +159,7 @@ export function lex(content) {
           application,
           args,
           hasParens,
+          inlineComment,
           lineNumber,
         });
       } else if (isDtmf) {
@@ -165,6 +170,7 @@ export function lex(content) {
           application,
           args,
           hasParens,
+          inlineComment,
           lineNumber,
         });
       } else {

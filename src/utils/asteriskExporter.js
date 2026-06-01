@@ -41,6 +41,10 @@ function getOrderedContexts(nodes) {
 // ─────────────────────────────────────────────────────────────────────────────
 function generateDialplanFromContexts(nodes, edges, findNode, outEdges, options = {}) {
   const includeSectionComments = options.includeSectionComments !== false;
+  // highFidelityMode (padrão: true) — usa originalLine para nós não editados,
+  // garantindo fidelidade literal ao .conf importado.
+  // false = sempre reconstrói a partir dos campos estruturados (normaliza formatação).
+  const highFidelityMode = options.highFidelityMode !== false;
   const ctxNodes = getOrderedContexts(nodes);
   // O(1) context lookup by name — used in label-reference validation (inside loops)
   const contextByName = new Map(ctxNodes.map((n) => [n.data.contextName, n]));
@@ -75,7 +79,11 @@ function generateDialplanFromContexts(nodes, edges, findNode, outEdges, options 
   function linesForChild(n) {
     if (!n) return [];
     if (n.data?._commented) return n.data._origLine ? [n.data._origLine] : [];
-    if (ACTION_META[n.type]) return [actionLine(n)].filter(Boolean);
+    if (ACTION_META[n.type]) {
+      const line = actionLine(n);
+      if (!line) return [];
+      return [n.data?.inlineComment ? `${line}  ${n.data.inlineComment}` : line];
+    }
 
     switch (n.type) {
       case 'config': {
@@ -130,12 +138,44 @@ function generateDialplanFromContexts(nodes, edges, findNode, outEdges, options 
             `Goto(orpen-ivr-transfer,s,1)`,
           ];
         }
+        // _fmt preserva aridade e capitalização originais (nó importado e não editado)
+        if (!n.data.isDirty && n.data._fmt?.gotoArgs?.length) {
+          const app = n.data._fmt.appCasing || 'Goto';
+          return [`${app}(${n.data._fmt.gotoArgs.join(',')})`];
+        }
         // _argCount preserva a aridade original do Goto (1, 2 ou 3 partes)
         const ac = n.data._argCount;
         if (ac === 1) return [`Goto(${n.data.context || ''})`];
         if (ac === 2) return [`Goto(${n.data.context || ''},${n.data.extension || 's'})`];
         return [`Goto(${n.data.context || ''},${n.data.extension || 's'},${n.data.priority || '1'})`];
       }
+      case 'integration': {
+        const out = [];
+        const vars = Array.isArray(n.data?.variables) ? n.data.variables : [];
+        for (const v of vars) {
+          if (v.key) out.push(`Set(${v.key}=${v.value ?? ''})`);
+        }
+        const script = (n.data?.agiScript || '').trim();
+        if (script) {
+          const params = (n.data?.agiParams || []).filter(Boolean);
+          const argStr = params.length ? ',' + params.join(',') : '';
+          out.push(`AGI(\${AGI_PATH}/${script}${argStr})`);
+        }
+        const dest = n.data?.destination || {};
+        if (dest.type === 'goto' && dest.context) {
+          out.push(`Goto(${dest.context},${dest.extension || 's'},${dest.priority || '1'})`);
+        } else if (dest.type === 'queue' && dest.queue) {
+          const opts = dest.queueOptions ? `,${dest.queueOptions}` : '';
+          out.push(`Queue(${dest.queue}${opts})`);
+        }
+        return out;
+      }
+      case 'blankline':
+        // Emite N linhas em branco (preserva espaçamento original)
+        return Array(n.data?.count || 1).fill('');
+      case 'sectioncomment':
+        // Emite o comentário de seção original intacto
+        return n.data?.text ? [n.data.text] : [];
       case 'commented':
         return []; // linhas comentadas não geram output no .conf
       case 'raw':
@@ -388,6 +428,7 @@ function generateDialplanFromContexts(nodes, edges, findNode, outEdges, options 
         // DTMF para menus standalone
         for (const m of scMenus) {
           const digits     = m.data.digits || [];
+          const scMenuLabel = (m.data.greetingLabel || m.data.label || '').trim() || 'menu';
           const getDigEdge = (digitId) =>
             edges.find((x) => x.source === m.id && x.sourceHandle === `d-${digitId}`);
 
@@ -412,24 +453,45 @@ function generateDialplanFromContexts(nodes, edges, findNode, outEdges, options 
 
           for (const dig of digits) {
             const e = getDigEdge(dig.id);
-            if (e) emitDigSC(dig.id, findNode(e.target));
+            if (!m.data.isDirty && m.data.rawDigitLines?.[dig.id]?.length) {
+              for (const rl of m.data.rawDigitLines[dig.id]) {
+                const ic = rl.inlineComment ? `  ${rl.inlineComment}` : '';
+                emit(`exten => ${dig.id},${rl.priority},${rl.cmdFull}${ic}`);
+              }
+            } else if (e) {
+              emitDigSC(dig.id, findNode(e.target));
+            }
           }
 
           const ei = getDigEdge('i');
-          if (ei) {
+          if (!m.data.isDirty && m.data.rawDigitLines?.['i']?.length) {
+            for (const rl of m.data.rawDigitLines['i']) {
+              const ic = rl.inlineComment ? `  ${rl.inlineComment}` : '';
+              emit(`exten => i,${rl.priority},${rl.cmdFull}${ic}`);
+            }
+          } else if (ei) {
             emitDigSC('i', findNode(ei.target));
+          } else if (m.data.rawILines && m.data.rawILines.length) {
+            for (const l of m.data.rawILines) emit(`exten => i,${l.priority},${l.application}(${l.args})`);
           } else {
             const inv = (m.data.invalidMacro || 'macro-menu-invalid-orpen-home').replace(/^macro-/, '');
             emit(`exten => i,1,Macro(${inv})`);
-            emit(`exten => i,n,Goto(${ENTRY_CTX},s,${scMenus.length ? 'menu' : '1'})`);
+            emit(`exten => i,n,Goto(${ENTRY_CTX},s,${scMenuLabel})`);
           }
           const et = getDigEdge('t');
-          if (et) {
+          if (!m.data.isDirty && m.data.rawDigitLines?.['t']?.length) {
+            for (const rl of m.data.rawDigitLines['t']) {
+              const ic = rl.inlineComment ? `  ${rl.inlineComment}` : '';
+              emit(`exten => t,${rl.priority},${rl.cmdFull}${ic}`);
+            }
+          } else if (et) {
             emitDigSC('t', findNode(et.target));
+          } else if (m.data.rawTLines && m.data.rawTLines.length) {
+            for (const l of m.data.rawTLines) emit(`exten => t,${l.priority},${l.application}(${l.args})`);
           } else {
             const tmo = (m.data.timeoutMacro || 'macro-menu-timeout-orpen-home').replace(/^macro-/, '');
             emit(`exten => t,1,Macro(${tmo})`);
-            emit(`exten => t,n,Goto(${ENTRY_CTX},s,${scMenus.length ? 'menu' : '1'})`);
+            emit(`exten => t,n,Goto(${ENTRY_CTX},s,${scMenuLabel})`);
           }
         }
 
@@ -497,10 +559,16 @@ function generateDialplanFromContexts(nodes, edges, findNode, outEdges, options 
         }
       }
 
-      if (c.type === 'menu') {
+      if (c.type === 'blankline') {
+        // Linhas em branco: emitem como raw vazio, sem prefixo exten =>
+        const count = c.data?.count || 1;
+        for (let bi = 0; bi < count; bi++) sSeq.push({ line: '', isRaw: true });
+      } else if (c.type === 'sectioncomment') {
+        // Comentários de seção: emitem verbatim, sem prefixo exten =>
+        if (c.data?.text) sSeq.push({ line: c.data.text, isRaw: true });
+      } else if (c.type === 'menu') {
         // MenuNode → Background (múltiplos arquivos via &) + WaitExten + marcador atômico
         const menuLabel = (c.data.label != null ? c.data.label : 'menu').trim();
-        // Constrói a linha Background com audioFiles (suporta múltiplos via &)
         const audioFiles = Array.isArray(c.data.audioFiles) && c.data.audioFiles.length > 0
           ? c.data.audioFiles
           : [c.data.greeting || '1-bem-vindo'];
@@ -508,6 +576,15 @@ function generateDialplanFromContexts(nodes, edges, findNode, outEdges, options 
         sSeq.push({ line: bgLine, label: menuLabel });
         sSeq.push({ line: `WaitExten(${c.data.waitExten || c.data.waitSeconds || 4})` });
         sSeq.push({ menuFlush: c }); // ← flush DTMF aqui, antes do próximo nó
+      } else if (
+        highFidelityMode &&
+        !c.data?.isDirty &&
+        c.data?.originalLine &&
+        !c.data?._commented
+      ) {
+        // Fidelidade máxima: emite a linha original exatamente como estava no .conf.
+        // Cobre qualquer formatação não capturada pelos metadados (_fmt, rawArgs etc.).
+        sSeq.push({ originalLine: c.data.originalLine });
       } else {
         const lns = linesForChild(c);
         const nodeLbl = ACTION_META[c.type]?.supportsLabel ? (c.data.label || '').trim() : '';
@@ -544,13 +621,17 @@ function generateDialplanFromContexts(nodes, edges, findNode, outEdges, options 
     }
 
     // ── Emissão ──────────────────────────────────────────────────────────────
-    // Verifica se há alguma linha real além dos marcadores menuFlush
-    const hasRealLines = sSeq.some((item) => !item.menuFlush);
+    // Verifica se há alguma linha real além de marcadores e blank-lines puras
+    const hasRealLines = sSeq.some(
+      (item) => !item.menuFlush && (item.originalLine != null || item.line || item.isRaw === false)
+    );
 
     if (!hasRealLines) {
       emit(`exten => s,1,Noop(## ${ctxName} ##)`);
     } else {
-      let seqIdx = 0;
+      // extenLineCount — conta TODAS as linhas exten emitidas (original + reconstruídas).
+      // Garante que linhas reconstruídas após originalLines recebam prioridade 'n' corretamente.
+      let extenLineCount = 0;
 
       // Emite TODAS as extensões DTMF de um menu imediatamente (bloco atômico).
       // Chamado pelo marcador { menuFlush } no meio do sSeq.
@@ -591,11 +672,10 @@ function generateDialplanFromContexts(nodes, edges, findNode, outEdges, options 
         };
 
         // ── Helper: injeta virtual context inline (sem bloco [nome] próprio) ────
-        // Emite Macro(sayDigit) + Macro(logIvr) + linhas dos filhos como exten => extId,N,...
         const emitVirtualCtxInline = (virtualCtx, extId, logIvrLabel) => {
           const childIds  = virtualCtx.data.childOrder || [];
           const children  = childIds.map((cid) => findNode(cid)).filter(Boolean);
-          if (!children.length) return; // contexto vazio — não emite boilerplate
+          if (!children.length) return;
           let pri1 = true;
           const emitLn = (line) => {
             if (!line) return;
@@ -609,6 +689,7 @@ function generateDialplanFromContexts(nodes, edges, findNode, outEdges, options 
             for (const ln of linesForChild(child)) emitLn(ln);
           }
         };
+
 
         for (const dig of digits) {
           // ── Modo rico: usa actions[] e finalDestination stored no dig (importação) ──
@@ -668,7 +749,6 @@ function generateDialplanFromContexts(nodes, edges, findNode, outEdges, options 
           const e = handleEdge(dig.id);
           if (!e) continue;
           const eTgt = findNode(e.target);
-          // Virtual context: injeta linhas inline (não emite [bloco] próprio)
           if (eTgt?.type === 'context' && eTgt.data?.expandedFrom === m.id) {
             emitVirtualCtxInline(eTgt, dig.id, dig.logIvrLabel);
           } else {
@@ -676,13 +756,12 @@ function generateDialplanFromContexts(nodes, edges, findNode, outEdges, options 
           }
         }
 
-        // ── Helper: emite actions de uma opção i/t respeitando GotoIfTime ───────
+        // ── Helper: emite actions de uma opção i/t ────────────────────────────
         const emitOptActions = (opt, extId) => {
           let pri1 = true;
           for (const action of (opt.actions || [])) {
             let ln = null;
             if (action.type === 'time') {
-              // BUG 5: GotoIfTime dentro de opção DTMF
               const dest = (action.data.trueContext || '').trim();
               if (dest) {
                 const spec   = buildTimeExport(action.data);
@@ -695,10 +774,9 @@ function generateDialplanFromContexts(nodes, edges, findNode, outEdges, options 
             }
             if (ln) { emit(`exten => ${extId},${pri1 ? '1' : 'n'},${ln}`); pri1 = false; }
           }
-          return !pri1; // true se emitiu pelo menos uma linha
+          return !pri1;
         };
 
-        // ── Helper: emite Goto com aridade correta (BUG 7 i/t + BUG 4) ────────
         const emitGotoAridade = (fd, extId) => {
           if (!fd) return false;
           if (fd.type === 'context') {
@@ -714,7 +792,7 @@ function generateDialplanFromContexts(nodes, edges, findNode, outEdges, options 
           return false;
         };
 
-        // ── Opção i (inválido) ───────────────────────────────────────────────
+        // ── Opção i (inválido) ────────────────────────────────────────────────
         const iOpt = m.data.invalidOption;
         const ei   = handleEdge('i');
         const hasStoredI = iOpt && (iOpt.actions?.length > 0 || iOpt.finalDestination != null);
@@ -722,7 +800,6 @@ function generateDialplanFromContexts(nodes, edges, findNode, outEdges, options 
           if (iOpt.comment) emit(`;${iOpt.comment}`);
           emitOptActions(iOpt, 'i');
           const ifd = iOpt.finalDestination;
-          // BUG 7/4: emite Goto com aridade correta; fallback ao menu se sem destino
           if (!emitGotoAridade(ifd, 'i')) emit(`exten => i,n,Goto(${ctxName},s,${menuGotoPri})`);
         } else if (ei) {
           const eiTgt = findNode(ei.target);
@@ -732,7 +809,6 @@ function generateDialplanFromContexts(nodes, edges, findNode, outEdges, options 
             emitDigit('i', eiTgt);
           }
         } else {
-          // BUG 4: usa invalidMacroName (nome exato sem replace) se disponível
           const inv = m.data.invalidMacroName || (m.data.invalidMacro || 'macro-menu-invalid-orpen-home').replace(/^macro-/, '');
           emit(`exten => i,1,Macro(${inv})`);
           emit(`exten => i,n,Goto(${ctxName},s,${menuGotoPri})`);
@@ -746,7 +822,6 @@ function generateDialplanFromContexts(nodes, edges, findNode, outEdges, options 
           if (tOpt.comment) emit(`;${tOpt.comment}`);
           emitOptActions(tOpt, 't');
           const tfd = tOpt.finalDestination;
-          // BUG 7/4: emite Goto com aridade correta; fallback ao menu se sem destino
           if (!emitGotoAridade(tfd, 't')) emit(`exten => t,n,Goto(${ctxName},s,${menuGotoPri})`);
         } else if (et) {
           const etTgt = findNode(et.target);
@@ -767,14 +842,19 @@ function generateDialplanFromContexts(nodes, edges, findNode, outEdges, options 
         if (item.menuFlush) {
           // Bloco atômico: emite DTMF do menu imediatamente após o WaitExten
           emitMenuDtmf(item.menuFlush);
+        } else if (item.originalLine != null) {
+          // Fidelidade máxima: emite a linha original verbatim (prioridade já embutida)
+          emit(item.originalLine);
+          extenLineCount++; // conta para que linhas reconstruídas seguintes usem 'n'
         } else if (item.isRaw) {
-          // Linhas raw (comentários, etc.) sem prefixo exten =>
+          // Linhas raw (include =>, blank lines, section comments, etc.) sem prefixo exten =>
           emit(item.line);
         } else {
-          const pri = seqIdx === 0 ? '1' : 'n';
+          // Linha reconstruída: deriva prioridade pela contagem de exten já emitidas
+          const pri = extenLineCount === 0 ? '1' : 'n';
           const lbl = item.label ? `(${item.label})` : '';
           emit(`exten => s,${pri}${lbl},${item.line}`);
-          seqIdx++;
+          extenLineCount++;
         }
       }
     }
@@ -925,7 +1005,7 @@ function generateDialplanLegacy(nodes, edges, findNode, outEdges) {
     emitS(`Macro(logIvr,ENTER_IVR)`);
     emitS(`Set(CHANNEL(language)=pt_BR)`);
     emitS(`Noop(## URA ${IVR} :: ${CTX} ##)`);
-    emit(`exten => s,n(menu),Background(\${SOUND_PATH}/${m.data.greeting || '1-bem-vindo'})`);
+    emit(`exten => s,n(menu),Background(${m.data.greeting || '1-bem-vindo'})`);
     emitS(`WaitExten(${m.data.waitExten || 4})`);
     sep();
 

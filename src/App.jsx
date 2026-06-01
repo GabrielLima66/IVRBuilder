@@ -27,6 +27,7 @@ import { ModeContext } from './contexts/ModeContext';
 import { ConfigProvider, useConfig } from './contexts/ConfigContext';
 import { ReviewModeContext } from './contexts/ReviewModeContext';
 import ConfigModal from './components/canvas/ConfigModal';
+import DiffModal   from './components/canvas/DiffModal';
 import HomeScreen from './screens/HomeScreen';
 import { salvarProjeto, listarProjetos } from './services/projectStorage';
 import {
@@ -144,6 +145,7 @@ function Canvas({ initialFlow, projectName, projectCreatedAt, currentProjectId, 
   }), [activeEdgeIds, activeNodeIds]);
 
   const [showExport,           setShowExport]           = useState(false);
+  const [showDiff,             setShowDiff]             = useState(false);
   const [showOrderPanel,       setShowOrderPanel]       = useState(false);
   const [showConfigModal,      setShowConfigModal]      = useState(false);
   const [exportText,           setExportText]           = useState('');
@@ -799,10 +801,11 @@ function Canvas({ initialFlow, projectName, projectCreatedAt, currentProjectId, 
 
   // ── Exportação ────────────────────────────────────────────────────────────
   const doExport = () => {
-    setExportText(generateDialplan(nodes, edges, {
+    const text = generateDialplan(nodes, edges, {
       includeSectionComments: config.includeSectionComments,
       highFidelityMode:       config.highFidelityMode,
-    }));
+    });
+    setExportText(text);
     // Computa e armazena o layout para download junto ao .conf
     try {
       const layout = extractLayout(
@@ -814,7 +817,22 @@ function Canvas({ initialFlow, projectName, projectCreatedAt, currentProjectId, 
     } catch (_) {
       setExportLayout(null);
     }
+    // Se o projeto tem originalConf e o diff está habilitado → mostra DiffModal
+    if (originalConf && config.showDiffBeforeExport) {
+      setShowDiff(true);
+      return;
+    }
     // Modo AMIGÁVEL: mostra aviso informativo na primeira exportação
+    if (mode === 'amigavel' && !localStorage.getItem('orpen-first-export-shown')) {
+      setShowFirstExportModal(true);
+    } else {
+      setShowExport(true);
+    }
+  };
+
+  // Chamado pelo DiffModal ao confirmar exportação
+  const handleDiffExport = () => {
+    setShowDiff(false);
     if (mode === 'amigavel' && !localStorage.getItem('orpen-first-export-shown')) {
       setShowFirstExportModal(true);
     } else {
@@ -1552,6 +1570,19 @@ function Canvas({ initialFlow, projectName, projectCreatedAt, currentProjectId, 
       )}
       {/* Modal de configurações */}
       {showConfigModal && <ConfigModal onClose={() => setShowConfigModal(false)} />}
+
+      {/* Modal de diff — comparação original × exportação */}
+      {showDiff && originalConf && (
+        <DiffModal
+          originalText={originalConf}
+          exportedText={exportText}
+          onExport={handleDiffExport}
+          onBack={() => setShowDiff(false)}
+          onUpdateOriginal={(newConf) => {
+            onUpdateOriginal?.(newConf);
+          }}
+        />
+      )}
 
     </div>
     </ReviewModeContext.Provider>

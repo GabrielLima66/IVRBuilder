@@ -2,6 +2,15 @@
 @tailwind components;
 @tailwind utilities;
 
+/* ── Escala de fonte da UI — aplicada via ConfigContext em :root ──────────────
+   Multiplicador que afeta sidebar, painel, header e modais.
+   Nós do canvas ficam isolados (usam sizes em px explícito).
+   ─────────────────────────────────────────────────────────────────────────── */
+:root { --ui-font-scale: 1; }
+
+/* Container de UI escalável — fonte base × escala configurada */
+.ui-scaled { font-size: calc(13px * var(--ui-font-scale)); }
+
 /* ═══════════════════════════════════════════════════════════════════════════
    TEMA: HACKING (padrão) — verde neon sobre preto terminal
    colorTheme="hacking" → data-theme="matrix"

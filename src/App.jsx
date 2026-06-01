@@ -2349,6 +2349,9 @@ export default function App() {
   // Provider estável entre trocas de tela: contexto de config/tema não remonta.
   return (
     <ConfigProvider>
+      {/* ui-scaled: aplica escala de fonte (--ui-font-scale) à UI fora dos nós do canvas.
+          Nós usam fontSize em px explícito → não são afetados pela herança de font-size. */}
+      <div className="ui-scaled" style={{ height: '100%', display: 'contents' }}>
       {screen === 'home' ? (
         <HomeScreen
           projects={projects}
@@ -2384,6 +2387,7 @@ export default function App() {
           </ReactFlowProvider>
         </div>
       )}
+      </div>
     </ConfigProvider>
   );
 }

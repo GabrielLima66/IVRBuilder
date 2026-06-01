@@ -53,6 +53,9 @@ export const CONFIG_DEFAULTS = {
   preserveComments:       true,         // bool — preservar linhas comentadas como NóComentado
   reviewModeOnImport:     true,         // bool — abrir canvas em modo revisão antes de confirmar
 
+  // Acessibilidade
+  uiFontScale:            1.0,          // 0.85–1.45 — escala da fonte da UI (não afeta nós do canvas)
+
   // Projeto
   autosaveDelay:          2,            // segundos (1–10) — debounce do autosave
   confirmBack:            true,         // bool — confirmar antes de sair com alterações
@@ -135,6 +138,12 @@ export function ConfigProvider({ children }) {
     const dataTheme = COLOR_THEME_TO_DATA_THEME[config.colorTheme] || 'matrix';
     document.documentElement.setAttribute('data-theme', dataTheme);
   }, [config.colorTheme]);
+
+  // Aplica --ui-font-scale no :root para escalar a UI sem afetar nós do canvas
+  useEffect(() => {
+    const scale = Math.max(0.85, Math.min(1.45, config.uiFontScale ?? 1.0));
+    document.documentElement.style.setProperty('--ui-font-scale', String(scale));
+  }, [config.uiFontScale]);
 
   return (
     <ConfigContext.Provider value={{ ...config, setConfig }}>

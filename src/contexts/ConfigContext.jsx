@@ -43,6 +43,9 @@ export const CONFIG_DEFAULTS = {
   includeSectionComments: true,         // bool — emitir comentários ;; no .conf exportado
   lineEnding:             'lf',         // 'lf' | 'crlf'
 
+  // Visualização
+  showFormattingElements: false,        // bool — mostrar NóLinhaEmBranco e NóComentárioSeção no canvas
+
   // Importação
   rawOnUnknown:           true,         // bool — criar NóRaw para comandos não reconhecidos
   preserveComments:       true,         // bool — preservar linhas comentadas como NóComentado

@@ -401,6 +401,14 @@ export default function ConfigModal({ onClose }) {
             hint="Define o caractere de fim de linha no .conf gerado"
           />
 
+          {/* ── VISUALIZAÇÃO ── */}
+          <SectionHeader label="VISUALIZAÇÃO" />
+          <ToggleRow
+            configKey="showFormattingElements"
+            label="Mostrar elementos de formatação"
+            hint="ON: exibe NóLinhaEmBranco e NóComentárioSeção no canvas. OFF: ocultos mas preservados na exportação"
+          />
+
           {/* ── IMPORTAÇÃO ── */}
           <SectionHeader label="IMPORTAÇÃO" />
           <ToggleRow

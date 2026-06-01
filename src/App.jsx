@@ -30,7 +30,9 @@ import { ModeContext } from './contexts/ModeContext';
 import { ConfigProvider, useConfig } from './contexts/ConfigContext';
 import { ReviewModeContext } from './contexts/ReviewModeContext';
 import ConfigModal from './components/canvas/ConfigModal';
+import ChangelogModal from './components/canvas/ChangelogModal';
 import { MenuActionsContext } from './contexts/MenuActionsContext';
+import { VERSION_STRING } from './version.js';
 import DiffModal   from './components/canvas/DiffModal';
 import HomeScreen from './screens/HomeScreen';
 import { salvarProjeto, listarProjetos } from './services/projectStorage';
@@ -212,6 +214,7 @@ function Canvas({ initialFlow, projectName, projectCreatedAt, currentProjectId, 
   const [showDiff,             setShowDiff]             = useState(false);
   const [showOrderPanel,       setShowOrderPanel]       = useState(false);
   const [showConfigModal,      setShowConfigModal]      = useState(false);
+  const [showChangelog,        setShowChangelog]        = useState(false);
   const [exportText,           setExportText]           = useState('');
   const [exportLayout,         setExportLayout]         = useState(null); // URALayout para download junto ao .conf
   const [showFirstExportModal, setShowFirstExportModal] = useState(false);
@@ -1557,6 +1560,27 @@ function Canvas({ initialFlow, projectName, projectCreatedAt, currentProjectId, 
           >
             ⚙ CONFIG
           </button>
+          {/* ── Versão clicável ──────────────────────────────────────────── */}
+          <>
+            <span style={{ color: 'var(--line)' }}>│</span>
+            <button
+              type="button"
+              onClick={() => setShowChangelog(true)}
+              title="Ver changelog"
+              style={{
+                background: 'none', border: 'none', cursor: 'pointer',
+                fontFamily: 'inherit', fontSize: 9, letterSpacing: 0.5,
+                color: 'var(--neon)', opacity: 0.4,
+                padding: '0 2px',
+                transition: 'opacity 0.15s',
+              }}
+              onMouseEnter={(e) => { e.currentTarget.style.opacity = '1'; }}
+              onMouseLeave={(e) => { e.currentTarget.style.opacity = '0.4'; }}
+            >
+              v{VERSION_STRING}
+            </button>
+          </>
+
           {/* ── Toggle PRO / AMIGÁVEL ─────────────────────────────────────── */}
           <>
             <span style={{ color: 'var(--line)' }}>│</span>
@@ -2048,6 +2072,8 @@ function Canvas({ initialFlow, projectName, projectCreatedAt, currentProjectId, 
       )}
       {/* Modal de configurações */}
       {showConfigModal && <ConfigModal onClose={() => setShowConfigModal(false)} />}
+      {/* Modal de changelog/versão */}
+      {showChangelog && <ChangelogModal onClose={() => setShowChangelog(false)} />}
 
       {/* Modal de diff — comparação original × exportação */}
       {showDiff && originalConf && (

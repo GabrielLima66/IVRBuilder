@@ -4,6 +4,8 @@
  */
 import React, { useState, useRef, useCallback, useEffect } from 'react';
 import { useConfig } from '../contexts/ConfigContext';
+import { VERSION_STRING } from '../version.js';
+import ChangelogModal from '../components/canvas/ChangelogModal.jsx';
 
 // ── Log de sessão de importação (acumulado enquanto a página está aberta) ─────
 const sessionImportLog = [];
@@ -485,6 +487,7 @@ export default function HomeScreen({
   const [showCreateModal, setShowCreateModal] = useState(false);
   const [confirmOpen,     setConfirmOpen]     = useState(null);
   const [confirmDelete,   setConfirmDelete]   = useState(null);
+  const [showChangelog,   setShowChangelog]   = useState(false);
   const jsonRef = useRef(null);
   const confRef = useRef(null);
 
@@ -619,11 +622,35 @@ export default function HomeScreen({
         )}
       </div>
 
+      {/* ── Rodapé com versão ─────────────────────────────────────────── */}
+      <div style={{
+        position: 'fixed', bottom: 12, right: 18, zIndex: 2,
+        pointerEvents: 'auto',
+      }}>
+        <button
+          type="button"
+          onClick={() => setShowChangelog(true)}
+          title="Ver changelog"
+          style={{
+            background: 'none', border: 'none', cursor: 'pointer',
+            fontFamily: 'inherit', fontSize: 11, letterSpacing: 0.5,
+            color: 'var(--neon)', opacity: 0.4,
+            transition: 'opacity 0.15s',
+            padding: 0,
+          }}
+          onMouseEnter={(e) => { e.currentTarget.style.opacity = '0.8'; }}
+          onMouseLeave={(e) => { e.currentTarget.style.opacity = '0.4'; }}
+        >
+          Orpen URA Builder · v{VERSION_STRING}
+        </button>
+      </div>
+
       {/* ── Modais ────────────────────────────────────────────────────────── */}
       {showCreateModal  && <CreateProjectModal    onClose={() => setShowCreateModal(false)} onCreate={handleCreate} />}
       {confirmOpen      && <ConfirmOpenModal       projectName={confirmOpen.name}   onClose={() => setConfirmOpen(null)}   onConfirm={() => { onOpenProject(confirmOpen); setConfirmOpen(null); }} />}
       {confirmDelete    && <ConfirmDeleteModal     projectName={confirmDelete.name} onClose={() => setConfirmDelete(null)} onConfirm={handleConfirmDelete} />}
       {confImportData   && <ConfImportModal        data={confImportData}            onClose={onConfImportCancel}           onConfirm={onConfImportConfirm} onReview={onConfImportReview} />}
+      {showChangelog    && <ChangelogModal onClose={() => setShowChangelog(false)} />}
     </div>
   );
 }

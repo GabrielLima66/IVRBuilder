@@ -48,7 +48,7 @@ const edgeTypes = { floating: EdgeWithWaypoints, smoothstep: EdgeWithWaypoints }
 // CANVAS — estado global do grafo + lógica de DnD / reparenting
 // Props de projeto (opcionais): permitem integração com HomeScreen.
 // ─────────────────────────────────────────────────────────────────────────────
-function Canvas({ initialFlow, projectName, projectCreatedAt, currentProjectId, onGoBack, onProjectSaved, isReviewMode, onReviewConfirm, onReviewCancel }) {
+function Canvas({ initialFlow, projectName, projectCreatedAt, currentProjectId, onGoBack, onProjectSaved, isReviewMode, onReviewConfirm, onReviewCancel, originalConf, onUpdateOriginal }) {
   // Lê configurações do ConfigContext
   const config = useConfig();
   const mode   = config.mode;
@@ -1701,6 +1701,7 @@ export default function App() {
           validation:    result.validation,
           fileName:      confFile.name,
           layoutApplied,
+          rawContent:    e.target.result, // texto bruto do .conf — para diff na exportação
         });
         setImportError(null);
       } catch (err) {
@@ -1725,6 +1726,8 @@ export default function App() {
         edges:    confImportData.edges,
         viewport: confImportData.viewport || { x: 0, y: 0, zoom: 0.7 },
       },
+      // Preserva o .conf original para diff visual na exportação
+      originalConf: confImportData.rawContent || null,
     };
     await salvarProjeto(project);
     setCurrentProject(project);
@@ -1749,6 +1752,7 @@ export default function App() {
         edges:    confImportData.edges,
         viewport: confImportData.viewport || { x: 0, y: 0, zoom: 0.7 },
       },
+      originalConf: confImportData.rawContent || null,
     };
     setCurrentProject(project);
     setPendingFlow(project.flow);
@@ -1771,6 +1775,15 @@ export default function App() {
     refreshProjects();
     setIsReviewMode(false);
   }, [currentProject, refreshProjects]);
+
+  // Atualiza o originalConf do projeto atual com o texto exportado.
+  // Chamado pelo Canvas quando o usuário clica em "ATUALIZAR ORIGINAL" no diff.
+  const handleUpdateOriginal = useCallback(async (newOriginalConf) => {
+    if (!currentProject) return;
+    const updated = { ...currentProject, originalConf: newOriginalConf };
+    await salvarProjeto(updated);
+    setCurrentProject(updated);
+  }, [currentProject]);
 
   // Cancelamento da revisão — descarta o projeto (não salvo) e volta para home.
   const handleReviewCancel = useCallback(() => {
@@ -1820,6 +1833,8 @@ export default function App() {
               isReviewMode={isReviewMode}
               onReviewConfirm={handleReviewConfirm}
               onReviewCancel={handleReviewCancel}
+              originalConf={currentProject?.originalConf || null}
+              onUpdateOriginal={handleUpdateOriginal}
             />
           </ReactFlowProvider>
         </div>

@@ -203,6 +203,17 @@ export const ACTION_META = {
 
 export function actionLine(n) {
   const d = n.data || {};
+  const fmt = d._fmt;
+
+  // Fast path: reproduz linha exatamente quando o nó não foi editado pelo usuário.
+  // Usa appCasing e rawArgs do .conf original para fidelidade máxima.
+  if (!d.isDirty && fmt && fmt.rawArgs !== undefined && fmt.appCasing) {
+    if (fmt.hasParens !== false) {
+      return `${fmt.appCasing}(${fmt.rawArgs})`;
+    }
+    // Aplicação sem parênteses (forma bare — raro, ex: "Hangup" sem "()")
+    return fmt.appCasing;
+  }
 
   switch (n.type) {
     case 'gosub': {

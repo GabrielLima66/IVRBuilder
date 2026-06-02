@@ -136,10 +136,12 @@ export function calculateContextDimensions(childNodes) {
   // Gap entre filhos: (N-1) × CTX_CHILD_GAP
   const gaps   = childNodes.length > 1 ? (childNodes.length - 1) * CTX_CHILD_GAP : 0;
   const totalH = childNodes.reduce((acc, n) => acc + (n.height ?? 90), 0);
-  const ctxH   = CTX_HEADER_H + totalH + gaps + CTX_PAD_BOTTOM;
+  // CTX_PAD_TOP: espaço entre cabeçalho e primeiro filho (evita sobreposição)
+  const ctxH   = CTX_HEADER_H + CTX_PAD_TOP + totalH + gaps + CTX_PAD_BOTTOM;
 
   return {
     width:  Math.max(CTX_MIN_W, ctxW),
-    height: Math.max(CTX_HEADER_H + CTX_PAD_BOTTOM + 40, ctxH), // mínimo visual
+    // mínimo visual = cabeçalho + pad_top + 40px de conteúdo mínimo + padding inferior
+    height: Math.max(CTX_HEADER_H + CTX_PAD_TOP + 40 + CTX_PAD_BOTTOM, ctxH),
   };
 }

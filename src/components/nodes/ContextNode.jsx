@@ -1,5 +1,5 @@
 import React, { memo, useState, useCallback, useRef, useEffect, useMemo } from 'react';
-import { Handle, Position, useReactFlow, useStore } from 'reactflow';
+import { Handle, Position, useReactFlow, useStore, useUpdateNodeInternals } from 'reactflow';
 import { FolderTree } from 'lucide-react';
 import { cls } from '../../utils/common';
 import { applyContextRename } from '../../utils/renamePropagator';
@@ -34,8 +34,12 @@ const NODE_CATEGORY = {
 };
 const getNodeCategory = (type) => NODE_CATEGORY[type] || 'other';
 
+// Y mínimo garantido para qualquer filho — nunca pode ser menor que isso
+export const MIN_CHILD_Y = CTX_HEADER_H + CTX_PAD_TOP; // 60px
+
 const ContextNode = memo(({ id, data, selected }) => {
   const { setNodes, getNodes } = useReactFlow();
+  const updateNodeInternals   = useUpdateNodeInternals();
 
   const childOrder  = useMemo(() => data.childOrder || [], [data.childOrder]);
   const isDraft     = !!data.isDraft;
@@ -150,6 +154,12 @@ const ContextNode = memo(({ id, data, selected }) => {
       return changed ? updated : ns;
     });
   }); // sem deps — ref guard evita loops
+
+  // Força o React Flow a recalcular os internals do contexto quando filhos mudam.
+  // Sem isso, handles e bounding box podem ficar stale após add/remove de filhos.
+  useEffect(() => {
+    updateNodeInternals(id);
+  }, [childOrder, id, updateNodeInternals]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // Toggle recolher/expandir — persiste em data.collapsed
   const toggleCollapsed = useCallback(() => {

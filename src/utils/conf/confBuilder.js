@@ -125,7 +125,8 @@ export function build(graph, layout) {
 
     for (let ni = 0; ni < ctx.childNodes.length; ni++) {
       const childSpec = ctx.childNodes[ni];
-      const pos       = ctxLayout.childPositions[ni] || { x: 20, y: 34 + ni * 60 };
+      // Fallback seguro: y mínimo = 60 (CTX_HEADER_H=34 + CTX_PAD_TOP=26) para nunca sobrepor o cabeçalho
+      const pos       = ctxLayout.childPositions[ni] || { x: 20, y: 60 + ni * 80 };
       const nid       = `n_${uid()}`;
       nodeIdByIdx[ni] = nid;
 
@@ -136,9 +137,10 @@ export function build(graph, layout) {
         data:       childSpec.commented
           ? { ...childSpec.data, _commented: true, _origLine: childSpec.origLine || '' }
           : { ...childSpec.data },
-        parentNode: ctx.id,
-        extent:     'parent',
-        draggable:  false,
+        parentNode:   ctx.id,
+        extent:       'parent',
+        expandParent: true,
+        draggable:    false,
         // Largura explícita para que o filho preencha o contexto imediatamente
         style:      { width: childW },
       };

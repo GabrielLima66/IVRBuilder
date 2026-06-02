@@ -19,6 +19,7 @@ import { generateDialplan } from './utils/asteriskExporter';
 import { ACTION_META } from './utils/actionMeta';
 import { uid } from './utils/common';
 import { arrangeContextNodes, ARRANGE_GAP_H } from './utils/arrangeContextNodes';
+import { MIN_CHILD_Y } from './components/nodes/ContextNode';
 import { CTX_MIN_W } from './utils/contextDimensions';
 import { generateUniqueContextName } from './utils/contextUtils';
 import { applyContextRename } from './utils/renamePropagator';
@@ -545,9 +546,10 @@ function Canvas({ initialFlow, projectName, projectCreatedAt, currentProjectId, 
     if (type !== 'context') {
       const parent = findContextAt(position, nodes);
       if (parent) {
-        newNode.parentNode = parent.id;
-        newNode.extent     = 'parent';
-        newNode.draggable  = false; // gerenciado pelo ContextNode
+        newNode.parentNode   = parent.id;
+        newNode.extent       = 'parent';
+        newNode.expandParent = true;
+        newNode.draggable    = false; // gerenciado pelo ContextNode
         newNode.position   = {
           x: 20,
           y: 0, // será ajustado pelo ContextNode via useEffect
@@ -577,6 +579,17 @@ function Canvas({ initialFlow, projectName, projectCreatedAt, currentProjectId, 
 
   // ── Re-parenting ao arrastar nó existente ─────────────────────────────────
   const onNodeDragStop = useCallback((event, draggedNode) => {
+    // Guard: filhos de ContextNode não podem ter y < MIN_CHILD_Y (evita sobreposição com header)
+    if (draggedNode.parentNode && draggedNode.position.y < MIN_CHILD_Y) {
+      setNodes((ns) =>
+        ns.map((n) =>
+          n.id === draggedNode.id
+            ? { ...n, position: { ...n.position, y: MIN_CHILD_Y } }
+            : n
+        )
+      );
+    }
+
     // Apply alignment snap before anything else
     alignDragStop(event, draggedNode);
 
@@ -673,10 +686,11 @@ function Canvas({ initialFlow, projectName, projectCreatedAt, currentProjectId, 
         if (targetId) {
           return {
             ...n,
-            parentNode: targetId,
-            extent:     'parent',
-            draggable:  false,
-            position:   { x: 20, y: 0 }, // ContextNode ajusta via useEffect
+            parentNode:   targetId,
+            extent:       'parent',
+            expandParent: true,
+            draggable:    false,
+            position:     { x: 20, y: 0 }, // ContextNode ajusta via useEffect
           };
         }
         const { parentNode, extent, ...rest } = n;
@@ -944,10 +958,11 @@ function Canvas({ initialFlow, projectName, projectCreatedAt, currentProjectId, 
         ...defaultNode,
         id:         childId,
         data:       { ...(defaultNode.data || {}), ...(action.data || {}) },
-        parentNode: ctxId,
-        extent:     'parent',
-        draggable:  false,
-        position:   { x: 20, y: 0 },
+        parentNode:   ctxId,
+        extent:       'parent',
+        expandParent: true,
+        draggable:    false,
+        position:     { x: 20, y: 0 },
       });
     }
 
@@ -982,9 +997,10 @@ function Canvas({ initialFlow, projectName, projectCreatedAt, currentProjectId, 
       }
 
       if (destNode) {
-        destNode.parentNode = ctxId;
-        destNode.extent     = 'parent';
-        destNode.draggable  = false;
+        destNode.parentNode   = ctxId;
+        destNode.extent       = 'parent';
+        destNode.expandParent = true;
+        destNode.draggable    = false;
         destNode.position   = { x: 20, y: 0 };
         childIds.push(destId);
         childNodes.push(destNode);

@@ -13,8 +13,12 @@
 /** Altura do cabeçalho do ContextNode (header com nome do contexto) */
 export const CTX_HEADER_H  = 34;   // px
 
-/** Padding entre o cabeçalho e o primeiro nó filho — evita sobreposição com a borda-bottom do header */
-export const CTX_PAD_TOP    = 8;   // px
+/**
+ * Padding entre o cabeçalho e o primeiro nó filho.
+ * CTX_HEADER_H + CTX_PAD_TOP = 60px mínimo para o primeiro filho
+ * (HEADER_HEIGHT=34 + PAD_TOP=26 → y_first=60, garantindo nenhuma sobreposição).
+ */
+export const CTX_PAD_TOP    = 26;  // px → primeiro filho em y=60
 
 /** Padding horizontal dos nós filhos (20px cada lado = 40px total) */
 export const CTX_PAD_H     = 20;   // px por lado

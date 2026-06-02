@@ -104,7 +104,8 @@ export function build(graph, layout) {
       type:     'context',
       position: ctxLayout.position,
       data:     {
-        contextName: ctx.name,
+        // Garante que contextName nunca seja vazio — o cabeçalho sempre mostra algum texto
+        contextName: ctx.name || `ctx-${ctx.id.slice(-6)}`,
         childOrder:  [], // will be filled after children are created
         exportOrder: ci + 1, // sequencial baseado na ordem do arquivo importado
         isDraft:     false,

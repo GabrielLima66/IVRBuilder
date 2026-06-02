@@ -248,7 +248,7 @@ const ContextNode = memo(({ id, data, selected }) => {
         <input
           className="ctx-name-input"
           value={data.contextName || ''}
-          placeholder="nome-do-contexto"
+          placeholder={data.contextName ? 'nome-do-contexto' : id.slice(-8)}
           spellCheck={false}
           onFocus={() => {
             nameOnFocus.current = data.contextName || '';

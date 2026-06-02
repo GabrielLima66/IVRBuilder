@@ -187,10 +187,67 @@ function createVirtualCtx(menuNodeId, extId, actions, finalDest, logIvrLabel, pa
   return { ctxNode, childNodes, uniqueName };
 }
 
+// ── Sanitização de segurança ──────────────────────────────────────────────────
+
+/**
+ * Garante que todo nó filho (não-context, não-config) tenha um parentNode
+ * válido apontando para um ContextNode existente no array.
+ * Se algum nó estiver órfão, cria um ContextNode placeholder (isDraft: true)
+ * e agrupa os órfãos dentro dele — nenhum nó é descartado.
+ *
+ * @param {import('reactflow').Node[]} nodes
+ * @returns {import('reactflow').Node[]}
+ */
+function sanitizeOrphanNodes(nodes) {
+  const ctxIds = new Set(nodes.filter((n) => n.type === 'context').map((n) => n.id));
+
+  const orphans = nodes.filter(
+    (n) => n.type !== 'context' && n.type !== 'config' && (!n.parentNode || !ctxIds.has(n.parentNode))
+  );
+
+  if (orphans.length === 0) return nodes;
+
+  console.warn('[expandDtmfOptions] corrigindo', orphans.length, 'nó(s) órfão(s):', orphans.map((n) => `${n.id}(${n.type})`));
+
+  const placeholderId = `n_orphan_${uid()}`;
+  const maxOrder = nodes
+    .filter((n) => n.type === 'context')
+    .reduce((mx, n) => Math.max(mx, n.data?.exportOrder ?? 0), 0);
+
+  const placeholderCtx = {
+    id:       placeholderId,
+    type:     'context',
+    position: { x: 40, y: 40 },
+    data: {
+      contextName: `_orfaos`,
+      childOrder:  orphans.map((n) => n.id),
+      exportOrder: maxOrder + 1,
+      isDraft:     true,  // não exportado pelo compilador
+    },
+    style:  { width: 320, height: 54 },
+    zIndex: -1,
+  };
+
+  const orphanSet = new Set(orphans.map((n) => n.id));
+  const fixedNodes = nodes.map((n) => {
+    if (!orphanSet.has(n.id)) return n;
+    return {
+      ...n,
+      parentNode: placeholderId,
+      extent:     'parent',
+      draggable:  false,
+      position:   { x: 20, y: 34 + orphans.indexOf(n) * 80 },
+    };
+  });
+
+  return [placeholderCtx, ...fixedNodes];
+}
+
 // ── Entry point ───────────────────────────────────────────────────────────────
 
 /**
- * Aplica a regra seletiva inline vs ContextNode para todas as opções DTMF.
+ * Aplica a regra seletiva de 3 níveis para todas as opções DTMF e sanitiza
+ * nós órfãos que possam ter sido criados em fases anteriores.
  *
  * Chamada após a Fase 5 (build) do pipeline de importação.
  *
@@ -312,5 +369,6 @@ export function expandDtmfOptions(nodes, edges) {
     }
   }
 
-  return { nodes: resNodes, edges: resEdges };
+  // Sanitização final: garante que não existam nós órfãos no estado retornado
+  return { nodes: sanitizeOrphanNodes(resNodes), edges: resEdges };
 }

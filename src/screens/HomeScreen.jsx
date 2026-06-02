@@ -302,6 +302,19 @@ function ConfImportModal({ data, onClose, onConfirm, onReview }) {
           </div>
         )}
 
+        {/* ── Aviso de nós órfãos ────────────────────────────────────────── */}
+        {(stats.orphanCount || 0) > 0 && (
+          <div style={{ marginBottom: 12 }}>
+            <div style={{ fontSize: 10, color: '#ff5050', letterSpacing: 1, marginBottom: 6 }}>
+              ⚠ {stats.orphanCount} NÓ(S) SEM CONTEXTO PAI DETECTADO(S)
+            </div>
+            <div style={{ fontSize: 9, color: 'var(--neon-dim)', lineHeight: 1.5, opacity: 0.8 }}>
+              // nós sem ContextNode pai foram agrupados em um contexto rascunho.
+              // Verifique o canvas e mova-os para o contexto correto.
+            </div>
+          </div>
+        )}
+
         {(stats.contextNameRenames || []).length > 0 && (
           <div style={{ marginBottom: 12 }}>
             <div style={{ fontSize: 10, color: '#ff8c00', letterSpacing: 1, marginBottom: 6 }}>

@@ -25,7 +25,7 @@ import { lex }             from './confLexer.js';
 import { map }             from './confMapper.js';
 import { resolve }         from './confResolver.js';
 import { calculateLayout } from './confLayout.js';
-import { build }           from './confBuilder.js';
+import { build, validateImportedState } from './confBuilder.js';
 import { expandDtmfOptions } from '../expandDtmfOptions.js';
 import { generateDialplan } from '../asteriskExporter.js';
 import { resetUnknownCommands, getUnknownCommands } from './unknownCommandsLog.js';
@@ -53,13 +53,24 @@ export function importConf(rawContent) {
   const layout = calculateLayout(graph);
 
   // ── Fase 5: Builder ────────────────────────────────────────────────────────
-  const { nodes: builtNodes, edges: builtEdges, contextNameRenames = [] } = build(graph, layout);
+  const {
+    nodes: builtNodes,
+    edges: builtEdges,
+    contextNameRenames = [],
+    orphanCount: builderOrphans = 0,
+  } = build(graph, layout);
 
   // ── Fase 6: Expansão DTMF ─────────────────────────────────────────────────
-  // Cada opção DTMF (ações inline) vira um ContextNode virtual independente.
-  // O compilador injeta as linhas desses contextos inline no bloco do pai.
   const { nodes, edges } = expandDtmfOptions(builtNodes, builtEdges);
   const flowState = { nodes, edges };
+
+  // ── Fase 7: Validação de integridade final ────────────────────────────────
+  // Inclui os nós criados pela Fase 6 (virtual contexts e seus filhos).
+  const integrityResult = validateImportedState(nodes);
+  const orphanCount      = integrityResult.orphanCount;
+  if (orphanCount > 0) {
+    console.error('[confImporter] nós órfãos detectados após Fase 6:', integrityResult.orphanIds);
+  }
 
   // ── Round-trip validation ──────────────────────────────────────────────────
   const validation = roundTrip(flowState, rawContent);
@@ -79,7 +90,12 @@ export function importConf(rawContent) {
     tokens,
     rawContexts,
     suggestedName: graph.suggestedName || 'projeto-importado',
-    stats: { ...baseStats, contextNameRenames, unknownCommands: getUnknownCommands() },
+    stats: {
+      ...baseStats,
+      contextNameRenames,
+      unknownCommands: getUnknownCommands(),
+      orphanCount,          // ← exibido no modal de resumo se > 0
+    },
   };
 }
 

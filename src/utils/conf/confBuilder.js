@@ -257,5 +257,42 @@ export function build(graph, layout) {
     });
   }
 
-  return { nodes, edges, contextNameRenames };
+  // ── Fase 5: Validação de integridade ─────────────────────────────────────
+  const { orphanCount, orphanIds } = validateImportedState(nodes);
+  if (orphanCount > 0) {
+    console.error('[confBuilder] IMPORT VALIDATION: nós órfãos detectados', orphanIds);
+  }
+
+  return { nodes, edges, contextNameRenames, orphanCount, orphanIds };
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// VALIDAÇÃO DE INTEGRIDADE
+// Detecta nós que não são ContextNode nem ConfigNode mas não têm parentNode
+// válido apontando para um ContextNode existente no array.
+// ─────────────────────────────────────────────────────────────────────────────
+
+/**
+ * Verifica se todos os nós filho possuem parentNode válido.
+ *
+ * @param {import('reactflow').Node[]} nodes
+ * @returns {{ valid: boolean, orphanCount: number, orphanIds: string[] }}
+ */
+export function validateImportedState(nodes) {
+  const contextIds = new Set(
+    nodes.filter((n) => n.type === 'context').map((n) => n.id)
+  );
+
+  const orphanNodes = nodes.filter(
+    (n) =>
+      n.type !== 'context' &&
+      n.type !== 'config' &&
+      (!n.parentNode || !contextIds.has(n.parentNode))
+  );
+
+  return {
+    valid:       orphanNodes.length === 0,
+    orphanCount: orphanNodes.length,
+    orphanIds:   orphanNodes.map((n) => `${n.id}(${n.type})`),
+  };
 }

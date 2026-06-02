@@ -1,13 +1,17 @@
 /**
  * expandDtmfOptions.js — Fase 6 do pipeline de importação.
  *
- * Aplica a regra seletiva inline vs ContextNode para cada opção DTMF:
+ * Aplica a regra seletiva de 3 níveis para cada opção DTMF:
  *
- *  INLINE (opção simples) — actions[] vazio ou só ações de roteamento:
+ *  INLINE (opção simples) — 0 ações reais:
  *    Só Goto / Queue / Dial / Hangup / Macro de fallback → mantém finalDestination
  *    no MenuNode e deixa o compilador emitir diretamente.
  *
- *  CONTEXTNODE (opção complexa) — 1+ ação real em actions[]:
+ *  MINI-EDITOR (opção intermediária) — 1 ação real:
+ *    A ação fica em actions[] no MenuNode; o usuário pode editar via ✏.
+ *    O compilador emite via hasStoredData path sem criar ContextNode.
+ *
+ *  CONTEXTNODE (opção complexa) — 2+ ações reais:
  *    Set, AGI, Playback, Background, ExecIfTime, GotoIfTime, SIPAddHeader → cria
  *    um ContextNode virtual com data.expandedFrom = menuNodeId.
  *    O compilador injeta as linhas desse contexto inline no bloco do pai.
@@ -42,14 +46,22 @@ const REAL_ACTION_TYPES = new Set([
 ]);
 
 /**
- * Retorna true se a lista de ações contém pelo menos uma ação "real"
- * (transformativa, que não é apenas roteamento de destino).
+ * Conta as ações "reais" (transformativas) de uma opção.
+ * 0 → inline | 1 → mini-editor | 2+ → ContextNode
  *
  * @param {Array<{type: string}>} actions
- * @returns {boolean}
+ * @returns {number}
+ */
+function countRealActions(actions) {
+  return (actions || []).filter((a) => REAL_ACTION_TYPES.has(a.type)).length;
+}
+
+/**
+ * Retorna true se a opção deve virar ContextNode (2+ ações reais).
+ * Opções com 1 ação real ficam no mini-editor (actions[] no MenuNode).
  */
 function isComplexOption(actions) {
-  return (actions || []).some((a) => REAL_ACTION_TYPES.has(a.type));
+  return countRealActions(actions) >= 2;
 }
 
 // ── Helpers de construção de nós filhos ──────────────────────────────────────

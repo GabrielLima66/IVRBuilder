@@ -4,7 +4,7 @@ import { FolderTree } from 'lucide-react';
 import { cls } from '../../utils/common';
 import { applyContextRename } from '../../utils/renamePropagator';
 import { useActiveSelection } from '../../contexts/ActiveSelectionContext';
-import { CTX_CHILD_GAP } from '../../utils/contextDimensions';
+import { CTX_CHILD_GAP, CTX_PAD_TOP } from '../../utils/contextDimensions';
 import { isContextNameDuplicate } from '../../utils/contextUtils';
 
 // Constantes de layout — fonte de verdade compartilhada com ContextOrderOverlay
@@ -12,7 +12,7 @@ export const CTX_HEADER_H  = 34;  // px — altura do cabeçalho
 export const CTX_PAD_H     = 20;  // px — padding esquerdo dos filhos
 export const CTX_PAD_BOTTOM = 20; // px — padding inferior
 export const CTX_MIN_W     = 320; // px — largura mínima do contexto
-export { CTX_CHILD_GAP };         // re-exportado de contextDimensions
+export { CTX_CHILD_GAP, CTX_PAD_TOP }; // re-exportados de contextDimensions
 
 // Tipos de nó de formatação — sem handles, sem separadores de categoria
 const FORMATTING_NODE_TYPES = new Set(['blankline', 'sectioncomment']);
@@ -83,7 +83,9 @@ const ContextNode = memo(({ id, data, selected }) => {
       return { ctxW, ctxH: CTX_HEADER_H, childW, positions: {}, separators: [] };
     }
 
-    let y = CTX_HEADER_H;
+    // CTX_PAD_TOP: espaço entre borda-bottom do cabeçalho e o primeiro filho
+    // Evita sobreposição do primeiro nó com o header
+    let y = CTX_HEADER_H + CTX_PAD_TOP;
     const positions  = {};
     const separators = [];
 

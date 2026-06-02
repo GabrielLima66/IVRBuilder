@@ -31,6 +31,7 @@ import { ConfigProvider, useConfig } from './contexts/ConfigContext';
 import { ReviewModeContext } from './contexts/ReviewModeContext';
 import ConfigModal from './components/canvas/ConfigModal';
 import ChangelogModal from './components/canvas/ChangelogModal';
+import DtmfActionEditorModal from './components/canvas/DtmfActionEditorModal';
 import { MenuActionsContext } from './contexts/MenuActionsContext';
 import { VERSION_STRING } from './version.js';
 import DiffModal   from './components/canvas/DiffModal';
@@ -215,6 +216,8 @@ function Canvas({ initialFlow, projectName, projectCreatedAt, currentProjectId, 
   const [showOrderPanel,       setShowOrderPanel]       = useState(false);
   const [showConfigModal,      setShowConfigModal]      = useState(false);
   const [showChangelog,        setShowChangelog]        = useState(false);
+  // Estado do mini-editor de ações DTMF: { menuNodeId, digitId } | null
+  const [dtmfEditorState,      setDtmfEditorState]      = useState(null);
   const [exportText,           setExportText]           = useState('');
   const [exportLayout,         setExportLayout]         = useState(null); // URALayout para download junto ao .conf
   const [showFirstExportModal, setShowFirstExportModal] = useState(false);
@@ -1403,9 +1406,36 @@ function Canvas({ initialFlow, projectName, projectCreatedAt, currentProjectId, 
     runAutoArrange();
   }, [setNodes, setEdges, neonColor, config, runAutoArrange]); // eslint-disable-line react-hooks/exhaustive-deps
 
+  // Abre o mini-editor de ações para um dígito específico
+  const openDigitEditor = useCallback((menuNodeId, digitId) => {
+    setDtmfEditorState({ menuNodeId, digitId });
+  }, []);
+
+  // Salva as ações e o destino final editados no mini-editor
+  const saveDigitActions = useCallback((menuNodeId, digitId, actions, finalDestination) => {
+    setNodes((ns) =>
+      ns.map((n) => {
+        if (n.id !== menuNodeId) return n;
+        return {
+          ...n,
+          data: {
+            ...n.data,
+            digits: n.data.digits.map((d) =>
+              d.id !== digitId ? d : { ...d, actions, finalDestination }
+            ),
+          },
+        };
+      })
+    );
+  }, [setNodes]);
+
   const menuActionsValue = useMemo(
-    () => ({ expandDigitToContext, collapseDigitContext, updateDigitLabel, createContextForNewDigit }),
-    [expandDigitToContext, collapseDigitContext, updateDigitLabel, createContextForNewDigit]
+    () => ({
+      expandDigitToContext, collapseDigitContext,
+      updateDigitLabel, createContextForNewDigit,
+      openDigitEditor,
+    }),
+    [expandDigitToContext, collapseDigitContext, updateDigitLabel, createContextForNewDigit, openDigitEditor]
   );
 
   return (
@@ -2074,6 +2104,22 @@ function Canvas({ initialFlow, projectName, projectCreatedAt, currentProjectId, 
       {showConfigModal && <ConfigModal onClose={() => setShowConfigModal(false)} />}
       {/* Modal de changelog/versão */}
       {showChangelog && <ChangelogModal onClose={() => setShowChangelog(false)} />}
+      {/* Mini-editor de ações DTMF */}
+      {dtmfEditorState && (() => {
+        const menuNode = nodes.find((n) => n.id === dtmfEditorState.menuNodeId);
+        if (!menuNode) return null;
+        return (
+          <DtmfActionEditorModal
+            menuNode={menuNode}
+            digitId={dtmfEditorState.digitId}
+            onClose={() => setDtmfEditorState(null)}
+            onSave={(digitId, actions, finalDestination) => {
+              saveDigitActions(dtmfEditorState.menuNodeId, digitId, actions, finalDestination);
+              setDtmfEditorState(null);
+            }}
+          />
+        );
+      })()}
 
       {/* Modal de diff — comparação original × exportação */}
       {showDiff && originalConf && (

@@ -704,9 +704,9 @@ function generateDialplanFromContexts(nodes, edges, findNode, outEdges, options 
             const logIvrLbl = dig.logIvrLabel || `${ctxName}-op-${dig.id}`;
             emit(`exten => ${dig.id},n,Macro(logIvr,ENTER_CONTEXT,${logIvrLbl})`);
             for (const action of (dig.actions || [])) {
-              // BUG 5: GotoIfTime (type='time') não está em actionLine — emite diretamente
               let ln = null;
               if (action.type === 'time') {
+                // GotoIfTime — não está em actionLine, emite diretamente
                 const dest = (action.data.trueContext || '').trim();
                 if (dest) {
                   const spec    = buildTimeExport(action.data);
@@ -714,6 +714,9 @@ function generateDialplanFromContexts(nodes, edges, findNode, outEdges, options 
                   const dstPri  = (action.data.truePriority  || '').trim() || '1';
                   ln = `GotoIfTime(${spec}?${dest},${dstExt},${dstPri})`;
                 }
+              } else if (action.type === 'raw') {
+                // Raw — linha literal do Asterisk, emitida sem transformação
+                ln = (action.data?.rawLine || '').trim() || null;
               } else {
                 ln = actionLine({ type: action.type, data: action.data });
               }
@@ -732,6 +735,13 @@ function generateDialplanFromContexts(nodes, edges, findNode, outEdges, options 
               }
             } else if (fd?.type === 'queue') {
               emit(`exten => ${dig.id},n,Goto(${fd.ctx},${fd.ext},${fd.pri})`);
+            } else if (fd?.type === 'queue_direct') {
+              // Chamada direta Queue() — configurado via mini-editor
+              const opts = fd.queueOptions ? `,${fd.queueOptions}` : '';
+              emit(`exten => ${dig.id},n,Queue(${fd.queue || ''}${opts})`);
+            } else if (fd?.type === 'playback_final') {
+              // Playback como destino final (sem Goto após)
+              emit(`exten => ${dig.id},n,Playback(\${SOUND_PATH}/${fd.filename || ''})`);
             } else if (fd?.type === 'dial') {
               const tmo = fd.timeout ? `,${fd.timeout}` : '';
               emit(`exten => ${dig.id},n,Dial(${fd.target}${tmo})`);

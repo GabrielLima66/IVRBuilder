@@ -37,8 +37,9 @@ const getNodeCategory = (type) => NODE_CATEGORY[type] || 'other';
 const ContextNode = memo(({ id, data, selected }) => {
   const { setNodes, getNodes } = useReactFlow();
 
-  const childOrder = useMemo(() => data.childOrder || [], [data.childOrder]);
-  const isDraft    = !!data.isDraft;
+  const childOrder  = useMemo(() => data.childOrder || [], [data.childOrder]);
+  const isDraft     = !!data.isDraft;
+  const isCollapsed = !!data.collapsed;
 
   const { activeNodeIds } = useActiveSelection();
   const isConnectedActive = activeNodeIds.has(id);
@@ -77,6 +78,11 @@ const ContextNode = memo(({ id, data, selected }) => {
     const ctxW   = maxW + 40;
     const childW = ctxW - 40;
 
+    // Recolhido: apenas a altura do cabeçalho, sem posicionar filhos
+    if (isCollapsed) {
+      return { ctxW, ctxH: CTX_HEADER_H, childW, positions: {}, separators: [] };
+    }
+
     let y = CTX_HEADER_H;
     const positions  = {};
     const separators = [];
@@ -87,7 +93,6 @@ const ContextNode = memo(({ id, data, selected }) => {
         const gapCenterY = y + CTX_CHILD_GAP / 2;
         const prevType   = childMeasures[childOrder[i - 1]]?.type;
         const currType   = childMeasures[cid]?.type;
-        // Não exibe separador de categoria quando um dos lados é nó de formatação
         const showLine   = !!(prevType && currType &&
           !FORMATTING_NODE_TYPES.has(prevType) &&
           !FORMATTING_NODE_TYPES.has(currType) &&
@@ -96,15 +101,13 @@ const ContextNode = memo(({ id, data, selected }) => {
         y += CTX_CHILD_GAP;
       }
       positions[cid] = { x: CTX_PAD_H, y };
-      // Nós de formatação podem ter height 0 legitimamente (toggle OFF)
-      // Usar ?? em vez de || para não converter 0 em 60
       const h = childMeasures[cid]?.h;
       y += h != null ? h : 60;
     }
 
     const ctxH = y + CTX_PAD_BOTTOM;
     return { ctxW, ctxH, childW, positions, separators };
-  }, [childOrder, childMeasures]);
+  }, [childOrder, childMeasures, isCollapsed]);
 
   // Aplica posições, larguras e opacidade (isDraft) dos filhos via setNodes
   useEffect(() => {
@@ -146,6 +149,17 @@ const ContextNode = memo(({ id, data, selected }) => {
     });
   }); // sem deps — ref guard evita loops
 
+  // Toggle recolher/expandir — persiste em data.collapsed
+  const toggleCollapsed = useCallback(() => {
+    setNodes((ns) =>
+      ns.map((n) =>
+        n.id === id
+          ? { ...n, data: { ...n.data, collapsed: !n.data.collapsed } }
+          : n
+      )
+    );
+  }, [id, setNodes]);
+
   const onRename = useCallback(
     (v) => {
       const allNodes = getNodes();
@@ -183,6 +197,7 @@ const ContextNode = memo(({ id, data, selected }) => {
         'ctx-node',
         selected && 'selected',
         isDraft && 'ctx-node--draft',
+        isCollapsed && 'ctx-node--collapsed',
         isConnectedActive && !isDraft && 'node-connected-active',
         isNavHighlight && 'ctx-node--nav-highlight'
       )}
@@ -219,6 +234,25 @@ const ContextNode = memo(({ id, data, selected }) => {
             ? { background: 'rgba(0,212,255,0.15)', borderBottomColor: '#00d4ff' }
             : {}}
       >
+        {/* Botão de recolher/expandir */}
+        <button
+          type="button"
+          aria-label={isCollapsed ? 'Expandir contexto' : 'Recolher contexto'}
+          title={isCollapsed ? 'Expandir' : 'Recolher'}
+          onClick={(e) => { e.stopPropagation(); toggleCollapsed(); }}
+          onMouseDown={(e) => e.stopPropagation()}
+          style={{
+            background: 'none', border: 'none', cursor: 'pointer',
+            color: accent, fontSize: 9, padding: '0 2px',
+            lineHeight: 1, flexShrink: 0, opacity: 0.7,
+            transition: 'opacity 0.1s',
+          }}
+          onMouseEnter={(e) => { e.currentTarget.style.opacity = '1'; }}
+          onMouseLeave={(e) => { e.currentTarget.style.opacity = '0.7'; }}
+        >
+          {isCollapsed ? '▶' : '▼'}
+        </button>
+
         <FolderTree size={13} style={{ color: accent }} />
 
         {/* Badge MACRO */}
@@ -267,6 +301,17 @@ const ContextNode = memo(({ id, data, selected }) => {
           }}
         />
         <span style={{ color: accentDim, fontSize: 11, letterSpacing: 1 }}>]</span>
+
+        {/* Contador de filhos quando recolhido */}
+        {isCollapsed && childOrder.length > 0 && (
+          <span style={{
+            fontSize: 8, color: accent, opacity: 0.55,
+            marginLeft: 4, flexShrink: 0, whiteSpace: 'nowrap',
+            letterSpacing: 0.5,
+          }}>
+            · {childOrder.length} nó{childOrder.length !== 1 ? 's' : ''}
+          </span>
+        )}
       </div>
 
       {/* Error: duplicate name — rendered OUTSIDE the header so it overlays below it */}

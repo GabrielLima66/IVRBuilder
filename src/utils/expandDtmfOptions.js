@@ -89,7 +89,7 @@ function buildChildNodeFromFinalDest(fd, ctxId) {
     return {
       ...buildNode('hangup', { x: 20, y: 0 }),
       id: childId, data: { causeCode: fd.causeCode || '' },
-      parentNode: ctxId, extent: 'parent', expandParent: true, draggable: false,
+      parentNode: ctxId, extent: 'parent', draggable: false,
       position: { x: 20, y: 0 }, style: { width: CHILD_W },
     };
   }
@@ -99,7 +99,7 @@ function buildChildNodeFromFinalDest(fd, ctxId) {
       ...buildNode('route', { x: 20, y: 0 }),
       id: childId,
       data: { routeMode: 'fila', queue: fd.ext || fd.ctx || '', queueOptions: '', context: '', extension: 's', priority: '1' },
-      parentNode: ctxId, extent: 'parent', expandParent: true, draggable: false,
+      parentNode: ctxId, extent: 'parent', draggable: false,
       position: { x: 20, y: 0 }, style: { width: CHILD_W },
     };
   }
@@ -115,7 +115,7 @@ function buildChildNodeFromFinalDest(fd, ctxId) {
         priority:  fd.pri || '1',
         _argCount: fd.argCount || 3,
       },
-      parentNode: ctxId, extent: 'parent', expandParent: true, draggable: false,
+      parentNode: ctxId, extent: 'parent', draggable: false,
       position: { x: 20, y: 0 }, style: { width: CHILD_W },
     };
   }
@@ -125,7 +125,7 @@ function buildChildNodeFromFinalDest(fd, ctxId) {
       ...buildNode('dial', { x: 20, y: 0 }),
       id: childId,
       data: { destination: fd.target || '', timeout: fd.timeout || '30', options: '' },
-      parentNode: ctxId, extent: 'parent', expandParent: true, draggable: false,
+      parentNode: ctxId, extent: 'parent', draggable: false,
       position: { x: 20, y: 0 }, style: { width: CHILD_W },
     };
   }
@@ -135,7 +135,7 @@ function buildChildNodeFromFinalDest(fd, ctxId) {
       ...buildNode('playback', { x: 20, y: 0 }),
       id: childId,
       data: { filename: fd.filename || '', label: '' },
-      parentNode: ctxId, extent: 'parent', expandParent: true, draggable: false,
+      parentNode: ctxId, extent: 'parent', draggable: false,
       position: { x: 20, y: 0 }, style: { width: CHILD_W },
     };
   }

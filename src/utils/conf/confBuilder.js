@@ -137,10 +137,9 @@ export function build(graph, layout) {
         data:       childSpec.commented
           ? { ...childSpec.data, _commented: true, _origLine: childSpec.origLine || '' }
           : { ...childSpec.data },
-        parentNode:   ctx.id,
-        extent:       'parent',
-        expandParent: true,
-        draggable:    false,
+        parentNode: ctx.id,
+        extent:     'parent',
+        draggable:  false,
         // Largura explícita para que o filho preencha o contexto imediatamente
         style:      { width: childW },
       };

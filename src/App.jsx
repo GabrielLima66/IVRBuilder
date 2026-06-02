@@ -546,10 +546,9 @@ function Canvas({ initialFlow, projectName, projectCreatedAt, currentProjectId, 
     if (type !== 'context') {
       const parent = findContextAt(position, nodes);
       if (parent) {
-        newNode.parentNode   = parent.id;
-        newNode.extent       = 'parent';
-        newNode.expandParent = true;
-        newNode.draggable    = false; // gerenciado pelo ContextNode
+        newNode.parentNode = parent.id;
+        newNode.extent     = 'parent';
+        newNode.draggable  = false; // gerenciado pelo ContextNode
         newNode.position   = {
           x: 20,
           y: 0, // será ajustado pelo ContextNode via useEffect
@@ -686,11 +685,10 @@ function Canvas({ initialFlow, projectName, projectCreatedAt, currentProjectId, 
         if (targetId) {
           return {
             ...n,
-            parentNode:   targetId,
-            extent:       'parent',
-            expandParent: true,
-            draggable:    false,
-            position:     { x: 20, y: 0 }, // ContextNode ajusta via useEffect
+            parentNode: targetId,
+            extent:     'parent',
+            draggable:  false,
+            position:   { x: 20, y: 0 }, // ContextNode ajusta via useEffect
           };
         }
         const { parentNode, extent, ...rest } = n;
@@ -958,11 +956,10 @@ function Canvas({ initialFlow, projectName, projectCreatedAt, currentProjectId, 
         ...defaultNode,
         id:         childId,
         data:       { ...(defaultNode.data || {}), ...(action.data || {}) },
-        parentNode:   ctxId,
-        extent:       'parent',
-        expandParent: true,
-        draggable:    false,
-        position:     { x: 20, y: 0 },
+        parentNode: ctxId,
+        extent:     'parent',
+        draggable:  false,
+        position:   { x: 20, y: 0 },
       });
     }
 
@@ -997,10 +994,9 @@ function Canvas({ initialFlow, projectName, projectCreatedAt, currentProjectId, 
       }
 
       if (destNode) {
-        destNode.parentNode   = ctxId;
-        destNode.extent       = 'parent';
-        destNode.expandParent = true;
-        destNode.draggable    = false;
+        destNode.parentNode = ctxId;
+        destNode.extent     = 'parent';
+        destNode.draggable  = false;
         destNode.position   = { x: 20, y: 0 };
         childIds.push(destId);
         childNodes.push(destNode);

@@ -189,6 +189,24 @@ function Canvas({ initialFlow, projectName, projectCreatedAt, currentProjectId, 
     }, 350);
   }, [setNodes]); // eslint-disable-line react-hooks/exhaustive-deps
 
+  // Recolhe todos os ContextNodes do canvas
+  const collapseAllContexts = useCallback(() => {
+    setNodes((ns) =>
+      ns.map((n) =>
+        n.type === 'context' ? { ...n, data: { ...n.data, collapsed: true } } : n
+      )
+    );
+  }, [setNodes]);
+
+  // Expande todos os ContextNodes do canvas
+  const expandAllContexts = useCallback(() => {
+    setNodes((ns) =>
+      ns.map((n) =>
+        n.type === 'context' ? { ...n, data: { ...n.data, collapsed: false } } : n
+      )
+    );
+  }, [setNodes]);
+
   // ── Refs sincronizadas — leitura estável do estado atual sem dep em callbacks ─
   // Permite que onConnect, handleEdgesChange, computeActiveFromNode etc. leiam o
   // valor mais recente de nodes/edges sem precisar tê-los no array de deps do
@@ -1570,6 +1588,38 @@ function Canvas({ initialFlow, projectName, projectCreatedAt, currentProjectId, 
             onMouseLeave={(e) => { e.currentTarget.style.borderColor = 'var(--line)'; e.currentTarget.style.color = 'var(--neon-dim)'; }}
           >
             ⟳ ORGANIZAR
+          </button>
+          <span style={{ color: 'var(--line)' }}>│</span>
+          {/* Botões de recolher/expandir todos os contextos */}
+          <button
+            type="button"
+            onClick={collapseAllContexts}
+            title="Recolher todos os contextos"
+            style={{
+              background: 'transparent', border: '1px solid var(--line)',
+              color: 'var(--neon-dim)', fontFamily: 'inherit', fontSize: '0.69rem',
+              letterSpacing: 1, padding: '1px 7px', cursor: 'pointer',
+              borderRadius: '2px 0 0 2px', transition: 'all 0.15s', borderRight: 'none',
+            }}
+            onMouseEnter={(e) => { e.currentTarget.style.borderColor = 'var(--neon)'; e.currentTarget.style.color = 'var(--neon)'; }}
+            onMouseLeave={(e) => { e.currentTarget.style.borderColor = 'var(--line)'; e.currentTarget.style.color = 'var(--neon-dim)'; }}
+          >
+            ⊟
+          </button>
+          <button
+            type="button"
+            onClick={expandAllContexts}
+            title="Expandir todos os contextos"
+            style={{
+              background: 'transparent', border: '1px solid var(--line)',
+              color: 'var(--neon-dim)', fontFamily: 'inherit', fontSize: '0.69rem',
+              letterSpacing: 1, padding: '1px 7px', cursor: 'pointer',
+              borderRadius: '0 2px 2px 0', transition: 'all 0.15s',
+            }}
+            onMouseEnter={(e) => { e.currentTarget.style.borderColor = 'var(--neon)'; e.currentTarget.style.color = 'var(--neon)'; }}
+            onMouseLeave={(e) => { e.currentTarget.style.borderColor = 'var(--line)'; e.currentTarget.style.color = 'var(--neon-dim)'; }}
+          >
+            ⊞
           </button>
           <span style={{ color: 'var(--line)' }}>│</span>
           {/* Botão de configurações */}

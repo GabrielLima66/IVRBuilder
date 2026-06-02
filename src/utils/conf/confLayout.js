@@ -21,6 +21,7 @@
 
 import {
   CTX_HEADER_H,
+  CTX_PAD_TOP,
   CTX_PAD_H,
   CTX_PAD_BOTTOM,
   CTX_MIN_W,
@@ -65,10 +66,11 @@ export function calculateLayout(graph) {
       ...ctx.childNodes.map((n) => n.width ?? NODE_DEFAULT_WIDTH)
     );
 
-    // ── Posiciona filhos verticalmente (com gap de CTX_CHILD_GAP entre eles) ─
-    let yChild = CTX_HEADER_H;
+    // ── Posiciona filhos verticalmente ───────────────────────────────────────
+    // Começa em CTX_HEADER_H + CTX_PAD_TOP para não sobrepor o cabeçalho
+    let yChild = CTX_HEADER_H + CTX_PAD_TOP;
     for (let i = 0; i < ctx.childNodes.length; i++) {
-      if (i > 0) yChild += CTX_CHILD_GAP; // 8px de gap antes de cada filho (exceto o primeiro)
+      if (i > 0) yChild += CTX_CHILD_GAP; // gap antes de cada filho (exceto o primeiro)
       childPositions.push({ nodeIdx: i, x: CTX_PAD_H, y: yChild });
       yChild += childHeights[i];
     }

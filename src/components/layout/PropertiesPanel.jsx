@@ -8,6 +8,36 @@ import { NODE_MODE_CONFIG, getFieldLabel, getNodeLabel } from '../../config/node
 import { isContextNameDuplicate } from '../../utils/contextUtils';
 import ContextNavPanel from './ContextNavPanel';
 
+// ─── Campo numérico com estado local — permite apagar livremente ─────────────
+// Guarda o valor como string durante a digitação; só persiste no onBlur.
+// Aplica padrão (defaultValue) se o campo estiver vazio ou inválido ao perder foco.
+const NumericField = memo(function NumericField({ label, value, onChange, defaultValue = 4 }) {
+  const [local, setLocal] = useState(String(value ?? defaultValue));
+  // Sincroniza se o valor do nó mudar externamente (ex: outro painel)
+  useEffect(() => { setLocal(String(value ?? defaultValue)); }, [value, defaultValue]);
+
+  return (
+    <div style={{ marginBottom: 10 }}>
+      <label className="term-label">{label}</label>
+      <input
+        className="term-input"
+        type="text"
+        inputMode="numeric"
+        pattern="[0-9]*"
+        value={local}
+        onChange={(e) => setLocal(e.target.value)}
+        onFocus={(e) => e.target.select()}
+        onBlur={() => {
+          const parsed = parseInt(local, 10);
+          const final  = (!isNaN(parsed) && parsed >= 0) ? parsed : defaultValue;
+          setLocal(String(final));
+          onChange(final);
+        }}
+      />
+    </div>
+  );
+});
+
 // ─── Inputs estáveis (fora do componente pai para não recriar a cada render) ─
 
 const Field = memo(function Field({ d, set, label, k, type = 'text', placeholder, options }) {
@@ -1169,7 +1199,12 @@ export default function PropertiesPanel({ node, updateNodeData, deleteNode, togg
       )}
       {node.type === 'waitexten' && (
         <>
-          <Field d={d} set={set} label="Segundos" k="seconds" type="number" />
+          <NumericField
+            label="Segundos"
+            value={d.seconds}
+            defaultValue={4}
+            onChange={(v) => set('seconds', v)}
+          />
           <div style={{ fontSize: 9, color: 'var(--neon-dim)', marginTop: 4 }}>
             Aguarda dígito DTMF. O roteamento é feito pelas extensões existentes no dialplan.
           </div>

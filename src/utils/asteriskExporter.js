@@ -398,7 +398,7 @@ function generateDialplanFromContexts(nodes, edges, findNode, outEdges, options 
         for (const c of scChain) {
           if (c.type === 'menu') {
             scMenus.push(c);
-            const menuLabel = (c.data.label != null ? c.data.label : 'menu').trim();
+            const menuLabel = (c.data.label || c.data.greetingLabel || 'menu').trim() || 'menu';
             const scAudioFiles = Array.isArray(c.data.audioFiles) && c.data.audioFiles.length > 0
               ? c.data.audioFiles
               : [c.data.greeting || '1-bem-vindo'];
@@ -568,7 +568,7 @@ function generateDialplanFromContexts(nodes, edges, findNode, outEdges, options 
         if (c.data?.text) sSeq.push({ line: c.data.text, isRaw: true });
       } else if (c.type === 'menu') {
         // MenuNode → Background (múltiplos arquivos via &) + WaitExten + marcador atômico
-        const menuLabel = (c.data.label != null ? c.data.label : 'menu').trim();
+        const menuLabel = (c.data.label || c.data.greetingLabel || 'menu').trim() || 'menu';
         const audioFiles = Array.isArray(c.data.audioFiles) && c.data.audioFiles.length > 0
           ? c.data.audioFiles
           : [c.data.greeting || '1-bem-vindo'];
@@ -636,7 +636,7 @@ function generateDialplanFromContexts(nodes, edges, findNode, outEdges, options 
       // Emite TODAS as extensões DTMF de um menu imediatamente (bloco atômico).
       // Chamado pelo marcador { menuFlush } no meio do sSeq.
       const emitMenuDtmf = (m) => {
-        const menuLabel    = (m.data.label != null ? m.data.label : 'menu').trim();
+        const menuLabel    = (m.data.label || m.data.greetingLabel || 'menu').trim() || 'menu';
         // Quando label está vazio, o Goto de retorno usa prioridade 1 (sem label)
         const menuGotoPri  = menuLabel || '1';
         const digits    = m.data.digits || [];
@@ -1015,7 +1015,7 @@ function generateDialplanLegacy(nodes, edges, findNode, outEdges) {
     emitS(`Macro(logIvr,ENTER_IVR)`);
     emitS(`Set(CHANNEL(language)=pt_BR)`);
     emitS(`Noop(## URA ${IVR} :: ${CTX} ##)`);
-    emit(`exten => s,n(menu),Background(${m.data.greeting || '1-bem-vindo'})`);
+    emit(`exten => s,n(${m.data.label || m.data.greetingLabel || 'menu'}),Background(${m.data.greeting || '1-bem-vindo'})`);
     emitS(`WaitExten(${m.data.waitExten || 4})`);
     sep();
 

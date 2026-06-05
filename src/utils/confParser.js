@@ -775,6 +775,7 @@ function processContext(ctx, xOffset, stats, globalConfig, isFirstContext) {
         contextName:   ctx.name,
         greeting,
         greetingLabel, // label da linha Background: 'menu', 'inicio', etc.
+        label:         greetingLabel || 'menu', // campo canônico lido pelo compilador e pelo PropertiesPanel
         waitExten:     menuWaitExten,
         digits:        menuDigits,
         invalidMacro,

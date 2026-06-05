@@ -55,7 +55,7 @@ function CreateProjectModal({ onClose, onCreate }) {
       <form onSubmit={(e) => { e.preventDefault(); if (isValid) onCreate(name.trim()); }} style={{ padding: 20 }}>
         <div style={{ marginBottom: 18 }}>
           <label className="term-label">NOME DO PROJETO</label>
-          <input className="term-input" value={name} placeholder="ex: orpen-ivr-suporte" autoFocus
+          <input className="term-input" value={name} placeholder="ex: rcx-ivr-suporte" autoFocus
             name="project-name" autoComplete="off"
             style={{ borderColor: errorMsg ? '#ff5050' : undefined }}
             onChange={(e) => setName(e.target.value.toLowerCase())} />

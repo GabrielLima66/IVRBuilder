@@ -278,7 +278,7 @@ const MenuPropertiesPanel = memo(function MenuPropertiesPanel({ d, set, fl, onAu
 
   return (
     <>
-      <Field d={d} set={set} label={fl('Contexto Asterisk', 'contextName')} k="contextName" placeholder="orpen-ivr-home" />
+      <Field d={d} set={set} label={fl('Contexto Asterisk', 'contextName')} k="contextName" placeholder="rcx-ivr-home" />
       <Field d={d} set={set} label={fl('WaitExten (seg)', 'waitExten')} k="waitExten" type="number" />
 
       {/* ── Label do menu (ponto de re-entrada via Goto) ── */}
@@ -557,7 +557,7 @@ export default function PropertiesPanel({ node, updateNodeData, deleteNode, togg
             <input
               className="term-input"
               value={d.contextName || ''}
-              placeholder="orpen-ivr-exemplo"
+              placeholder="rcx-ivr-exemplo"
               onFocus={() => {
                 ctxNameOnFocus.current = d.contextName || '';
                 setCtxNameDup(false);
@@ -756,7 +756,7 @@ export default function PropertiesPanel({ node, updateNodeData, deleteNode, togg
               <input
                 className="term-input"
                 value={d.trueContext || ''}
-                placeholder="ex: orpen-ivr-fora-horario"
+                placeholder="ex: rcx-ivr-fora-horario"
                 onChange={(e) => set('trueContext', e.target.value.replace(/\s+/g, ''))}
                 onBlur={(e) => syncTrueContext && syncTrueContext(node.id, e.target.value)}
                 onKeyDown={(e) => {
@@ -839,7 +839,7 @@ export default function PropertiesPanel({ node, updateNodeData, deleteNode, togg
 
             {mode === 'contexto' && (
               <>
-                <Field d={d} set={set} label="Contexto de Destino" k="context"   placeholder="orpen-ivr-home" />
+                <Field d={d} set={set} label="Contexto de Destino" k="context"   placeholder="rcx-ivr-home" />
                 <Field d={d} set={set} label="Extensão"            k="extension" placeholder="s" />
                 <Field d={d} set={set} label="Prioridade"          k="priority"  placeholder="1" />
                 <div style={{ fontSize: 9, color: '#00d4ff', marginTop: 6, border: '1px dashed #00d4ff33', padding: 6, borderRadius: 3 }}>
@@ -865,7 +865,7 @@ export default function PropertiesPanel({ node, updateNodeData, deleteNode, togg
                   <div style={{ color: 'var(--neon-dim)', marginBottom: 4 }}>// MACRO PADRÃO ORPEN</div>
                   <code>Set(DESTINY_TRANFER={d.queue || '...'})</code><br />
                   <code>Set(TYPE_TRANSFER=QUEUE)</code><br />
-                  <code>Goto(orpen-ivr-transfer,s,1)</code>
+                  <code>Goto(rcx-ivr-transfer,s,1)</code>
                 </div>
               </>
             )}
@@ -959,7 +959,7 @@ export default function PropertiesPanel({ node, updateNodeData, deleteNode, togg
                 className="term-input"
                 list={`gotoif-true-${node.id}`}
                 value={d.trueDestination || ''}
-                placeholder="orpen-ivr-home,s,menu"
+                placeholder="rcx-ivr-home,s,menu"
                 onChange={(e) => set('trueDestination', e.target.value)}
               />
               <datalist id={`gotoif-true-${node.id}`}>
@@ -973,7 +973,7 @@ export default function PropertiesPanel({ node, updateNodeData, deleteNode, togg
                 className="term-input"
                 list={`gotoif-false-${node.id}`}
                 value={d.falseDestination || ''}
-                placeholder="orpen-ivr-home,s,reentrada"
+                placeholder="rcx-ivr-home,s,reentrada"
                 onChange={(e) => set('falseDestination', e.target.value)}
               />
               <datalist id={`gotoif-false-${node.id}`}>
@@ -1075,7 +1075,7 @@ export default function PropertiesPanel({ node, updateNodeData, deleteNode, togg
           <Field d={d} set={set} label="Dias da semana (ex: mon-fri)"  k="days" />
           <Field d={d} set={set} label="Dias do mês"                   k="monthdays" placeholder="*" />
           <Field d={d} set={set} label="Meses"                         k="months"    placeholder="*" />
-          <Field d={d} set={set} label="Aplicação"                     k="action"    placeholder="Goto(orpen-ivr-home,s,1)" />
+          <Field d={d} set={set} label="Aplicação"                     k="action"    placeholder="Goto(rcx-ivr-home,s,1)" />
           <div style={{ fontSize: 9, color: '#a78bfa', marginTop: 6, border: '1px dashed #a78bfa33', padding: 6, borderRadius: 3, lineHeight: 1.5 }}>
             <code>ExecIfTime({d.hours || '*'},{d.days || '*'},{d.monthdays || '*'},{d.months || '*'}?{d.action || 'App()'})</code>
           </div>
@@ -1312,7 +1312,7 @@ export default function PropertiesPanel({ node, updateNodeData, deleteNode, togg
             {destType === 'goto' && (
               <>
                 <Field d={dest} set={(k, v) => set('destination', { ...dest, [k]: v })}
-                  label="Contexto" k="context" placeholder="orpen-ivr-home" />
+                  label="Contexto" k="context" placeholder="rcx-ivr-home" />
                 <Field d={dest} set={(k, v) => set('destination', { ...dest, [k]: v })}
                   label="Extensão" k="extension" placeholder="s" />
                 <Field d={dest} set={(k, v) => set('destination', { ...dest, [k]: v })}

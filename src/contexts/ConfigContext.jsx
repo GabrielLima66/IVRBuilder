@@ -39,7 +39,7 @@ export const CONFIG_DEFAULTS = {
   edgeIdleOpacity:        0.25,         // 0.10–0.60 — opacidade das edges em repouso
 
   // Exportação
-  contextPrefix:          'orpen-ivr',  // string — prefixo usado em nomes de contexto gerados
+  contextPrefix:          'rcx-ivr',    // string — prefixo usado em nomes de contexto gerados
   includeSectionComments: true,         // bool — emitir comentários ;; no .conf exportado
   lineEnding:             'lf',         // 'lf' | 'crlf'
   highFidelityMode:       true,         // bool — emitir originalLine para nós não editados (fidelidade literal)

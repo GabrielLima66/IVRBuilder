@@ -358,7 +358,7 @@ export default function ExportOrderPanel({ nodes, onClose, onUpdateNode }) {
         </div>
         <div style={{ lineHeight: 1.8 }}>
           <div style={{ color: 'var(--neon)', fontSize: 10, opacity: 0.6 }}>
-            [orpen-ivr-{configNode?.data?.ivr || '??'}]
+            [rcx-ivr-{configNode?.data?.ivr || '??'}]
             <span style={{ color: 'var(--neon-dim)', fontSize: 9 }}> ← sempre primeiro</span>
           </div>
           {preview.map((item, i) => (

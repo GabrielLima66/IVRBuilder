@@ -69,7 +69,7 @@ function generateDialplanFromContexts(nodes, edges, findNode, outEdges, options 
     if (t.type === 'route') {
       const m = t.data.routeMode || 'macro';
       if (m === 'fila') return null;
-      if (m === 'macro') return 'orpen-ivr-transfer,s,1';
+      if (m === 'macro') return 'rcx-ivr-transfer,s,1';
       return `${t.data.context || ''},${t.data.extension || 's'},${t.data.priority || '1'}`;
     }
     return null;
@@ -135,7 +135,7 @@ function generateDialplanFromContexts(nodes, edges, findNode, outEdges, options 
           return [
             `Set(DESTINY_TRANFER=${n.data.queue || ''})`,
             `Set(TYPE_TRANSFER=QUEUE)`,
-            `Goto(orpen-ivr-transfer,s,1)`,
+            `Goto(rcx-ivr-transfer,s,1)`,
           ];
         }
         // _fmt preserva aridade e capitalização originais (nó importado e não editado)
@@ -265,24 +265,24 @@ function generateDialplanFromContexts(nodes, edges, findNode, outEdges, options 
 
   // ── Bloco do GlobalConfigNode ────────────────────────────────────────────────
   //
-  // O GlobalConfigNode SEMPRE gera seu próprio bloco [orpen-ivr-{IVR}], separado
+  // O GlobalConfigNode SEMPRE gera seu próprio bloco [rcx-ivr-{IVR}], separado
   // de qualquer ContextNode.
   //
   // CASO A — config conectado diretamente a um ContextNode:
-  //   Gera [orpen-ivr-{IVR}] com as linhas de configuração (Set/Macro/Noop)
+  //   Gera [rcx-ivr-{IVR}] com as linhas de configuração (Set/Macro/Noop)
   //   + Goto automático para o primeiro ContextNode conectado
   //   + Hangup + include => hangup-ivr
   //   O ContextNode NÃO recebe as linhas do GlobalConfig (blocos separados).
   //
   // CASO B — config standalone (sem conexão direta a ContextNode):
   //   Caminha sequencialmente por nós standalone (TimeNode, MenuNode etc.)
-  //   e gera [orpen-ivr-{IVR}] com a cadeia completa, igual ao comportamento
+  //   e gera [rcx-ivr-{IVR}] com a cadeia completa, igual ao comportamento
   //   anterior para canvas sem ContextNodes.
   {
     const standaloneConfig = nodes.find((n) => n.type === 'config' && !n.parentNode);
 
     // _isRealGlobalConfig === false significa que o arquivo não tem bloco de config separado —
-    // o primeiro contexto Asterisk É o entry point. Não emitir [orpen-ivr-XXXX] redundante.
+    // o primeiro contexto Asterisk É o entry point. Não emitir [rcx-ivr-XXXX] redundante.
     if (standaloneConfig && standaloneConfig.data._isRealGlobalConfig !== false) {
       // Encontra o primeiro ContextNode conectado diretamente ao GlobalConfig
       // (ctxNodes já está ordenado por `order`, então `find` retorna o mais prioritário)
@@ -291,11 +291,11 @@ function generateDialplanFromContexts(nodes, edges, findNode, outEdges, options 
       );
 
       const IVR       = standaloneConfig.data.ivr || '0000';
-      const ENTRY_CTX = `orpen-ivr-${IVR}`;
+      const ENTRY_CTX = `rcx-ivr-${IVR}`;
 
       if (cfgConnectedCtxNode) {
         // ── CASO A: GlobalConfigNode → ContextNode ───────────────────────────
-        const firstCtxName = cfgConnectedCtxNode.data.contextName || 'orpen-ivr-home';
+        const firstCtxName = cfgConnectedCtxNode.data.contextName || 'rcx-ivr-home';
 
         emit(`[${ENTRY_CTX}]`);
 
@@ -316,7 +316,7 @@ function generateDialplanFromContexts(nodes, edges, findNode, outEdges, options 
           emit(`include => hangup-ivr`);
         } else {
           // BUG 8: o ContextNode conectado TEM O MESMO NOME do bloco de entrada
-          // (acontece quando o .conf original usa [orpen-ivr-XXXX] como contexto de IVR real)
+          // (acontece quando o .conf original usa [rcx-ivr-XXXX] como contexto de IVR real)
           // Inlineia os filhos desse ContextNode aqui e suprime o bloco duplicado.
           absorbedCtxIds.add(cfgConnectedCtxNode.id);
           const entryChildren  = nodes.filter((n) => n.parentNode === cfgConnectedCtxNode.id);
@@ -474,7 +474,7 @@ function generateDialplanFromContexts(nodes, edges, findNode, outEdges, options 
           } else if (m.data.rawILines && m.data.rawILines.length) {
             for (const l of m.data.rawILines) emit(`exten => i,${l.priority},${l.application}(${l.args})`);
           } else {
-            const inv = (m.data.invalidMacro || 'macro-menu-invalid-orpen-home').replace(/^macro-/, '');
+            const inv = (m.data.invalidMacro || 'macro-menu-invalid-rcx-home').replace(/^macro-/, '');
             emit(`exten => i,1,Macro(${inv})`);
             emit(`exten => i,n,Goto(${ENTRY_CTX},s,${scMenuLabel})`);
           }
@@ -489,7 +489,7 @@ function generateDialplanFromContexts(nodes, edges, findNode, outEdges, options 
           } else if (m.data.rawTLines && m.data.rawTLines.length) {
             for (const l of m.data.rawTLines) emit(`exten => t,${l.priority},${l.application}(${l.args})`);
           } else {
-            const tmo = (m.data.timeoutMacro || 'macro-menu-timeout-orpen-home').replace(/^macro-/, '');
+            const tmo = (m.data.timeoutMacro || 'macro-menu-timeout-rcx-home').replace(/^macro-/, '');
             emit(`exten => t,1,Macro(${tmo})`);
             emit(`exten => t,n,Goto(${ENTRY_CTX},s,${scMenuLabel})`);
           }
@@ -506,7 +506,7 @@ function generateDialplanFromContexts(nodes, edges, findNode, outEdges, options 
     // BUG 8: pula contextos já emitidos inline no bloco GlobalConfig
     if (absorbedCtxIds.has(ctx.id)) continue;
 
-    const ctxName  = ctx.data.contextName || 'orpen-ivr-contexto';
+    const ctxName  = ctx.data.contextName || 'rcx-ivr-contexto';
     const children = nodes.filter((n) => n.parentNode === ctx.id);
     const chainRaw = getExecChain(ctx, children);
 
@@ -544,7 +544,7 @@ function generateDialplanFromContexts(nodes, edges, findNode, outEdges, options 
     // bloco do MenuNode seja atômico e nunca seja interrompido por linhas de outros nós.
     const sSeq = [];
 
-    // NOTA: o GlobalConfigNode gera seu próprio bloco [orpen-ivr-{IVR}] separado
+    // NOTA: o GlobalConfigNode gera seu próprio bloco [rcx-ivr-{IVR}] separado
     // (ver bloco "GlobalConfigNode" acima). As linhas de configuração (Set, Macro,
     // Noop) NÃO são mais injetadas aqui — este bloco é exclusivo do ContextNode.
 
@@ -819,7 +819,7 @@ function generateDialplanFromContexts(nodes, edges, findNode, outEdges, options 
             emitDigit('i', eiTgt);
           }
         } else {
-          const inv = m.data.invalidMacroName || (m.data.invalidMacro || 'macro-menu-invalid-orpen-home').replace(/^macro-/, '');
+          const inv = m.data.invalidMacroName || (m.data.invalidMacro || 'macro-menu-invalid-rcx-home').replace(/^macro-/, '');
           emit(`exten => i,1,Macro(${inv})`);
           emit(`exten => i,n,Goto(${ctxName},s,${menuGotoPri})`);
         }
@@ -842,7 +842,7 @@ function generateDialplanFromContexts(nodes, edges, findNode, outEdges, options 
           }
         } else {
           // BUG 4: usa timeoutMacroName (nome exato sem replace) se disponível
-          const tmo = m.data.timeoutMacroName || (m.data.timeoutMacro || 'macro-menu-timeout-orpen-home').replace(/^macro-/, '');
+          const tmo = m.data.timeoutMacroName || (m.data.timeoutMacro || 'macro-menu-timeout-rcx-home').replace(/^macro-/, '');
           emit(`exten => t,1,Macro(${tmo})`);
           emit(`exten => t,n,Goto(${ctxName},s,${menuGotoPri})`);
         }
@@ -896,7 +896,7 @@ function generateDialplanLegacy(nodes, edges, findNode, outEdges) {
   if (!config) return '; ERRO: nenhum nó de configuração encontrado.\n';
 
   const IVR = config.data.ivr || '0000';
-  const ENTRY_CTX = `orpen-ivr-${IVR}`;
+  const ENTRY_CTX = `rcx-ivr-${IVR}`;
   const lines = [];
   const generatedContexts = new Set();
   const actionChainCtxs  = [];
@@ -973,7 +973,7 @@ function generateDialplanLegacy(nodes, edges, findNode, outEdges) {
 
   const rootMenu = cursor && cursor.type === 'menu' ? cursor : nodes.find((n) => n.type === 'menu');
   if (rootMenu) {
-    emitS(`Goto(${rootMenu.data.contextName || 'orpen-ivr-home'},s,1)`);
+    emitS(`Goto(${rootMenu.data.contextName || 'rcx-ivr-home'},s,1)`);
     sep();
     emitS(`Hangup()`);
     emit(`include => hangup-ivr`);
@@ -998,7 +998,7 @@ function generateDialplanLegacy(nodes, edges, findNode, outEdges) {
       return [
         `Set(DESTINY_TRANFER=${n.data.queue || ''})`,
         `Set(TYPE_TRANSFER=QUEUE)`,
-        `Goto(orpen-ivr-transfer,s,1)`,
+        `Goto(rcx-ivr-transfer,s,1)`,
       ];
     }
     return [`Goto(${n.data.context || ''},${n.data.extension || 's'},${n.data.priority || '1'})`];
@@ -1006,7 +1006,7 @@ function generateDialplanLegacy(nodes, edges, findNode, outEdges) {
 
   while (menuQueue.length) {
     const m   = menuQueue.shift();
-    const CTX = m.data.contextName || `orpen-ivr-${IVR}-menu`;
+    const CTX = m.data.contextName || `rcx-ivr-${IVR}-menu`;
     if (generatedContexts.has(CTX)) continue;
     generatedContexts.add(CTX);
 
@@ -1033,28 +1033,28 @@ function generateDialplanLegacy(nodes, edges, findNode, outEdges) {
       if (!tgt) { sep(); continue; }
 
       if (tgt.type === 'menu') {
-        emit(`exten => ${d.id},n,Goto(${tgt.data.contextName || 'orpen-ivr-sub'},s,1)`);
+        emit(`exten => ${d.id},n,Goto(${tgt.data.contextName || 'rcx-ivr-sub'},s,1)`);
         if (!seenMenu.has(tgt.id)) { seenMenu.add(tgt.id); menuQueue.push(tgt); }
       } else if (tgt.type === 'route') {
         const lns = routeLines(tgt);
         emit(`exten => ${d.id},n,${lns[0]}`);
         for (let i = 1; i < lns.length; i++) emit(`exten => ${d.id},n,${lns[i]}`);
       } else if (tgt.type === 'time') {
-        const subCtx = `orpen-ivr-${IVR}-${d.id}`;
+        const subCtx = `rcx-ivr-${IVR}-${d.id}`;
         emit(`exten => ${d.id},n,Goto(${subCtx},s,1)`);
         tgt.__subCtx = subCtx;
       } else if (ACTION_META[tgt.type]) {
-        const subCtx = `orpen-ivr-${IVR}-${d.id}`;
+        const subCtx = `rcx-ivr-${IVR}-${d.id}`;
         emit(`exten => ${d.id},n,Goto(${subCtx},s,1)`);
         actionChainCtxs.push({ ctx: subCtx, start: tgt, parentCtx: CTX });
       }
       sep();
     }
 
-    emit(`exten => i,1,Macro(${(m.data.invalidMacro || 'macro-menu-invalid-orpen-home').replace(/^macro-/, '')})`);
+    emit(`exten => i,1,Macro(${(m.data.invalidMacro || 'macro-menu-invalid-rcx-home').replace(/^macro-/, '')})`);
     emit(`exten => i,n,Goto(${CTX},s,1)`);
     sep();
-    emit(`exten => t,1,Macro(${(m.data.timeoutMacro || 'macro-menu-timeout-orpen-home').replace(/^macro-/, '')})`);
+    emit(`exten => t,1,Macro(${(m.data.timeoutMacro || 'macro-menu-timeout-rcx-home').replace(/^macro-/, '')})`);
     emit(`exten => t,n,Goto(${CTX},s,1)`);
     sep();
     emitS(`Hangup()`);
@@ -1087,7 +1087,7 @@ function generateDialplanLegacy(nodes, edges, findNode, outEdges) {
           if (!nxt) break;
 
           if (nxt.type === 'menu') {
-            emitS(`Goto(${nxt.data.contextName || 'orpen-ivr-home'},s,1)`);
+            emitS(`Goto(${nxt.data.contextName || 'rcx-ivr-home'},s,1)`);
             if (!seenMenu.has(nxt.id)) { seenMenu.add(nxt.id); menuQueue.push(nxt); }
             terminated = true; break;
           }
@@ -1096,7 +1096,7 @@ function generateDialplanLegacy(nodes, edges, findNode, outEdges) {
             terminated = true; break;
           }
           if (nxt.type === 'time') {
-            const passCtx = `orpen-ivr-${IVR}-cond-${nxt.id.slice(-4)}`;
+            const passCtx = `rcx-ivr-${IVR}-cond-${nxt.id.slice(-4)}`;
             emitS(`Goto(${passCtx},s,1)`);
             nxt.__subCtx = passCtx;
             terminated = true; break;
@@ -1116,8 +1116,8 @@ function generateDialplanLegacy(nodes, edges, findNode, outEdges) {
   const menus = nodes.filter((n) => n.type === 'menu');
   const macros = new Map();
   for (const m of menus) {
-    const inv = m.data.invalidMacro || 'macro-menu-invalid-orpen-home';
-    const tmo = m.data.timeoutMacro || 'macro-menu-timeout-orpen-home';
+    const inv = m.data.invalidMacro || 'macro-menu-invalid-rcx-home';
+    const tmo = m.data.timeoutMacro || 'macro-menu-timeout-rcx-home';
     macros.set(inv, { kind: 'invalid', sound: m.data.invalidSound || 'opcao-invalida', retry: m.data.maxRetry || 2, goto: m.data.retryGoto || 'ivr-encerramento,s,1' });
     macros.set(tmo, { kind: 'timeout', retry: m.data.maxRetry || 2, goto: m.data.retryGoto || 'ivr-encerramento,s,1' });
   }

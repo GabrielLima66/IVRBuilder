@@ -8,7 +8,7 @@ export function buildNode(type, position) {
       return {
         ...base,
         data: {
-          contextName: 'orpen-ivr-novo-contexto',
+          contextName: 'rcx-ivr-novo-contexto',
           childOrder:  [],
           exportOrder: 0,     // será substituído por (maxOrder + 1) no App.jsx
           isDraft:     false,
@@ -34,7 +34,7 @@ export function buildNode(type, position) {
       return {
         ...base,
         data: {
-          contextName:  'orpen-ivr-home',
+          contextName:  'rcx-ivr-home',
           audioFiles:   ['boas-vindas'],       // array de arquivos de áudio (suporta múltiplos via &)
           greeting:     'boas-vindas',         // compat legado (= audioFiles[0])
           waitExten:    4,
@@ -46,8 +46,8 @@ export function buildNode(type, position) {
             finalDestination: null,
           })),
           label:         'menu',               // label da linha Background — ponto de re-entrada (ex: Goto(ctx,s,menu))
-          invalidMacro:  'macro-menu-invalid-orpen-home',
-          timeoutMacro:  'macro-menu-timeout-orpen-home',
+          invalidMacro:  'macro-menu-invalid-rcx-home',
+          timeoutMacro:  'macro-menu-timeout-rcx-home',
           invalidOption: null,
           timeoutOption: null,
           maxRetry:      2,
@@ -77,7 +77,7 @@ export function buildNode(type, position) {
           routeMode:    'macro',
           queue:        '7000',
           queueOptions: '',
-          context:      'orpen-ivr-home',
+          context:      'rcx-ivr-home',
           extension:    's',
           priority:     '1',
         },
@@ -91,7 +91,7 @@ export function buildNode(type, position) {
     case 'hangup':
       return { ...base, data: { causeCode: '' } };
     case 'gotoif':
-      return { ...base, data: { expression: '"${VAR}"="1"', trueDestination: 'orpen-ivr-home,s,1', falseDestination: '' } };
+      return { ...base, data: { expression: '"${VAR}"="1"', trueDestination: 'rcx-ivr-home,s,1', falseDestination: '' } };
 
     // Execução Lógica
     case 'set':
@@ -103,7 +103,7 @@ export function buildNode(type, position) {
     case 'execif':
       return { ...base, data: { expression: '"${MINHA_VAR}"!=""', action: 'Playback(${SOUND_PATH}/nome-do-audio)' } };
     case 'execiftime':
-      return { ...base, data: { hours: '08:00-18:00', days: 'mon-fri', monthdays: '*', months: '*', action: 'Goto(orpen-ivr-home,s,1)' } };
+      return { ...base, data: { hours: '08:00-18:00', days: 'mon-fri', monthdays: '*', months: '*', action: 'Goto(rcx-ivr-home,s,1)' } };
     case 'include':
       return { ...base, data: { contextName: 'hangup-ivr' } };
     case 'sipaddheader':

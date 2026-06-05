@@ -79,7 +79,7 @@ export function build(graph, layout) {
       logIvr:              globalConfig.logIvr        || false,
       customerAgi:         false,
       // false = primeiro contexto é real contexto IVR, não bloco de config.
-      // O compilador usa isso para suprimir a emissão do bloco [orpen-ivr-XXXX].
+      // O compilador usa isso para suprimir a emissão do bloco [rcx-ivr-XXXX].
       _isRealGlobalConfig: isRealGlobalConfig !== false,
     },
   });
@@ -209,7 +209,7 @@ export function build(graph, layout) {
   // ── Edge GlobalConfig → first ContextNode ─────────────────────────────────
   // Criada apenas quando o primeiro contexto era realmente um GlobalConfig (tem SOUND_PATH/AGI_PATH).
   // Quando o arquivo não tem bloco de config separado (ex: [ura-principal-sac] é o próprio entry),
-  // não criamos a edge — o compilador não deve emitir [orpen-ivr-XXXX] redundante.
+  // não criamos a edge — o compilador não deve emitir [rcx-ivr-XXXX] redundante.
   if (firstCtxId && isRealGlobalConfig !== false) {
     edges.push({
       id:           `e-cfg-${firstCtxId}`,

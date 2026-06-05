@@ -9,7 +9,7 @@
  * Estratégia: se o nome base está livre, retorna como está. Caso contrário,
  * sufixo numérico incremental: baseName-2, baseName-3, ...
  *
- * @param {string} baseName        — nome desejado (ex: 'orpen-ivr-novo-contexto')
+ * @param {string} baseName        — nome desejado (ex: 'rcx-ivr-novo-contexto')
  * @param {string[]} existingNames — lista de nomes já em uso no canvas
  * @returns {string} nome único pronto para uso
  */

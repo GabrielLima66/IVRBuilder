@@ -468,8 +468,8 @@ export default function ConfigModal({ onClose }) {
           <TextRow
             configKey="contextPrefix"
             label="Prefixo de contexto"
-            placeholder="orpen-ivr"
-            hint="Prefixo usado ao gerar nomes de novos ContextNodes (ex: 'orpen-ivr-novo-contexto')"
+            placeholder="rcx-ivr"
+            hint="Prefixo usado ao gerar nomes de novos ContextNodes (ex: 'rcx-ivr-novo-contexto')"
           />
           <ToggleRow
             configKey="includeSectionComments"

@@ -111,7 +111,7 @@ const RouteNode = memo(({ id, data, selected }) => {
             <div className="rcx-node-row"><span className="k">DESTINY</span><span className="v">{data.queue || '—'}</span></div>
             <div className="rcx-node-row">
               <span className="k">→</span>
-              <span className="v" style={{ fontSize: 10, color: '#a78bfa' }}>orpen-ivr-transfer</span>
+              <span className="v" style={{ fontSize: 10, color: '#a78bfa' }}>rcx-ivr-transfer</span>
             </div>
           </>
         )}

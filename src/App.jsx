@@ -537,7 +537,7 @@ function Canvas({ initialFlow, projectName, projectCreatedAt, currentProjectId, 
       const maxOrder = ctxNodes.reduce((max, n) => Math.max(max, n.data?.exportOrder ?? 0), 0);
       const existingNames = ctxNodes.map((n) => n.data?.contextName || '');
       // Usa o prefixo configurado pelo usuário como base do nome
-      const prefix    = (config.contextPrefix || 'orpen-ivr').replace(/\s+/g, '-');
+      const prefix    = (config.contextPrefix || 'rcx-ivr').replace(/\s+/g, '-');
       const baseName  = `${prefix}-novo-contexto`;
       const uniqueName = generateUniqueContextName(baseName, existingNames);
       newNode.data = { ...newNode.data, exportOrder: maxOrder + 1, contextName: uniqueName };
@@ -936,9 +936,9 @@ function Canvas({ initialFlow, projectName, projectCreatedAt, currentProjectId, 
     if (!digit || !Array.isArray(digit.actions) || digit.actions.length === 0) return;
 
     // Nome do contexto derivado de logIvrLabel ou fallback
-    const ctxBaseName = menuNode.data.contextName || 'orpen-ivr-menu';
+    const ctxBaseName = menuNode.data.contextName || 'rcx-ivr-menu';
     const logIvrLbl   = digit.logIvrLabel || `${ctxBaseName}-op-${digit.id}`;
-    const prefix      = (config.contextPrefix || 'orpen-ivr').replace(/\s+/g, '-');
+    const prefix      = (config.contextPrefix || 'rcx-ivr').replace(/\s+/g, '-');
     const baseName    = `${prefix}-${logIvrLbl}`;
     const existingNames = ns.filter((n) => n.type === 'context').map((n) => n.data?.contextName || '');
     const uniqueCtxName = generateUniqueContextName(baseName, existingNames);
@@ -1103,7 +1103,7 @@ function Canvas({ initialFlow, projectName, projectCreatedAt, currentProjectId, 
           if (m === 'fila') {
             finalDestination = { type: 'queue', ext: child.data.queue || '', ctx: child.data.queue || '' };
           } else if (m === 'macro') {
-            finalDestination = { type: 'context', contextName: 'orpen-ivr-transfer' };
+            finalDestination = { type: 'context', contextName: 'rcx-ivr-transfer' };
           } else {
             finalDestination = {
               type: 'context',
@@ -1368,7 +1368,7 @@ function Canvas({ initialFlow, projectName, projectCreatedAt, currentProjectId, 
     const menuNode = ns.find((n) => n.id === menuNodeId);
     if (!menuNode) return;
 
-    const prefix  = (config.contextPrefix || 'orpen-ivr').replace(/\s+/g, '-');
+    const prefix  = (config.contextPrefix || 'rcx-ivr').replace(/\s+/g, '-');
     const ctxBase = menuNode.data.contextName || 'menu';
     const baseName = `${prefix}-${ctxBase.replace(/^(orpen-ivr-|rcx-ivr-)/, '')}-op-${digitId}`;
     const existing = ns.filter((n) => n.type === 'context').map((n) => n.data?.contextName || '');

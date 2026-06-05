@@ -14,7 +14,7 @@
  *   com os mesmos métodos save/load — sem alterar o restante do código.
  *
  * CHAVE DE LIGAÇÃO CONF ↔ LAYOUT:
- *   contextName: nome do contexto Asterisk (ex: "orpen-ivr-2900").
+ *   contextName: nome do contexto Asterisk (ex: "rcx-ivr-2900").
  *   Nós filhos: índice dentro do childOrder do contexto.
  *   Nós livres (config, etc.): nodeType (config é único por projeto).
  *   Edges com offset: chave semântica sourceKey+targetKey+handles.

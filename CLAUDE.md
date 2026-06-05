@@ -265,7 +265,7 @@ const color = resolveNodeColor(item.accent, theme);
 - Variáveis com `__` (duplo underscore) são herdadas por sub-contextos: `__IVR`, `__NUMBER_DIALED`.
 - `include => outro-contexto` — inclui outro contexto (exportado via RawNode). Nunca como `exten => s,n,include(...)`.
 - Extensão `i` = dígito inválido; `t` = timeout de WaitExten.
-- Prefixo de contexto do projeto: `orpen-ivr-*`. Macro de transfer: `orpen-ivr-transfer`.
+- Prefixo de contexto do projeto: `rcx-ivr-*`. Macro de transfer: `rcx-ivr-transfer`.
 
 ### Sintaxe validada das funções Asterisk (fonte: docs.asterisk.org)
 
@@ -351,8 +351,8 @@ pathD = `M ${sx} ${sy} C ${sx+80} ${sy}, ${tx-80} ${ty}, ${tx} ${ty}`
 | `config.soundPath` | `'${ura-asterisk}'` ou string vazia |
 | `config.agiPath` | `'/var/lib/asterisk/agi-bin'` |
 | `config.language` | `'pt_BR'` |
-| Prefixo de contexto | `orpen-ivr-` |
-| Macro de transfer | `orpen-ivr-transfer` |
+| Prefixo de contexto | `rcx-ivr-` |
+| Macro de transfer | `rcx-ivr-transfer` |
 | MenuNode `waitExten` | `4` |
 | MenuNode `maxRetry` | `3` |
 | MenuNode dígitos padrão (`DEFAULT_DIGITS`) | `[{id:'1',label:'Opcao 1'}, ..., {id:'4',label:'Opcao 4'}]` |

@@ -346,7 +346,7 @@ Formato legado suportado: `{ hours, days, monthdays, months }` — `buildTimeExp
 }
 ```
 Exporta:
-- `macro` → `Set(DESTINY_TRANFER=queue)` + `Set(TYPE_TRANSFER=QUEUE)` + `Goto(orpen-ivr-transfer,s,1)`
+- `macro` → `Set(DESTINY_TRANFER=queue)` + `Set(TYPE_TRANSFER=QUEUE)` + `Goto(rcx-ivr-transfer,s,1)`
 - `fila` → `Queue(queue[,opts])`
 - `contexto` → `Goto(context,extension,priority)`
 
@@ -444,7 +444,7 @@ Contextos ativos são filtrados (excluindo `isDraft: true`) e ordenados pelo cam
 
 #### Passo 3 — Bloco standalone (Config sem edges a ContextNode)
 
-Se o ConfigNode não estiver conectado a nenhum ContextNode ativo, gera um bloco `[orpen-ivr-{IVR}]` com a cadeia de nós standalone (sem `parentNode`) que partem do Config.
+Se o ConfigNode não estiver conectado a nenhum ContextNode ativo, gera um bloco `[rcx-ivr-{IVR}]` com a cadeia de nós standalone (sem `parentNode`) que partem do Config.
 
 #### Passo 4 — Por contexto: sequência principal (sSeq)
 
@@ -1036,7 +1036,7 @@ Chaves disponíveis (`CONFIG_DEFAULTS`):
 | Canvas | `smartGuides` | bool | `true` |
 | Edges | `edgeStyle` | `'smooth'|'straight'|'step'` | `'smooth'` |
 | Edges | `edgeIdleOpacity` | number (0.10-0.60) | `0.25` |
-| Exportação | `contextPrefix` | string | `'orpen-ivr'` |
+| Exportação | `contextPrefix` | string | `'rcx-ivr'` |
 | Exportação | `includeSectionComments` | bool | `true` |
 | Exportação | `lineEnding` | `'lf'|'crlf'` | `'lf'` |
 | Importação | `rawOnUnknown` | bool | `true` |

@@ -1353,6 +1353,8 @@ function Canvas({ initialFlow, projectName, projectCreatedAt, currentProjectId, 
       return {
         ...n,
         selected: n.id === selectedId,
+        // Restringe drag do ContextNode ao cabeçalho — evita conflito com filhos
+        ...(n.type === 'context' ? { dragHandle: '.ctx-header' } : {}),
         ...(hasExtra ? { data: { ...n.data, ...extra } } : {}),
       };
     }),

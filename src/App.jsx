@@ -2207,6 +2207,22 @@ function Canvas({ initialFlow, projectName, projectCreatedAt, currentProjectId, 
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
+// ── Migração de prefixo legado ────────────────────────────────────────────────
+// Substitui 'orpen-' por 'rcx-' em contextNames de projetos salvos antes de
+// a convenção ser padronizada. Retorna { nodes, changed }.
+function migrateOrpenPrefix(nodes) {
+  if (!nodes?.length) return { nodes, changed: false };
+  let changed = false;
+  const migrated = nodes.map((n) => {
+    if (n.type !== 'context') return n;
+    const name = n.data?.contextName || '';
+    if (!name.startsWith('orpen-')) return n;
+    changed = true;
+    return { ...n, data: { ...n.data, contextName: name.replace(/^orpen-/, 'rcx-') } };
+  });
+  return { nodes: migrated, changed };
+}
+
 // ROOT APP — roteamento simples: 'home' | 'canvas'
 // ─────────────────────────────────────────────────────────────────────────────
 export default function App() {
@@ -2217,6 +2233,7 @@ export default function App() {
   const [importError,    setImportError]    = useState(null);
   const [confImportData, setConfImportData] = useState(null); // { nodes, edges, stats, suggestedName }
   const [isReviewMode,   setIsReviewMode]   = useState(false);
+  const [migrationMsg,   setMigrationMsg]   = useState(null); // notificação de migração de prefixo
 
   // Modo de interface agora gerenciado pelo ConfigContext (ConfigProvider)
   // Tema gerenciado pelo ConfigContext via colorTheme ('terminal'|'matrix'|'dark')
@@ -2258,6 +2275,21 @@ export default function App() {
         }
       } catch (_) { /* não-crítico — prossegue com flow original */ }
     }
+
+    // Migração automática: substitui prefixo 'orpen-' por 'rcx-' em contextNames legados
+    const migrated = migrateOrpenPrefix(flow?.nodes);
+    if (migrated.changed) {
+      flow = { ...flow, nodes: migrated.nodes };
+      const updated = { ...project, flow };
+      salvarProjeto(updated).catch(() => {});
+      setCurrentProject(updated);
+      setMigrationMsg("// projeto migrado: prefixo 'orpen-' substituído por 'rcx-'");
+      setTimeout(() => setMigrationMsg(null), 3000);
+      setPendingFlow(flow);
+      setScreen('canvas');
+      return;
+    }
+
     setCurrentProject(project);
     setPendingFlow(flow);
     setScreen('canvas');
@@ -2493,6 +2525,19 @@ export default function App() {
               onUpdateOriginal={handleUpdateOriginal}
             />
           </ReactFlowProvider>
+        </div>
+      )}
+      {/* Toast de migração de prefixo legado */}
+      {migrationMsg && (
+        <div style={{
+          position: 'fixed', bottom: 24, left: '50%', transform: 'translateX(-50%)',
+          zIndex: 9999,
+          fontFamily: "'JetBrains Mono', 'Fira Code', monospace",
+          fontSize: 10, letterSpacing: 1,
+          color: 'var(--neon)', opacity: 0.5,
+          pointerEvents: 'none',
+        }}>
+          {migrationMsg}
         </div>
       )}
       </div>

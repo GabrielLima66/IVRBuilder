@@ -1,4 +1,4 @@
-﻿import React, { memo, useRef, useState } from 'react';
+﻿import React, { memo, useRef, useState, useEffect } from 'react';
 import { ACTION_META } from '../../utils/actionMeta';
 import {
   formatDayRange, WEEKDAY_ORDER, MONTH_ORDER, getMaxDay, buildTimeExport,
@@ -447,7 +447,10 @@ const MenuPropertiesPanel = memo(function MenuPropertiesPanel({ d, set, fl, onAu
 export default function PropertiesPanel({ node, updateNodeData, deleteNode, toggleComment, patchNodeStyle, syncTrueContext, propagateContextRename, nodes = [], onContextNavigate, createContextForNewDigit, isReviewMode }) {
   // Armazena o nome do contexto no momento do foco (para detectar rename via painel)
   const ctxNameOnFocus = useRef('');
-  const [ctxNameDup, setCtxNameDup] = useState(false);
+  const [ctxNameDup,    setCtxNameDup]    = useState(false);
+  const [confirmDelete, setConfirmDelete] = useState(false);
+  // Reseta confirmação ao trocar de nó selecionado
+  useEffect(() => { setConfirmDelete(false); }, [node?.id]);
   const mode = useModeContext();
   const panelStyle = {
     width: 320, height: '100%',
@@ -1373,12 +1376,58 @@ export default function PropertiesPanel({ node, updateNodeData, deleteNode, togg
         </button>
       )}
 
-      {node.type !== 'config' && (
-        <button className="btn-neon btn-danger" style={{ width: '100%', marginTop: 6 }}
-          onClick={() => deleteNode(node.id)}>
-          ⌫ EXCLUIR NÓ
-        </button>
-      )}
+      {node.type !== 'config' && (() => {
+        const childCount = nodes.filter((n) => n.parentNode === node.id).length;
+        const needsConfirm = node.type === 'context' && childCount > 0;
+
+        if (needsConfirm && confirmDelete) {
+          return (
+            <div style={{
+              marginTop: 8,
+              padding: '8px 10px',
+              border: '1px solid #ff5050',
+              borderRadius: 3,
+              background: 'rgba(255,50,50,0.06)',
+            }}>
+              <div style={{
+                fontSize: 9, color: '#ff7070', letterSpacing: 0.5,
+                marginBottom: 8, lineHeight: 1.5,
+              }}>
+                // excluir &apos;{node.data?.contextName}&apos; e seus {childCount} nó{childCount !== 1 ? 's' : ''} filhos?
+              </div>
+              <div style={{ display: 'flex', gap: 6 }}>
+                <button
+                  type="button"
+                  className="btn-neon btn-danger"
+                  style={{ flex: 1, padding: '4px 0', fontSize: 9, letterSpacing: 1 }}
+                  onClick={() => { setConfirmDelete(false); deleteNode(node.id); }}
+                >
+                  CONFIRMAR EXCLUSÃO
+                </button>
+                <button
+                  type="button"
+                  className="btn-neon"
+                  style={{ flex: 1, padding: '4px 0', fontSize: 9, letterSpacing: 1, opacity: 0.5 }}
+                  onClick={() => setConfirmDelete(false)}
+                >
+                  CANCELAR
+                </button>
+              </div>
+            </div>
+          );
+        }
+
+        return (
+          <button
+            type="button"
+            className="btn-neon btn-danger"
+            style={{ width: '100%', marginTop: 6 }}
+            onClick={() => needsConfirm ? setConfirmDelete(true) : deleteNode(node.id)}
+          >
+            ⌫ EXCLUIR NÓ
+          </button>
+        );
+      })()}
       </div>
       {/* closes content wrapper div */}
     </aside>

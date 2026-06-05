@@ -74,6 +74,22 @@ const EDGE_STYLE_MAP = { smooth: 'smoothstep', straight: 'straight', step: 'step
 // CANVAS — estado global do grafo + lógica de DnD / reparenting
 // Props de projeto (opcionais): permitem integração com HomeScreen.
 // ─────────────────────────────────────────────────────────────────────────────
+
+// ── Utilitário: coleta todos os IDs a remover em cascata a partir de contextos-raiz ──
+// Retorna um Set com: rootIds + filhos diretos + contextos de expansão + filhos destes.
+function collectCascadeIds(rootIds, nodes) {
+  const ids = new Set(rootIds);
+  // 1ª passagem: filhos diretos e contextos de expansão DTMF
+  for (const n of nodes) {
+    if (ids.has(n.parentNode)) ids.add(n.id);
+    if (n.type === 'context' && ids.has(n.data?.expandedFrom)) ids.add(n.id);
+  }
+  // 2ª passagem: filhos dos contextos de expansão adicionados acima
+  for (const n of nodes) {
+    if (ids.has(n.parentNode)) ids.add(n.id);
+  }
+  return ids;
+}
 function Canvas({ initialFlow, projectName, projectCreatedAt, currentProjectId, onGoBack, onProjectSaved, isReviewMode, onReviewConfirm, onReviewCancel, originalConf, onUpdateOriginal }) {
   // Lê configurações do ConfigContext
   const config = useConfig();
@@ -799,12 +815,32 @@ function Canvas({ initialFlow, projectName, projectCreatedAt, currentProjectId, 
 
   // ── Deleção ───────────────────────────────────────────────────────────────
   const deleteNode = useCallback((id) => {
-    const isContext = nodesRef.current.find((n) => n.id === id)?.type === 'context';
+    const targetNode = nodesRef.current.find((n) => n.id === id);
+    const isContext  = targetNode?.type === 'context';
 
+    if (isContext) {
+      // Cascata: remove contexto + todos os filhos + contextos de expansão + edges
+      const ids = collectCascadeIds([id], nodesRef.current);
+      setNodes((ns) =>
+        ns
+          .filter((n) => !ids.has(n.id))
+          .map((n) => {
+            if (n.type !== 'context') return n;
+            const order = (n.data.childOrder || []).filter((cid) => !ids.has(cid));
+            if (order.length === (n.data.childOrder || []).length) return n;
+            return { ...n, data: { ...n.data, childOrder: order } };
+          })
+      );
+      setEdges((es) => es.filter((e) => !ids.has(e.source) && !ids.has(e.target)));
+      setSelectedId(null);
+      runAutoArrange();
+      return;
+    }
+
+    // Nó filho (não contexto): comportamento existente
     setNodes((ns) =>
       ns
         .filter((n) => n.id !== id)
-        // Remove o id excluído do childOrder de qualquer ContextNode pai
         .map((n) => {
           if (n.type !== 'context') return n;
           const order = (n.data.childOrder || []).filter((cid) => cid !== id);
@@ -814,9 +850,6 @@ function Canvas({ initialFlow, projectName, projectCreatedAt, currentProjectId, 
     );
     setEdges((es) => es.filter((e) => e.source !== id && e.target !== id));
     setSelectedId(null);
-
-    // Reorganiza para fechar o gap deixado pelo contexto excluído
-    if (isContext) runAutoArrange();
   }, [setNodes, setEdges, runAutoArrange]);
 
   // ── Toggle comentado (DESATIVAR / ATIVAR) ─────────────────────────────────

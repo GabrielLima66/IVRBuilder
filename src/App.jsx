@@ -852,6 +852,36 @@ function Canvas({ initialFlow, projectName, projectCreatedAt, currentProjectId, 
     setSelectedId(null);
   }, [setNodes, setEdges, runAutoArrange]);
 
+  // ── Intercepta exclusão nativa do React Flow (tecla DEL/Backspace) ──────────
+  // React Flow remove os nós selecionados do estado e depois chama onNodesDelete.
+  // Neste ponto os filhos ainda estão no array (RF não os selecionou).
+  // Removemos os filhos órfãos e edges pendentes manualmente.
+  const onNodesDeleteHandler = useCallback((deletedNodes) => {
+    const ctxIds = deletedNodes.filter((n) => n.type === 'context').map((n) => n.id);
+    if (!ctxIds.length) return;
+
+    // nodesRef.current ainda tem os filhos (RF só removeu os nós selecionados)
+    const allIds    = collectCascadeIds(ctxIds, nodesRef.current);
+    const orphanIds = new Set([...allIds].filter((id) => !ctxIds.includes(id)));
+
+    if (orphanIds.size > 0) {
+      setNodes((ns) =>
+        ns
+          .filter((n) => !orphanIds.has(n.id))
+          .map((n) => {
+            if (n.type !== 'context') return n;
+            const order = (n.data.childOrder || []).filter((cid) => !orphanIds.has(cid));
+            if (order.length === (n.data.childOrder || []).length) return n;
+            return { ...n, data: { ...n.data, childOrder: order } };
+          })
+      );
+    }
+    // Remove edges conectadas a qualquer ID do conjunto completo (contexto + filhos)
+    setEdges((es) => es.filter((e) => !allIds.has(e.source) && !allIds.has(e.target)));
+    setSelectedId(null);
+    runAutoArrange();
+  }, [setNodes, setEdges, runAutoArrange]);
+
   // ── Toggle comentado (DESATIVAR / ATIVAR) ─────────────────────────────────
   const toggleComment = useCallback((id) => {
     setNodes((ns) =>
@@ -1764,6 +1794,7 @@ function Canvas({ initialFlow, projectName, projectCreatedAt, currentProjectId, 
           onNodeDragStart={onNodeDragStart}
           onNodeDrag={handleNodeDrag}
           onNodeDragStop={onNodeDragStop}
+          onNodesDelete={onNodesDeleteHandler}
           onEdgeContextMenu={onEdgeContextMenu}
           onNodeContextMenu={onNodeContextMenu}
           nodeTypes={nodeTypes}

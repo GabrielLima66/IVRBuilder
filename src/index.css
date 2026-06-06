@@ -299,6 +299,7 @@ body::before {
    ═══════════════════════════════════════════════════════════════════════════ */
 .react-flow { background: var(--bg); }
 .react-flow__background path { stroke: var(--neon-glow-faint) !important; }
+.react-flow__selection { background: rgba(0,255,65,0.06); border: 1px solid var(--neon) !important; }
 .react-flow__edge-path { stroke: var(--neon); stroke-width: 1.5; cursor: pointer; }
 .react-flow__edge:hover .react-flow__edge-path { stroke: #fff; stroke-width: 2; }
 .react-flow__edge.selected .react-flow__edge-path {

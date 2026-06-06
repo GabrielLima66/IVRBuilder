@@ -2293,6 +2293,7 @@ function migrateOrpenPrefix(nodes) {
 // ROOT APP — roteamento simples: 'home' | 'canvas'
 // ─────────────────────────────────────────────────────────────────────────────
 export default function App() {
+  const { queueContext } = useConfig();
   const [screen,         setScreen]         = useState('home');
   const [projects,       setProjects]       = useState([]);  // reflete o IndexedDB
   const [currentProject, setCurrentProject] = useState(null);
@@ -2409,7 +2410,7 @@ export default function App() {
     const reader = new FileReader();
     reader.onload = async (e) => {
       try {
-        const result = importConf(e.target.result, { queueContext: config.queueContext });
+        const result = importConf(e.target.result, { queueContext });
         let nodes         = result.flowState.nodes;
         let edges         = result.flowState.edges;
         let viewport      = { x: 0, y: 0, zoom: 0.7 };

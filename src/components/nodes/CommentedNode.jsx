@@ -10,6 +10,12 @@ import { cls } from '../../utils/common';
 import { useActiveSelection } from '../../contexts/ActiveSelectionContext';
 import { useReviewMode } from '../../contexts/ReviewModeContext';
 
+const minBtnSty = {
+  background: 'none', border: 'none', cursor: 'pointer',
+  fontSize: 9, padding: '0 2px', lineHeight: 1,
+  opacity: 0.6, flexShrink: 0, fontFamily: 'inherit', color: 'inherit',
+};
+
 const CommentedNode = memo(({ id, data, selected }) => {
   const { setNodes } = useReactFlow();
   const { activeNodeIds } = useActiveSelection();
@@ -21,6 +27,12 @@ const CommentedNode = memo(({ id, data, selected }) => {
     if (!data.onReactivate) return;
     data.onReactivate(id, data.originalLine);
   }, [id, data]);
+
+  const toggleMinimize = useCallback(() => {
+    setNodes((ns) => ns.map((n) =>
+      n.id === id ? { ...n, data: { ...n.data, minimized: !n.data.minimized } } : n
+    ));
+  }, [id, setNodes]);
 
   return (
     <div
@@ -44,6 +56,16 @@ const CommentedNode = memo(({ id, data, selected }) => {
         color: '#ffcc00',
       }}>
         <span style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
+          <button type="button" aria-label={data.minimized ? 'Expandir nó' : 'Minimizar nó'}
+            title={data.minimized ? 'Expandir' : 'Minimizar'}
+            onClick={(e) => { e.stopPropagation(); toggleMinimize(); }}
+            onMouseDown={(e) => e.stopPropagation()}
+            style={minBtnSty}
+            onMouseEnter={(e) => { e.currentTarget.style.opacity = '1'; }}
+            onMouseLeave={(e) => { e.currentTarget.style.opacity = '0.6'; }}
+          >
+            {data.minimized ? '▶' : '▼'}
+          </button>
           <span style={{ fontSize: 9, letterSpacing: 1.5, opacity: 0.8 }}>// COMENTADO</span>
           {reviewMode && (
             <span className="badge" style={{ borderColor: '#ffcc0099', color: '#ffcc00', fontSize: 9 }} title="Linha comentada importada — verifique antes de confirmar">?</span>
@@ -71,24 +93,26 @@ const CommentedNode = memo(({ id, data, selected }) => {
         )}
       </div>
 
-      <div className="rcx-node-body">
-        <div style={{
-          fontSize: 9,
-          color: '#ffcc00',
-          opacity: 0.65,
-          wordBreak: 'break-all',
-          fontFamily: 'inherit',
-          lineHeight: 1.5,
-          padding: '2px 0',
-        }}>
-          {data.originalLine || data.text || ''}
-        </div>
-        {data.reactivateError && (
-          <div style={{ fontSize: 8, color: '#ff5050', marginTop: 4 }}>
-            ⚠ {data.reactivateError}
+      {!data.minimized && (
+        <div className="rcx-node-body">
+          <div style={{
+            fontSize: 9,
+            color: '#ffcc00',
+            opacity: 0.65,
+            wordBreak: 'break-all',
+            fontFamily: 'inherit',
+            lineHeight: 1.5,
+            padding: '2px 0',
+          }}>
+            {data.originalLine || data.text || ''}
           </div>
-        )}
-      </div>
+          {data.reactivateError && (
+            <div style={{ fontSize: 8, color: '#ff5050', marginTop: 4 }}>
+              ⚠ {data.reactivateError}
+            </div>
+          )}
+        </div>
+      )}
     </div>
   );
 });

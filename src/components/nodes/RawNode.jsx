@@ -17,6 +17,12 @@ const btnStyle = (color) => ({
   borderRadius: 2,
 });
 
+const minBtnSty = {
+  background: 'none', border: 'none', cursor: 'pointer',
+  fontSize: 9, padding: '0 2px', lineHeight: 1,
+  opacity: 0.6, flexShrink: 0, fontFamily: 'inherit', color: 'inherit',
+};
+
 const RawNode = memo(({ id, data, selected }) => {
   const { setNodes, setEdges } = useReactFlow();
   const { activeNodeIds } = useActiveSelection();
@@ -44,6 +50,12 @@ const RawNode = memo(({ id, data, selected }) => {
     setEdges((es) => es.filter((e) => e.source !== id && e.target !== id));
   }, [id, setNodes, setEdges]);
 
+  const toggleMinimize = useCallback(() => {
+    setNodes((ns) => ns.map((n) =>
+      n.id === id ? { ...n, data: { ...n.data, minimized: !n.data.minimized } } : n
+    ));
+  }, [id, setNodes]);
+
   return (
     <div
       className={cls('rcx-node', selected && 'selected', isConnectedActive && 'node-connected-active')}
@@ -65,7 +77,17 @@ const RawNode = memo(({ id, data, selected }) => {
         borderColor: '#ff8c0066',
         color: '#ff8c00',
       }}>
-        <span style={{ fontSize: 9, letterSpacing: 1.5 }}>
+        <span style={{ display: 'flex', alignItems: 'center', gap: 4, fontSize: 9, letterSpacing: 1.5 }}>
+          <button type="button" aria-label={data.minimized ? 'Expandir nó' : 'Minimizar nó'}
+            title={data.minimized ? 'Expandir' : 'Minimizar'}
+            onClick={(e) => { e.stopPropagation(); toggleMinimize(); }}
+            onMouseDown={(e) => e.stopPropagation()}
+            style={minBtnSty}
+            onMouseEnter={(e) => { e.currentTarget.style.opacity = '1'; }}
+            onMouseLeave={(e) => { e.currentTarget.style.opacity = '0.6'; }}
+          >
+            {data.minimized ? '▶' : '▼'}
+          </button>
           {data._commented ? '// RAW' : '// RAW'}
         </span>
         <span style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
@@ -79,32 +101,34 @@ const RawNode = memo(({ id, data, selected }) => {
         </span>
       </div>
 
-      <div className="rcx-node-body">
-        <div style={{ fontSize: 9, color: 'var(--neon-dim)', marginBottom: 4, letterSpacing: 0.5 }}>
-          linha original:
-        </div>
-        <textarea
-          className="term-textarea"
-          value={data.rawLine || ''}
-          rows={2}
-          style={{ fontSize: 10, resize: 'vertical', borderColor: '#ff8c0066' }}
-          onChange={handleChange}
-          onMouseDown={(e) => e.stopPropagation()}
-          onClick={(e) => e.stopPropagation()}
-          readOnly={!!data._commented}
-        />
-
-        {data._commented && (
-          <div style={{ display: 'flex', gap: 5, marginTop: 6 }}>
-            <button onMouseDown={(e) => e.stopPropagation()} onClick={handleActivate} style={btnStyle('var(--neon)')}>
-              ATIVAR
-            </button>
-            <button onMouseDown={(e) => e.stopPropagation()} onClick={handleExclude} style={btnStyle('#ff5050')}>
-              EXCLUIR
-            </button>
+      {!data.minimized && (
+        <div className="rcx-node-body">
+          <div style={{ fontSize: 9, color: 'var(--neon-dim)', marginBottom: 4, letterSpacing: 0.5 }}>
+            linha original:
           </div>
-        )}
-      </div>
+          <textarea
+            className="term-textarea"
+            value={data.rawLine || ''}
+            rows={2}
+            style={{ fontSize: 10, resize: 'vertical', borderColor: '#ff8c0066' }}
+            onChange={handleChange}
+            onMouseDown={(e) => e.stopPropagation()}
+            onClick={(e) => e.stopPropagation()}
+            readOnly={!!data._commented}
+          />
+
+          {data._commented && (
+            <div style={{ display: 'flex', gap: 5, marginTop: 6 }}>
+              <button onMouseDown={(e) => e.stopPropagation()} onClick={handleActivate} style={btnStyle('var(--neon)')}>
+                ATIVAR
+              </button>
+              <button onMouseDown={(e) => e.stopPropagation()} onClick={handleExclude} style={btnStyle('#ff5050')}>
+                EXCLUIR
+              </button>
+            </div>
+          )}
+        </div>
+      )}
     </div>
   );
 });

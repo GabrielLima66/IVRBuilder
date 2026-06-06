@@ -23,6 +23,12 @@ const btnStyle = (color) => ({
   borderRadius: 2,
 });
 
+const minBtnSty = {
+  background: 'none', border: 'none', cursor: 'pointer',
+  fontSize: 9, padding: '0 2px', lineHeight: 1,
+  opacity: 0.6, flexShrink: 0, fontFamily: 'inherit', color: 'inherit',
+};
+
 const ActionNode = memo(({ id, data, selected, type }) => {
   const meta = ACTION_META[type];
   if (!meta) return null;
@@ -65,6 +71,12 @@ const ActionNode = memo(({ id, data, selected, type }) => {
     setEdges((es) => es.filter((e) => e.source !== id && e.target !== id));
   }, [id, setNodes, setEdges]);
 
+  const toggleMinimize = useCallback(() => {
+    setNodes((ns) => ns.map((n) =>
+      n.id === id ? { ...n, data: { ...n.data, minimized: !n.data.minimized } } : n
+    ));
+  }, [id, setNodes]);
+
   const errors      = meta.validate ? meta.validate(data) : [];
   const isInvalid   = errors.length > 0;
   const borderColor = data._commented
@@ -97,8 +109,20 @@ const ActionNode = memo(({ id, data, selected, type }) => {
         borderColor: color + '88',
         color,
       }}>
-        <span style={{ display: 'flex', alignItems: 'center', gap: 6, textShadow: `0 0 5px ${color}` }}>
-          <Icon size={12} /> {data._commented ? `// ${displayTitle}` : displayTitle}
+        <span style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
+          <button type="button" aria-label={data.minimized ? 'Expandir nó' : 'Minimizar nó'}
+            title={data.minimized ? 'Expandir' : 'Minimizar'}
+            onClick={(e) => { e.stopPropagation(); toggleMinimize(); }}
+            onMouseDown={(e) => e.stopPropagation()}
+            style={minBtnSty}
+            onMouseEnter={(e) => { e.currentTarget.style.opacity = '1'; }}
+            onMouseLeave={(e) => { e.currentTarget.style.opacity = '0.6'; }}
+          >
+            {data.minimized ? '▶' : '▼'}
+          </button>
+          <span style={{ display: 'flex', alignItems: 'center', gap: 6, textShadow: `0 0 5px ${color}` }}>
+            <Icon size={12} /> {data._commented ? `// ${displayTitle}` : displayTitle}
+          </span>
         </span>
         <span style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
           {confidenceLevel === 'medium' && (
@@ -119,53 +143,57 @@ const ActionNode = memo(({ id, data, selected, type }) => {
         </span>
       </div>
 
-      {meta.supportsLabel && data.label?.trim() && (
-        <div style={{
-          padding: '2px 10px',
-          fontSize: 9,
-          color: '#ffcc00',
-          letterSpacing: 1,
-          fontFamily: 'inherit',
-          borderBottom: '1px dashed #ffcc0044',
-          background: '#ffcc000a',
-        }}>
-          ({data.label.trim()})
-        </div>
+      {!data.minimized && (
+        <>
+          {meta.supportsLabel && data.label?.trim() && (
+            <div style={{
+              padding: '2px 10px',
+              fontSize: 9,
+              color: '#ffcc00',
+              letterSpacing: 1,
+              fontFamily: 'inherit',
+              borderBottom: '1px dashed #ffcc0044',
+              background: '#ffcc000a',
+            }}>
+              ({data.label.trim()})
+            </div>
+          )}
+
+          <div className="rcx-node-body">
+            {rows.map((r, i) => (
+              <div key={i} className="rcx-node-row">
+                <span className="k">{r.k}</span>
+                <span className="v" style={{ maxWidth: 140, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                  {r.v}
+                </span>
+              </div>
+            ))}
+
+            {isInvalid && !data._commented && (
+              <div style={{
+                marginTop: 6, padding: '3px 6px',
+                fontSize: 9, color: '#ff5050',
+                borderTop: '1px dashed #ff505066',
+              }}>
+                ⚠ {errors[0]}
+              </div>
+            )}
+
+            {data._commented && (
+              <div style={{ display: 'flex', gap: 5, marginTop: 6 }}>
+                <button onMouseDown={(e) => e.stopPropagation()} onClick={handleActivate}
+                  style={btnStyle('var(--neon)')}>
+                  ATIVAR
+                </button>
+                <button onMouseDown={(e) => e.stopPropagation()} onClick={handleExclude}
+                  style={btnStyle('#ff5050')}>
+                  EXCLUIR
+                </button>
+              </div>
+            )}
+          </div>
+        </>
       )}
-
-      <div className="rcx-node-body">
-        {rows.map((r, i) => (
-          <div key={i} className="rcx-node-row">
-            <span className="k">{r.k}</span>
-            <span className="v" style={{ maxWidth: 140, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-              {r.v}
-            </span>
-          </div>
-        ))}
-
-        {isInvalid && !data._commented && (
-          <div style={{
-            marginTop: 6, padding: '3px 6px',
-            fontSize: 9, color: '#ff5050',
-            borderTop: '1px dashed #ff505066',
-          }}>
-            ⚠ {errors[0]}
-          </div>
-        )}
-
-        {data._commented && (
-          <div style={{ display: 'flex', gap: 5, marginTop: 6 }}>
-            <button onMouseDown={(e) => e.stopPropagation()} onClick={handleActivate}
-              style={btnStyle('var(--neon)')}>
-              ATIVAR
-            </button>
-            <button onMouseDown={(e) => e.stopPropagation()} onClick={handleExclude}
-              style={btnStyle('#ff5050')}>
-              EXCLUIR
-            </button>
-          </div>
-        )}
-      </div>
     </div>
   );
 });

@@ -25,6 +25,12 @@ const btnStyle = (color) => ({
   borderRadius: 2,
 });
 
+const minBtnSty = {
+  background: 'none', border: 'none', cursor: 'pointer',
+  fontSize: 9, padding: '0 2px', lineHeight: 1,
+  opacity: 0.6, flexShrink: 0, fontFamily: 'inherit', color: 'inherit',
+};
+
 const RouteNode = memo(({ id, data, selected }) => {
   const { setNodes, setEdges } = useReactFlow();
   const mode  = data.routeMode || 'macro';
@@ -51,6 +57,12 @@ const RouteNode = memo(({ id, data, selected }) => {
     setEdges((es) => es.filter((e) => e.source !== id && e.target !== id));
   }, [id, setNodes, setEdges]);
 
+  const toggleMinimize = useCallback(() => {
+    setNodes((ns) => ns.map((n) =>
+      n.id === id ? { ...n, data: { ...n.data, minimized: !n.data.minimized } } : n
+    ));
+  }, [id, setNodes]);
+
   const borderColor = data._commented ? (color + '33') : (color + '99');
 
   return (
@@ -73,60 +85,74 @@ const RouteNode = memo(({ id, data, selected }) => {
         background: `linear-gradient(180deg, ${color}22 0%, ${color}08 100%)`,
         borderColor: color + '88', color,
       }}>
-        <span style={{ textShadow: `0 0 5px ${color}` }}>
-          {data._commented ? `// ${displayTitle}` : `▶ ${displayTitle}`}
+        <span style={{ display: 'flex', alignItems: 'center', gap: 4, textShadow: `0 0 5px ${color}` }}>
+          <button type="button" aria-label={data.minimized ? 'Expandir nó' : 'Minimizar nó'}
+            title={data.minimized ? 'Expandir' : 'Minimizar'}
+            onClick={(e) => { e.stopPropagation(); toggleMinimize(); }}
+            onMouseDown={(e) => e.stopPropagation()}
+            style={minBtnSty}
+            onMouseEnter={(e) => { e.currentTarget.style.opacity = '1'; }}
+            onMouseLeave={(e) => { e.currentTarget.style.opacity = '0.6'; }}
+          >
+            {data.minimized ? '▶' : '▼'}
+          </button>
+          {data._commented ? `// ${displayTitle}` : displayTitle}
         </span>
-        {isPreserved && <span className="node-preserved-badge" title="Linha original preservada — não editado">⬤</span>}
-        {data._commented
-          ? <span className="badge" style={{ borderColor: '#ff505088', color: '#ff5050' }}>DESATIVADO</span>
-          : modeCtx !== 'amigavel' && (
-              <span className="badge" style={{ borderColor: color, color }}>{MODE_LABEL[mode] || 'MACRO+FILA'}</span>
-            )
-        }
+        <span style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
+          {isPreserved && <span className="node-preserved-badge" title="Linha original preservada — não editado">⬤</span>}
+          {data._commented
+            ? <span className="badge" style={{ borderColor: '#ff505088', color: '#ff5050' }}>DESATIVADO</span>
+            : modeCtx !== 'amigavel' && (
+                <span className="badge" style={{ borderColor: color, color }}>{MODE_LABEL[mode] || 'MACRO+FILA'}</span>
+              )
+          }
+        </span>
       </div>
 
-      <div className="rcx-node-body">
-        {mode === 'contexto' && (
-          <>
-            <div className="rcx-node-row">
-              <span className="k">ctx</span>
-              <span className="v" style={{ maxWidth: 155, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-                {data.context || '—'}
-              </span>
-            </div>
-            <div className="rcx-node-row">
-              <span className="k">ext</span><span className="v">{data.extension || 's'}</span>
-              <span className="k" style={{ marginLeft: 8 }}>pri</span><span className="v">{data.priority || '1'}</span>
-            </div>
-          </>
-        )}
-        {mode === 'fila' && (
-          <>
-            <div className="rcx-node-row"><span className="k">Queue</span><span className="v">{data.queue || '—'}</span></div>
-            <div className="rcx-node-row"><span className="k">opts</span><span className="v">{data.queueOptions || '(sem)'}</span></div>
-          </>
-        )}
-        {mode === 'macro' && (
-          <>
-            <div className="rcx-node-row"><span className="k">DESTINY</span><span className="v">{data.queue || '—'}</span></div>
-            <div className="rcx-node-row">
-              <span className="k">→</span>
-              <span className="v" style={{ fontSize: 10, color: '#a78bfa' }}>rcx-ivr-transfer</span>
-            </div>
-          </>
-        )}
+      {!data.minimized && (
+        <div className="rcx-node-body">
+          {mode === 'contexto' && (
+            <>
+              <div className="rcx-node-row">
+                <span className="k">ctx</span>
+                <span className="v" style={{ maxWidth: 155, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                  {data.context || '—'}
+                </span>
+              </div>
+              <div className="rcx-node-row">
+                <span className="k">ext</span><span className="v">{data.extension || 's'}</span>
+                <span className="k" style={{ marginLeft: 8 }}>pri</span><span className="v">{data.priority || '1'}</span>
+              </div>
+            </>
+          )}
+          {mode === 'fila' && (
+            <>
+              <div className="rcx-node-row"><span className="k">Queue</span><span className="v">{data.queue || '—'}</span></div>
+              <div className="rcx-node-row"><span className="k">opts</span><span className="v">{data.queueOptions || '(sem)'}</span></div>
+            </>
+          )}
+          {mode === 'macro' && (
+            <>
+              <div className="rcx-node-row"><span className="k">DESTINY</span><span className="v">{data.queue || '—'}</span></div>
+              <div className="rcx-node-row">
+                <span className="k">→</span>
+                <span className="v" style={{ fontSize: 10, color: '#a78bfa' }}>rcx-ivr-transfer</span>
+              </div>
+            </>
+          )}
 
-        {data._commented && (
-          <div style={{ display: 'flex', gap: 5, marginTop: 6 }}>
-            <button onMouseDown={(e) => e.stopPropagation()} onClick={handleActivate} style={btnStyle('var(--neon)')}>
-              ATIVAR
-            </button>
-            <button onMouseDown={(e) => e.stopPropagation()} onClick={handleExclude} style={btnStyle('#ff5050')}>
-              EXCLUIR
-            </button>
-          </div>
-        )}
-      </div>
+          {data._commented && (
+            <div style={{ display: 'flex', gap: 5, marginTop: 6 }}>
+              <button onMouseDown={(e) => e.stopPropagation()} onClick={handleActivate} style={btnStyle('var(--neon)')}>
+                ATIVAR
+              </button>
+              <button onMouseDown={(e) => e.stopPropagation()} onClick={handleExclude} style={btnStyle('#ff5050')}>
+                EXCLUIR
+              </button>
+            </div>
+          )}
+        </div>
+      )}
     </div>
   );
 });

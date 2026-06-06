@@ -20,6 +20,12 @@ const btnStyle = (color) => ({
   borderRadius: 2,
 });
 
+const minBtnSty = {
+  background: 'none', border: 'none', cursor: 'pointer',
+  fontSize: 9, padding: '0 2px', lineHeight: 1,
+  opacity: 0.6, flexShrink: 0, fontFamily: 'inherit', color: 'inherit',
+};
+
 const TimeNode = memo(({ id, data, selected }) => {
   const { setNodes, setEdges } = useReactFlow();
   const { activeNodeIds } = useActiveSelection();
@@ -43,6 +49,12 @@ const TimeNode = memo(({ id, data, selected }) => {
     setNodes((ns) => ns.filter((n) => n.id !== id));
     setEdges((es) => es.filter((e) => e.source !== id && e.target !== id));
   }, [id, setNodes, setEdges]);
+
+  const toggleMinimize = useCallback(() => {
+    setNodes((ns) => ns.map((n) =>
+      n.id === id ? { ...n, data: { ...n.data, minimized: !n.data.minimized } } : n
+    ));
+  }, [id, setNodes]);
 
   const timeStr  = data.timeStart || data.timeEnd
     ? formatTimeRange(data.timeStart, data.timeEnd)
@@ -85,61 +97,75 @@ const TimeNode = memo(({ id, data, selected }) => {
       />
 
       <div className="rcx-node-header">
-        <span className="neon-text">
-          {data._commented ? `// ${displayTitle}` : `▶ ${displayTitle}`}
+        <span style={{ display: 'flex', alignItems: 'center', gap: 4 }} className="neon-text">
+          <button type="button" aria-label={data.minimized ? 'Expandir nó' : 'Minimizar nó'}
+            title={data.minimized ? 'Expandir' : 'Minimizar'}
+            onClick={(e) => { e.stopPropagation(); toggleMinimize(); }}
+            onMouseDown={(e) => e.stopPropagation()}
+            style={minBtnSty}
+            onMouseEnter={(e) => { e.currentTarget.style.opacity = '1'; }}
+            onMouseLeave={(e) => { e.currentTarget.style.opacity = '0.6'; }}
+          >
+            {data.minimized ? '▶' : '▼'}
+          </button>
+          {data._commented ? `// ${displayTitle}` : displayTitle}
         </span>
-        {isPreserved && <span className="node-preserved-badge" title="Linha original preservada — não editado">⬤</span>}
-        {data._commented
-          ? <span className="badge" style={{ borderColor: '#ff505088', color: '#ff5050' }}>DESATIVADO</span>
-          : modeCtx !== 'amigavel' && <span className="badge">GotoIfTime</span>
-        }
+        <span style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
+          {isPreserved && <span className="node-preserved-badge" title="Linha original preservada — não editado">⬤</span>}
+          {data._commented
+            ? <span className="badge" style={{ borderColor: '#ff505088', color: '#ff5050' }}>DESATIVADO</span>
+            : modeCtx !== 'amigavel' && <span className="badge">GotoIfTime</span>
+          }
+        </span>
       </div>
 
-      <div className="rcx-node-body">
-        <div className="rcx-node-row"><span className="k">horário</span><span className="v">{timeStr}</span></div>
-        <div className="rcx-node-row"><span className="k">dias</span><span className="v">{daysStr}</span></div>
-        <div className="rcx-node-row"><span className="k">meses</span><span className="v">{monthStr}</span></div>
-        <div className="rcx-node-row"><span className="k">dia mês</span><span className="v">{mdayStr}</span></div>
+      {!data.minimized && (
+        <div className="rcx-node-body">
+          <div className="rcx-node-row"><span className="k">horário</span><span className="v">{timeStr}</span></div>
+          <div className="rcx-node-row"><span className="k">dias</span><span className="v">{daysStr}</span></div>
+          <div className="rcx-node-row"><span className="k">meses</span><span className="v">{monthStr}</span></div>
+          <div className="rcx-node-row"><span className="k">dia mês</span><span className="v">{mdayStr}</span></div>
 
-        <div style={{
-          marginTop: 6,
-          padding: '4px 6px',
-          borderTop: '1px dashed var(--line)',
-          fontSize: 10,
-        }}>
-          <div style={{ color: '#ffcc00', fontSize: 9, letterSpacing: 1, marginBottom: 2 }}>
-            → SE VERDADEIRO
-          </div>
-          <span style={{
-            color: trueCtx ? '#ffcc00' : 'var(--panel-hint-color)',
-            fontStyle: trueCtx ? 'normal' : 'italic',
+          <div style={{
+            marginTop: 6,
+            padding: '4px 6px',
+            borderTop: '1px dashed var(--line)',
+            fontSize: 10,
           }}>
-            {trueCtx || '(sem destino)'}
-          </span>
-        </div>
-
-        {!data._commented && (
-          <>
-            <div style={{ marginTop: 4, fontSize: 9, color: isValid ? 'var(--neon)' : '#ff5050', letterSpacing: 0.5 }}>
-              {isValid ? '✓ vinculado' : '⚠ sem destino vinculado'}
+            <div style={{ color: '#ffcc00', fontSize: 9, letterSpacing: 1, marginBottom: 2 }}>
+              → SE VERDADEIRO
             </div>
-            <div style={{ marginTop: 6, fontSize: 10, color: 'var(--neon)', textAlign: 'center' }}>
-              ↓ Continua (falso)
-            </div>
-          </>
-        )}
-
-        {data._commented && (
-          <div style={{ display: 'flex', gap: 5, marginTop: 6 }}>
-            <button onMouseDown={(e) => e.stopPropagation()} onClick={handleActivate} style={btnStyle('var(--neon)')}>
-              ATIVAR
-            </button>
-            <button onMouseDown={(e) => e.stopPropagation()} onClick={handleExclude} style={btnStyle('#ff5050')}>
-              EXCLUIR
-            </button>
+            <span style={{
+              color: trueCtx ? '#ffcc00' : 'var(--panel-hint-color)',
+              fontStyle: trueCtx ? 'normal' : 'italic',
+            }}>
+              {trueCtx || '(sem destino)'}
+            </span>
           </div>
-        )}
-      </div>
+
+          {!data._commented && (
+            <>
+              <div style={{ marginTop: 4, fontSize: 9, color: isValid ? 'var(--neon)' : '#ff5050', letterSpacing: 0.5 }}>
+                {isValid ? '✓ vinculado' : '⚠ sem destino vinculado'}
+              </div>
+              <div style={{ marginTop: 6, fontSize: 10, color: 'var(--neon)', textAlign: 'center' }}>
+                ↓ Continua (falso)
+              </div>
+            </>
+          )}
+
+          {data._commented && (
+            <div style={{ display: 'flex', gap: 5, marginTop: 6 }}>
+              <button onMouseDown={(e) => e.stopPropagation()} onClick={handleActivate} style={btnStyle('var(--neon)')}>
+                ATIVAR
+              </button>
+              <button onMouseDown={(e) => e.stopPropagation()} onClick={handleExclude} style={btnStyle('#ff5050')}>
+                EXCLUIR
+              </button>
+            </div>
+          )}
+        </div>
+      )}
 
       <Handle
         type="source"

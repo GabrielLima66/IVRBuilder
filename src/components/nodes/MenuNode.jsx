@@ -30,6 +30,12 @@ const EDIT_BTN = {
   transition: 'opacity 0.1s', lineHeight: 1,
 };
 
+const minBtnSty = {
+  background: 'none', border: 'none', cursor: 'pointer',
+  fontSize: 9, padding: '0 2px', lineHeight: 1,
+  opacity: 0.6, flexShrink: 0, fontFamily: 'inherit', color: 'inherit',
+};
+
 const MenuNode = memo(({ id, data, selected }) => {
   const digits = data.digits || [];
   const updateNodeInternals = useUpdateNodeInternals();
@@ -39,6 +45,13 @@ const MenuNode = memo(({ id, data, selected }) => {
   const displayTitle        = getNodeLabel('menu', modeCtx);
   const menuActions         = useMenuActions();
   const rfInstance          = useReactFlow();
+  const { setNodes }        = rfInstance;
+
+  const toggleMinimize = useCallback(() => {
+    setNodes((ns) => ns.map((n) =>
+      n.id === id ? { ...n, data: { ...n.data, minimized: !n.data.minimized } } : n
+    ));
+  }, [id, setNodes]);
 
   // Todos os hooks antes de qualquer early return — Rules of Hooks
   const [editingDigitId, setEditingDigitId] = useState(null);
@@ -91,11 +104,23 @@ const MenuNode = memo(({ id, data, selected }) => {
       <Handle type="target" position={Position.Left} id="in-left" />
 
       <div className="rcx-node-header">
-        <span className="neon-text">▶ {displayTitle}</span>
+        <span style={{ display: 'flex', alignItems: 'center', gap: 4 }} className="neon-text">
+          <button type="button" aria-label={data.minimized ? 'Expandir nó' : 'Minimizar nó'}
+            title={data.minimized ? 'Expandir' : 'Minimizar'}
+            onClick={(e) => { e.stopPropagation(); toggleMinimize(); }}
+            onMouseDown={(e) => e.stopPropagation()}
+            style={minBtnSty}
+            onMouseEnter={(e) => { e.currentTarget.style.opacity = '1'; }}
+            onMouseLeave={(e) => { e.currentTarget.style.opacity = '0.6'; }}
+          >
+            {data.minimized ? '▶' : '▼'}
+          </button>
+          {displayTitle}
+        </span>
         {modeCtx !== 'amigavel' && <span className="badge">(menu)</span>}
       </div>
 
-      <div className="rcx-node-body">
+      {!data.minimized && <div className="rcx-node-body">
         {/* Linha de áudio */}
         <div className="rcx-node-row">
           <span className="k">audio</span>
@@ -285,7 +310,7 @@ const MenuNode = memo(({ id, data, selected }) => {
             <Handle type="source" position={Position.Right} id="d-t" style={{ background: '#ff8c00' }} />
           </div>
         </div>
-      </div>
+      </div>}
     </div>
   );
 });

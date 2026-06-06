@@ -165,6 +165,21 @@ const ContextNode = memo(({ id, data, selected }) => {
     );
   }, [id, setNodes]);
 
+  // Minimizar/expandir todos os filhos em lote
+  const minimizeAll = useCallback(() => {
+    const childSet = new Set(childOrder);
+    setNodes((ns) => ns.map((n) =>
+      childSet.has(n.id) ? { ...n, data: { ...n.data, minimized: true } } : n
+    ));
+  }, [childOrder, setNodes]);
+
+  const expandAll = useCallback(() => {
+    const childSet = new Set(childOrder);
+    setNodes((ns) => ns.map((n) =>
+      childSet.has(n.id) ? { ...n, data: { ...n.data, minimized: false } } : n
+    ));
+  }, [childOrder, setNodes]);
+
   const onRename = useCallback(
     (v) => {
       const allNodes = getNodes();
@@ -306,6 +321,46 @@ const ContextNode = memo(({ id, data, selected }) => {
           }}
         />
         <span style={{ color: accentDim, fontSize: 11, letterSpacing: 1 }}>]</span>
+
+        {/* ⊟/⊞ minimizar/expandir todos os filhos */}
+        {!isCollapsed && childOrder.length > 0 && (
+          <span style={{ display: 'flex', gap: 2, flexShrink: 0, marginLeft: 2 }}>
+            <button
+              type="button"
+              aria-label="Minimizar todos os filhos"
+              title="Minimizar todos"
+              onClick={(e) => { e.stopPropagation(); minimizeAll(); }}
+              onMouseDown={(e) => e.stopPropagation()}
+              style={{
+                background: 'none', border: 'none', cursor: 'pointer',
+                color: accent, fontSize: 11, padding: '0 2px',
+                lineHeight: 1, flexShrink: 0, opacity: 0.5,
+                transition: 'opacity 0.1s',
+              }}
+              onMouseEnter={(e) => { e.currentTarget.style.opacity = '1'; }}
+              onMouseLeave={(e) => { e.currentTarget.style.opacity = '0.5'; }}
+            >
+              ⊟
+            </button>
+            <button
+              type="button"
+              aria-label="Expandir todos os filhos"
+              title="Expandir todos"
+              onClick={(e) => { e.stopPropagation(); expandAll(); }}
+              onMouseDown={(e) => e.stopPropagation()}
+              style={{
+                background: 'none', border: 'none', cursor: 'pointer',
+                color: accent, fontSize: 11, padding: '0 2px',
+                lineHeight: 1, flexShrink: 0, opacity: 0.5,
+                transition: 'opacity 0.1s',
+              }}
+              onMouseEnter={(e) => { e.currentTarget.style.opacity = '1'; }}
+              onMouseLeave={(e) => { e.currentTarget.style.opacity = '0.5'; }}
+            >
+              ⊞
+            </button>
+          </span>
+        )}
 
         {/* Contador de filhos quando recolhido */}
         {isCollapsed && childOrder.length > 0 && (

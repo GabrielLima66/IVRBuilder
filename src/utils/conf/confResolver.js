@@ -71,7 +71,7 @@ function toCmdFull(application, args) {
  * @param {boolean} [hasParens=true]  se a chamada original tinha parênteses (ex: bare Hangup sem ())
  * @returns {Object|null}
  */
-function appToNodeData(application, args, hasParens = true) {
+function appToNodeData(application, args, hasParens = true, options = {}) {
   const cmd    = application.toLowerCase();
   const params = args;
 
@@ -140,10 +140,11 @@ function appToNodeData(application, args, hasParens = true) {
       const ctx   = parts[0] || '';
       const ext   = parts[1] || 's';
       const pri   = parts[2] || '1';
-      // Heurística: Goto(ctx-queue, NNNN, 1) → RouteNode modo FILA
-      // Critério: extensão é número puro (3-6 dígitos) E nome do contexto contém
-      // "queue" ou "fila" (insensível a maiúsculas).
-      const isQueueContext = /queue|fila/i.test(ctx);
+      // Detecta Goto([contexto-de-fila], NUMERO, 1) → RouteNode modo FILA.
+      // Prioridade: match exato com o queueContext configurado.
+      // Fallback: heurística — contexto contém "queue" ou "fila" e extensão é número (3-6 dígitos).
+      const configuredQueueCtx = options.queueContext || 'rcx-queue';
+      const isQueueContext = ctx === configuredQueueCtx || /queue|fila/i.test(ctx);
       const isNumericExt   = /^\d{3,6}$/.test(ext);
       if (isQueueContext && isNumericExt) {
         return {
@@ -484,7 +485,7 @@ function processOptionLines(lines) {
     }
 
     // Linha de ação intermediária
-    const nd = appToNodeData(line.application, line.args, line.hasParens ?? true);
+    const nd = appToNodeData(line.application, line.args, line.hasParens ?? true, options);
     if (!nd) continue;
 
     if (nd._configField) {
@@ -509,7 +510,7 @@ function processOptionLines(lines) {
  * @param {boolean} isFirstContext
  * @returns {{ childNodes: ResolvedNodeData[], dtmfGotos: Object.<string,string>, directives: string[] }}
  */
-function resolveContext(rawCtx, globalConfig, isFirstContext) {
+function resolveContext(rawCtx, globalConfig, isFirstContext, options = {}) {
   /** @type {ResolvedNodeData[]} */
   const childNodes = [];
   /** @type {Object.<string,string>} digit → context name */
@@ -525,7 +526,7 @@ function resolveContext(rawCtx, globalConfig, isFirstContext) {
 
   // ── 2. Process sequential 's' extensions ────────────────────────────────
   for (const ext of rawCtx.extensions) {
-    const nd = appToNodeData(ext.application, ext.args, ext.hasParens ?? true);
+    const nd = appToNodeData(ext.application, ext.args, ext.hasParens ?? true, options);
     if (!nd) continue;
 
     // Skip global config lines that match the extracted GlobalConfig
@@ -896,7 +897,7 @@ function detectIntegrationBlocks(childNodes) {
  * @param {import('./confMapper.js').RawContext[]} rawContexts
  * @returns {ResolvedGraph & { unresolvedRefs: string[], stats: Object }}
  */
-export function resolve(rawContexts) {
+export function resolve(rawContexts, options = {}) {
   if (!rawContexts.length) {
     return {
       globalConfig: { ivr: '', soundPath: '', agiPath: '', language: '', comment: '', numberDialed: false, logIvr: false },
@@ -933,7 +934,7 @@ export function resolve(rawContexts) {
     const isMacro = /^macro-/i.test(rawCtx.name);
     // isFirstContext: only true when the first context IS a real GlobalConfig setup block.
     // Otherwise all contexts are treated as regular ContextNodes (no lines skipped).
-    const { childNodes, dtmfGotos, directives } = resolveContext(rawCtx, globalConfig, isRealGlobalConfig && i === 0);
+    const { childNodes, dtmfGotos, directives } = resolveContext(rawCtx, globalConfig, isRealGlobalConfig && i === 0, options);
 
     // Count stats
     for (const n of childNodes) {

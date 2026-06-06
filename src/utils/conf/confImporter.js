@@ -36,7 +36,7 @@ import { resetUnknownCommands, getUnknownCommands } from './unknownCommandsLog.j
  * @param {string} rawContent  conteúdo bruto do arquivo .conf
  * @returns {ImportResult}
  */
-export function importConf(rawContent) {
+export function importConf(rawContent, options = {}) {
   // Limpa log de comandos desconhecidos antes de cada importação
   resetUnknownCommands();
 
@@ -47,7 +47,7 @@ export function importConf(rawContent) {
   const rawContexts = map(tokens);
 
   // ── Fase 3: Resolver ───────────────────────────────────────────────────────
-  const graph = resolve(rawContexts);
+  const graph = resolve(rawContexts, { queueContext: options.queueContext });
 
   // ── Fase 4: Layout ─────────────────────────────────────────────────────────
   const layout = calculateLayout(graph);

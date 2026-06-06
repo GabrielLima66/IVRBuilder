@@ -463,14 +463,23 @@ export default function ConfigModal({ onClose }) {
           <SectionHeader label="ACESSIBILIDADE" />
           <FontScaleControl />
 
-          {/* ── EXPORTAÇÃO ── */}
-          <SectionHeader label="EXPORTAÇÃO" />
+          {/* ── COMPILADOR ── */}
+          <SectionHeader label="COMPILADOR" />
           <TextRow
             configKey="contextPrefix"
             label="Prefixo de contexto"
             placeholder="rcx-ivr"
             hint="Prefixo usado ao gerar nomes de novos ContextNodes (ex: 'rcx-ivr-novo-contexto')"
           />
+          <TextRow
+            configKey="queueContext"
+            label="Contexto de fila"
+            placeholder="rcx-queue"
+            hint="Contexto Asterisk usado pelo NóFila: Goto([contexto-de-fila],[número],1). Também usado para detectar filas ao importar um .conf."
+          />
+
+          {/* ── EXPORTAÇÃO ── */}
+          <SectionHeader label="EXPORTAÇÃO" />
           <ToggleRow
             configKey="includeSectionComments"
             label="Incluir comentários de seção (;;)"

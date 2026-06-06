@@ -40,6 +40,7 @@ export const CONFIG_DEFAULTS = {
 
   // Exportação
   contextPrefix:          'rcx-ivr',    // string — prefixo usado em nomes de contexto gerados
+  queueContext:           'rcx-queue',  // string — contexto Asterisk usado pelo NóFila (Goto([queueContext],[numero],1))
   includeSectionComments: true,         // bool — emitir comentários ;; no .conf exportado
   lineEnding:             'lf',         // 'lf' | 'crlf'
   highFidelityMode:       true,         // bool — emitir originalLine para nós não editados (fidelidade literal)

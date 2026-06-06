@@ -4,6 +4,7 @@ import {
   formatDayRange, WEEKDAY_ORDER, MONTH_ORDER, getMaxDay, buildTimeExport,
 } from '../../utils/timeUtils';
 import { useModeContext } from '../../contexts/ModeContext';
+import { useConfig } from '../../contexts/ConfigContext';
 import { NODE_MODE_CONFIG, getFieldLabel, getNodeLabel } from '../../config/nodeModeConfig';
 import { isContextNameDuplicate } from '../../utils/contextUtils';
 import ContextNavPanel from './ContextNavPanel';
@@ -482,6 +483,7 @@ export default function PropertiesPanel({ node, updateNodeData, deleteNode, togg
   // Reseta confirmação ao trocar de nó selecionado
   useEffect(() => { setConfirmDelete(false); }, [node?.id]);
   const mode = useModeContext();
+  const config = useConfig();
   const panelStyle = {
     width: 320, height: '100%',
     background: 'var(--panel)',
@@ -883,10 +885,9 @@ export default function PropertiesPanel({ node, updateNodeData, deleteNode, togg
 
             {mode === 'fila' && (
               <>
-                <Field d={d} set={set} label="Número / Nome da Fila" k="queue"        placeholder="7000" />
-                <Field d={d} set={set} label="Opções (ex: t)"        k="queueOptions" placeholder="t" />
+                <Field d={d} set={set} label="Número / Nome da Fila" k="queue" placeholder="7000" />
                 <div style={{ fontSize: 9, color: '#ff8c00', marginTop: 6, border: '1px dashed #ff8c0033', padding: 6, borderRadius: 3 }}>
-                  <code>Queue({d.queue || '...'}{d.queueOptions ? ',' + d.queueOptions : ''})</code>
+                  <code>Goto({config.queueContext || 'rcx-queue'},{d.queue || '...'},1)</code>
                 </div>
               </>
             )}

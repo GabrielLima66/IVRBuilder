@@ -45,6 +45,7 @@ function generateDialplanFromContexts(nodes, edges, findNode, outEdges, options 
   // garantindo fidelidade literal ao .conf importado.
   // false = sempre reconstrói a partir dos campos estruturados (normaliza formatação).
   const highFidelityMode = options.highFidelityMode !== false;
+  const queueContext = options.queueContext || 'rcx-queue';
   const ctxNodes = getOrderedContexts(nodes);
   // O(1) context lookup by name — used in label-reference validation (inside loops)
   const contextByName = new Map(ctxNodes.map((n) => [n.data.contextName, n]));
@@ -128,8 +129,7 @@ function generateDialplanFromContexts(nodes, edges, findNode, outEdges, options 
       case 'route': {
         const m = n.data.routeMode || 'macro';
         if (m === 'fila') {
-          const opts = n.data.queueOptions ? `,${n.data.queueOptions}` : '';
-          return [`Queue(${n.data.queue || ''}${opts})`];
+          return [`Goto(${queueContext},${n.data.queue || ''},1)`];
         }
         if (m === 'macro') {
           return [
@@ -891,10 +891,11 @@ function generateDialplanFromContexts(nodes, edges, findNode, outEdges, options 
 // ─────────────────────────────────────────────────────────────────────────────
 // MODO LEGADO — fluxo linear (sem Context Nodes)
 // ─────────────────────────────────────────────────────────────────────────────
-function generateDialplanLegacy(nodes, edges, findNode, outEdges) {
+function generateDialplanLegacy(nodes, edges, findNode, outEdges, options = {}) {
   const config = nodes.find((n) => n.type === 'config');
   if (!config) return '; ERRO: nenhum nó de configuração encontrado.\n';
 
+  const queueContext = options.queueContext || 'rcx-queue';
   const IVR = config.data.ivr || '0000';
   const ENTRY_CTX = `rcx-ivr-${IVR}`;
   const lines = [];
@@ -991,8 +992,7 @@ function generateDialplanLegacy(nodes, edges, findNode, outEdges) {
   const routeLines = (n) => {
     const m = n.data.routeMode || 'macro';
     if (m === 'fila') {
-      const opts = n.data.queueOptions ? `,${n.data.queueOptions}` : '';
-      return [`Queue(${n.data.queue || ''}${opts})`];
+      return [`Goto(${queueContext},${n.data.queue || ''},1)`];
     }
     if (m === 'macro') {
       return [

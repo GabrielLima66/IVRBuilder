@@ -1261,6 +1261,7 @@ function Canvas({ initialFlow, projectName, projectCreatedAt, currentProjectId, 
     const text = generateDialplan(nodes, edges, {
       includeSectionComments: config.includeSectionComments,
       highFidelityMode:       config.highFidelityMode,
+      queueContext:           config.queueContext,
     });
     setExportText(text);
     // Computa e armazena o layout para download junto ao .conf
@@ -2408,7 +2409,7 @@ export default function App() {
     const reader = new FileReader();
     reader.onload = async (e) => {
       try {
-        const result = importConf(e.target.result);
+        const result = importConf(e.target.result, { queueContext: config.queueContext });
         let nodes         = result.flowState.nodes;
         let edges         = result.flowState.edges;
         let viewport      = { x: 0, y: 0, zoom: 0.7 };

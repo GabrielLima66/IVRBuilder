@@ -202,8 +202,18 @@ export const ACTION_META = {
   waitexten: {
     title: 'WAIT EXTEN', app: 'WaitExten', icon: Hourglass, color: '#00ff41', category: 'system',
     supportsLabel: true, // ponto de re-entrada para DTMF
-    summary: (d) => [{ k: 'segundos', v: String(d.seconds ?? 4) }],
-    validate: (d) => reqNum(d.seconds, 'Segundos'),
+    summary: (d) => {
+      const n = Number(d.seconds);
+      const eff = (!isNaN(n) && (n > 0 || (n === 0 && d.isDirty))) ? n : 4;
+      return [{ k: 'segundos', v: String(eff) }];
+    },
+    validate: (d) => {
+      const raw = d.seconds;
+      if (raw == null || raw === '') return []; // sem valor → usa padrão 4
+      const n = Number(raw);
+      if (!isNaN(n) && n >= 0) return []; // ≥ 0 é válido; actionLine decide se usa 0 ou 4
+      return ['Segundos deve ser numérico'];
+    },
   },
   playback: {
     title: 'PLAYBACK', app: 'Playback', icon: Play, color: '#00ff41', category: 'system',
@@ -303,8 +313,12 @@ export function actionLine(n) {
       return `Answer()`;
     case 'wait':
       return `Wait(${d.seconds ?? 1})`;
-    case 'waitexten':
-      return `WaitExten(${d.seconds ?? 4})`;
+    case 'waitexten': {
+      const s = Number(d.seconds);
+      // Emite 0 só se o usuário digitou explicitamente (isDirty); stale 0 usa padrão 4.
+      if (!isNaN(s) && (s > 0 || (s === 0 && d.isDirty))) return `WaitExten(${s})`;
+      return `WaitExten(4)`;
+    }
     case 'playback':
       return `Playback(\${SOUND_PATH}/${d.filename || ''})`;
     case 'background': {

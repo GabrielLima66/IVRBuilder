@@ -475,7 +475,7 @@ const MenuPropertiesPanel = memo(function MenuPropertiesPanel({ d, set, fl, onAu
 
 // ─── Painel principal ─────────────────────────────────────────────────────────
 
-export default function PropertiesPanel({ node, updateNodeData, deleteNode, toggleComment, patchNodeStyle, syncTrueContext, propagateContextRename, nodes = [], onContextNavigate, createContextForNewDigit, isReviewMode }) {
+export default function PropertiesPanel({ node, selectedNodes = [], updateNodeData, deleteNode, deleteSelectedNodes, minimizeSelectedNodes, toggleComment, patchNodeStyle, syncTrueContext, propagateContextRename, nodes = [], onContextNavigate, createContextForNewDigit, isReviewMode }) {
   // Armazena o nome do contexto no momento do foco (para detectar rename via painel)
   const ctxNameOnFocus = useRef('');
   const [ctxNameDup,    setCtxNameDup]    = useState(false);
@@ -492,6 +492,74 @@ export default function PropertiesPanel({ node, updateNodeData, deleteNode, togg
     overflow: 'auto',
     boxSizing: 'border-box',
   };
+
+  // ── Painel de seleção múltipla ─────────────────────────────────────────────
+  if (selectedNodes.length > 1) {
+    // Conta ocorrências por tipo
+    const typeCounts = {};
+    for (const n of selectedNodes) {
+      typeCounts[n.type] = (typeCounts[n.type] || 0) + 1;
+    }
+    const typeEntries = Object.entries(typeCounts).sort((a, b) => b[1] - a[1]);
+
+    return (
+      <aside style={{ ...panelStyle }}>
+        <div style={{ fontSize: 10, color: 'var(--neon-dim)', letterSpacing: 1, marginBottom: 12 }}>
+          // {selectedNodes.length} nós selecionados
+        </div>
+
+        <div style={{ display: 'flex', flexWrap: 'wrap', gap: 4, marginBottom: 16 }}>
+          {typeEntries.map(([type, count]) => (
+            <span
+              key={type}
+              style={{
+                fontSize: 8, letterSpacing: 0.8, padding: '2px 6px',
+                border: '1px solid var(--neon-dim)', borderRadius: 2,
+                color: 'var(--neon-dim)', fontFamily: 'inherit',
+              }}
+            >
+              {type.toUpperCase()}: {count}
+            </span>
+          ))}
+        </div>
+
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+          <button
+            type="button"
+            onClick={minimizeSelectedNodes}
+            style={{
+              display: 'block', width: '100%',
+              background: 'transparent', border: '1px solid var(--neon-dim)',
+              color: 'var(--neon-dim)', fontFamily: 'inherit', fontSize: 10,
+              letterSpacing: 1, padding: '6px 10px', cursor: 'pointer',
+              borderRadius: 2, textAlign: 'left',
+              transition: 'all 0.15s',
+            }}
+            onMouseEnter={(e) => { e.currentTarget.style.borderColor = 'var(--neon)'; e.currentTarget.style.color = 'var(--neon)'; }}
+            onMouseLeave={(e) => { e.currentTarget.style.borderColor = 'var(--neon-dim)'; e.currentTarget.style.color = 'var(--neon-dim)'; }}
+          >
+            ⊟ MINIMIZAR SELECIONADOS
+          </button>
+          <button
+            type="button"
+            onClick={deleteSelectedNodes}
+            style={{
+              display: 'block', width: '100%',
+              background: 'transparent', border: '1px solid #ff505066',
+              color: '#ff5050', fontFamily: 'inherit', fontSize: 10,
+              letterSpacing: 1, padding: '6px 10px', cursor: 'pointer',
+              borderRadius: 2, textAlign: 'left',
+              transition: 'all 0.15s',
+            }}
+            onMouseEnter={(e) => { e.currentTarget.style.borderColor = '#ff5050'; e.currentTarget.style.background = '#ff505011'; }}
+            onMouseLeave={(e) => { e.currentTarget.style.borderColor = '#ff505066'; e.currentTarget.style.background = 'transparent'; }}
+          >
+            🗑 EXCLUIR SELECIONADOS
+          </button>
+        </div>
+      </aside>
+    );
+  }
 
   if (!node) {
     return (

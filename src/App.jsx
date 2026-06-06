@@ -9,6 +9,7 @@ import ReactFlow, {
   ReactFlowProvider,
   useReactFlow,
   MarkerType,
+  SelectionMode,
 } from 'reactflow';
 import { nodeTypes } from './components/nodes';
 import EdgeWithWaypoints from './components/edges/EdgeWithWaypoints';
@@ -233,7 +234,8 @@ function Canvas({ initialFlow, projectName, projectCreatedAt, currentProjectId, 
   useEffect(() => { nodesRef.current = nodes; }, [nodes]);
   useEffect(() => { edgesRef.current = edges; }, [edges]);
 
-  const [selectedId,      setSelectedId]      = useState(null);
+  // selectedIds é derivado dos nodes gerenciados nativamente pelo ReactFlow via onNodesChange.
+  // Não é state explícito — evita conflito com a seleção nativa (Shift+click, box selection).
   // ── Seleção visual de edges/nós vizinhos ─────────────────────────────────
   // activeEdgeIds: edges em estado ativo (sólidas, pulsantes)
   // activeNodeIds: nós vizinhos em estado ativo (borda pulsante)
@@ -755,29 +757,36 @@ function Canvas({ initialFlow, projectName, projectCreatedAt, currentProjectId, 
     setActiveNodeIds(newNodeIds);
   }, []); // ← edges removido das deps; edgesRef é estável
 
-  const onNodeClick  = useCallback((_, n) => {
-    setSelectedId(n.id);
+  const onNodeClick  = useCallback((event, n) => {
     setEdgeMenu(null);
     setNodeMenu(null);
     computeActiveFromNode(n.id);
+    // Seleção gerenciada pelo ReactFlow via onNodesChange + useNodesState.
+    // Nenhuma atualização manual de selectedIds necessária.
   }, [computeActiveFromNode]);
 
   // Clicar em edge → ativa a edge + os dois nós das extremidades
   const onEdgeClick  = useCallback((_, edge) => {
-    setSelectedId(null);
     setEdgeMenu(null);
     setNodeMenu(null);
     setActiveEdgeIds(new Set([edge.id]));
     setActiveNodeIds(new Set([edge.source, edge.target]));
   }, []);
 
-  // Clicar no canvas → volta ao repouso imediatamente
+  // Clicar no canvas → volta ao repouso imediatamente (RF já dispara onNodesChange p/ desselecionar)
   const onPaneClick  = useCallback(() => {
-    setSelectedId(null);
     setEdgeMenu(null);
     setNodeMenu(null);
     setActiveEdgeIds(new Set());
     setActiveNodeIds(new Set());
+  }, []);
+
+  // Limpa destaque de edge quando múltiplos nós são selecionados (box selection ou Shift+click)
+  const onSelectionChange = useCallback(({ nodes: selNodes }) => {
+    if (selNodes.length > 1) {
+      setActiveEdgeIds(new Set());
+      setActiveNodeIds(new Set());
+    }
   }, []);
 
   // ── Atualização de dados e estilo ─────────────────────────────────────────
@@ -832,12 +841,11 @@ function Canvas({ initialFlow, projectName, projectCreatedAt, currentProjectId, 
           })
       );
       setEdges((es) => es.filter((e) => !ids.has(e.source) && !ids.has(e.target)));
-      setSelectedId(null);
       runAutoArrange();
       return;
     }
 
-    // Nó filho (não contexto): comportamento existente
+    // Nó filho (não contexto)
     setNodes((ns) =>
       ns
         .filter((n) => n.id !== id)
@@ -849,37 +857,67 @@ function Canvas({ initialFlow, projectName, projectCreatedAt, currentProjectId, 
         })
     );
     setEdges((es) => es.filter((e) => e.source !== id && e.target !== id));
-    setSelectedId(null);
   }, [setNodes, setEdges, runAutoArrange]);
 
-  // ── Intercepta exclusão nativa do React Flow (tecla DEL/Backspace) ──────────
-  // React Flow remove os nós selecionados do estado e depois chama onNodesDelete.
-  // Neste ponto os filhos ainda estão no array (RF não os selecionou).
-  // Removemos os filhos órfãos e edges pendentes manualmente.
-  const onNodesDeleteHandler = useCallback((deletedNodes) => {
-    const ctxIds = deletedNodes.filter((n) => n.type === 'context').map((n) => n.id);
-    if (!ctxIds.length) return;
-
-    // nodesRef.current ainda tem os filhos (RF só removeu os nós selecionados)
+  // ── Exclusão em massa dos nós selecionados ────────────────────────────────
+  const deleteSelectedNodes = useCallback(() => {
+    const selectedInNodes = nodesRef.current.filter((n) => n.selected);
+    if (!selectedInNodes.length) return;
+    const ids       = selectedInNodes.map((n) => n.id);
+    const ctxIds    = ids.filter((id) => nodesRef.current.find((n) => n.id === id)?.type === 'context');
     const allIds    = collectCascadeIds(ctxIds, nodesRef.current);
-    const orphanIds = new Set([...allIds].filter((id) => !ctxIds.includes(id)));
-
-    if (orphanIds.size > 0) {
-      setNodes((ns) =>
-        ns
-          .filter((n) => !orphanIds.has(n.id))
-          .map((n) => {
-            if (n.type !== 'context') return n;
-            const order = (n.data.childOrder || []).filter((cid) => !orphanIds.has(cid));
-            if (order.length === (n.data.childOrder || []).length) return n;
-            return { ...n, data: { ...n.data, childOrder: order } };
-          })
-      );
-    }
-    // Remove edges conectadas a qualquer ID do conjunto completo (contexto + filhos)
+    for (const id of ids) allIds.add(id);
+    setNodes((ns) =>
+      ns
+        .filter((n) => !allIds.has(n.id))
+        .map((n) => {
+          if (n.type !== 'context') return n;
+          const order = (n.data.childOrder || []).filter((cid) => !allIds.has(cid));
+          if (order.length === (n.data.childOrder || []).length) return n;
+          return { ...n, data: { ...n.data, childOrder: order } };
+        })
+    );
     setEdges((es) => es.filter((e) => !allIds.has(e.source) && !allIds.has(e.target)));
-    setSelectedId(null);
-    runAutoArrange();
+    if (ctxIds.length) runAutoArrange();
+  }, [setNodes, setEdges, runAutoArrange]);
+
+  // ── Minimizar nós selecionados em massa ───────────────────────────────────
+  const minimizeSelectedNodes = useCallback(() => {
+    setNodes((ns) => ns.map((n) =>
+      n.selected ? { ...n, data: { ...n.data, minimized: true } } : n
+    ));
+  }, [setNodes]);
+
+  // ── Intercepta exclusão nativa do React Flow (tecla DEL/Backspace) ──────────
+  // RF remove os nós selecionados e depois chama onNodesDelete.
+  // Aqui limpamos: filhos órfãos de contextos, childOrder e edges pendentes.
+  const onNodesDeleteHandler = useCallback((deletedNodes) => {
+    const deletedSet = new Set(deletedNodes.map((n) => n.id));
+    const ctxIds     = deletedNodes.filter((n) => n.type === 'context').map((n) => n.id);
+
+    // Cascade: filhos de ContextNodes deletados que não foram selecionados explicitamente
+    const allCascade = ctxIds.length > 0
+      ? collectCascadeIds(ctxIds, nodesRef.current)
+      : new Set();
+    const orphanIds  = new Set([...allCascade].filter((id) => !deletedSet.has(id)));
+
+    // IDs completos: nós explicitamente deletados + órfãos de cascata
+    const allDeletedIds = new Set([...deletedSet, ...orphanIds]);
+
+    setNodes((ns) =>
+      ns
+        .filter((n) => !orphanIds.has(n.id))
+        .map((n) => {
+          if (n.type !== 'context') return n;
+          const order = (n.data.childOrder || []).filter((cid) => !allDeletedIds.has(cid));
+          if (order.length === (n.data.childOrder || []).length) return n;
+          return { ...n, data: { ...n.data, childOrder: order } };
+        })
+    );
+    if (orphanIds.size > 0) {
+      setEdges((es) => es.filter((e) => !orphanIds.has(e.source) && !orphanIds.has(e.target)));
+    }
+    if (ctxIds.length) runAutoArrange();
   }, [setNodes, setEdges, runAutoArrange]);
 
   // ── Toggle comentado (DESATIVAR / ATIVAR) ─────────────────────────────────
@@ -1214,9 +1252,10 @@ function Canvas({ initialFlow, projectName, projectCreatedAt, currentProjectId, 
     event.preventDefault();
     event.stopPropagation();
     setNodeMenu({ x: event.clientX, y: event.clientY, nodeId: n.id });
-    setSelectedId(n.id);
+    // Força seleção do nó clicado com botão direito via setNodes
+    setNodes((ns) => ns.map((node) => ({ ...node, selected: node.id === n.id })));
     computeActiveFromNode(n.id);
-  }, [computeActiveFromNode]);
+  }, [computeActiveFromNode, setNodes]);
 
   // ── Forçar save imediato (sem aguardar debounce) ─────────────────────────
   const flushSave = useCallback(async () => {
@@ -1340,7 +1379,7 @@ function Canvas({ initialFlow, projectName, projectCreatedAt, currentProjectId, 
     try { await navigator.clipboard.writeText(exportText); } catch (_) { /* ignore */ }
   };
 
-  // Injeta selected visualmente sem armazenar em estado extra do React Flow.
+  // Injeta props extras sem sobrescrever `selected` — o RF gerencia seleção via onNodesChange.
   // _navHighlight: flag transitória para a animação de destaque de navegação —
   // não persiste nos nodes reais nem dispara autosave.
   const nodesWithSel = useMemo(
@@ -1353,19 +1392,18 @@ function Canvas({ initialFlow, projectName, projectCreatedAt, currentProjectId, 
       const hasExtra = navHl || conflict;
       return {
         ...n,
-        selected: n.id === selectedId,
+        // `selected` vem de nodes (gerenciado pelo RF via onNodesChange + useNodesState)
         // Restringe drag do ContextNode ao cabeçalho — evita conflito com filhos
         ...(n.type === 'context' ? { dragHandle: '.ctx-header' } : {}),
         ...(hasExtra ? { data: { ...n.data, ...extra } } : {}),
       };
     }),
-    [nodes, selectedId, highlightedCtxId, dragConflictId]
+    [nodes, highlightedCtxId, dragConflictId]
   );
 
-  const selectedNode = useMemo(
-    () => nodes.find((n) => n.id === selectedId) ?? null,
-    [nodes, selectedId]
-  );
+  // Derivados da seleção nativa do RF (nodes gerenciados por useNodesState via onNodesChange)
+  const selectedNodes = useMemo(() => nodes.filter((n) => n.selected), [nodes]);
+  const selectedNode  = selectedNodes.length === 1 ? selectedNodes[0] : null;
 
   // ── Tema: sincroniza cor do marker das edges quando o tema muda ───────────────
   useEffect(() => {
@@ -1625,13 +1663,19 @@ function Canvas({ initialFlow, projectName, projectCreatedAt, currentProjectId, 
           <span style={{ color: 'var(--line)' }}>│</span>
           <span>STATUS: <span style={{ color: 'var(--neon)' }}>● LIVE</span></span>
           <span style={{ color: 'var(--line)' }}>│</span>
-          <span style={{ color: '#888' }}>
-            SELECT +{' '}
-            <kbd style={{ padding: '1px 5px', border: '1px solid var(--neon-dim)', borderRadius: 2, fontSize: '0.69rem', color: 'var(--neon)' }}>
-              DEL
-            </kbd>{' '}
-            p/ excluir
-          </span>
+          {selectedNodes.length > 1 ? (
+            <span style={{ color: 'var(--neon)', fontWeight: 600 }}>
+              SELECT: {selectedNodes.length} nós
+            </span>
+          ) : (
+            <span style={{ color: '#888' }}>
+              SELECT +{' '}
+              <kbd style={{ padding: '1px 5px', border: '1px solid var(--neon-dim)', borderRadius: 2, fontSize: '0.69rem', color: 'var(--neon)' }}>
+                DEL
+              </kbd>{' '}
+              p/ excluir
+            </span>
+          )}
           <span style={{ color: 'var(--line)' }}>│</span>
           {/* Painel de ordem de exportação */}
           <button
@@ -1808,7 +1852,11 @@ function Canvas({ initialFlow, projectName, projectCreatedAt, currentProjectId, 
           deleteKeyCode={isReviewMode ? null : ['Backspace', 'Delete']}
           edgesFocusable
           elementsSelectable
-          multiSelectionKeyCode={['Meta', 'Control']}
+          multiSelectionKeyCode="Shift"
+          selectionOnDrag={true}
+          selectionMode={SelectionMode.Partial}
+          panOnDrag={[1, 2]}
+          onSelectionChange={onSelectionChange}
           connectionLineType={EDGE_STYLE_MAP[config.edgeStyle] === 'straight' ? 'straight' : config.edgeStyle === 'step' ? 'step' : 'smoothstep'}
           defaultEdgeOptions={defaultEdgeOpts}
           snapToGrid={config.snapToGrid}
@@ -1932,9 +1980,12 @@ function Canvas({ initialFlow, projectName, projectCreatedAt, currentProjectId, 
 
       <PropertiesPanel
         node={selectedNode}
+        selectedNodes={selectedNodes}
         nodes={nodes}
         updateNodeData={updateNodeData}
         deleteNode={deleteNode}
+        deleteSelectedNodes={deleteSelectedNodes}
+        minimizeSelectedNodes={minimizeSelectedNodes}
         toggleComment={toggleComment}
         patchNodeStyle={patchNodeStyle}
         syncTrueContext={syncTrueContext}
